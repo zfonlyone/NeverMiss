@@ -3,7 +3,7 @@ import { Platform } from 'react-native';
 import * as Device from 'expo-device';
 import { Task } from '../models/Task';
 import { TaskCycle } from '../models/TaskCycle';
-import { registerBackgroundTasks, unregisterBackgroundTasks } from './backgroundTaskService';
+import { registerBackgroundTask, unregisterBackgroundTask } from './backgroundTaskService';
 
 // Configure notifications
 export async function configureNotifications(): Promise<boolean> {
@@ -14,6 +14,7 @@ export async function configureNotifications(): Promise<boolean> {
         shouldShowAlert: true,
         shouldPlaySound: true,
         shouldSetBadge: true,
+        priority: Notifications.AndroidNotificationPriority.MAX,
       }),
     });
     
@@ -22,17 +23,21 @@ export async function configureNotifications(): Promise<boolean> {
       await Notifications.setNotificationChannelAsync('default', {
         name: 'Default',
         importance: Notifications.AndroidImportance.MAX,
-        vibrationPattern: [0, 250, 250, 250],
-        lightColor: '#FF231F7C',
+        vibrationPattern: [0, 500, 200, 500, 200, 500],
+        lightColor: '#FF0000',
+        enableLights: true,
+        enableVibrate: true,
       });
       
       await Notifications.setNotificationChannelAsync('reminders', {
         name: 'Task Reminders',
         description: 'Notifications for task reminders',
-        importance: Notifications.AndroidImportance.HIGH,
-        vibrationPattern: [0, 250, 250, 250],
-        lightColor: '#2196F3',
-        sound: true,
+        importance: Notifications.AndroidImportance.MAX,
+        vibrationPattern: [0, 500, 200, 500, 200, 500],
+        lightColor: '#FF0000',
+        enableLights: true,
+        enableVibrate: true,
+        sound: 'default',
       });
     }
     
@@ -40,7 +45,7 @@ export async function configureNotifications(): Promise<boolean> {
     const permissionResult = await requestNotificationPermissions();
     
     // Register background tasks
-    await registerBackgroundTasks();
+    await registerBackgroundTask();
     
     return permissionResult;
   } catch (error) {
@@ -93,25 +98,31 @@ export async function scheduleTaskNotification(
     
     // Don't schedule if the notification time is in the past
     if (notificationDate <= new Date()) {
-      console.log(`Notification time for task "${task.name}" is in the past, skipping`);
+      console.log(`Notification time for task "${task.title}" is in the past, skipping`);
       return null;
     }
     
     // Schedule notification
     const notificationId = await Notifications.scheduleNotificationAsync({
       content: {
-        title: `Reminder: ${task.name}`,
-        body: `Your task is due soon!`,
+        title: `⚠️ 提醒: ${task.title}`,
+        body: task.description || '您的任务即将到期！',
         data: { taskId: task.id, cycleId: cycle.id },
         sound: true,
-        priority: Notifications.AndroidNotificationPriority.HIGH,
-        color: '#2196F3',
-        ...(Platform.OS === 'android' && { channelId: 'reminders' }),
+        priority: Notifications.AndroidNotificationPriority.MAX,
+        color: '#FF0000',
+        badge: 1,
+        ...(Platform.OS === 'android' && { 
+          channelId: 'reminders',
+          vibrate: [0, 500, 200, 500, 200, 500],
+          lights: true,
+          lightColor: '#FF0000',
+        }),
       },
       trigger: notificationDate,
     });
     
-    console.log(`Scheduled notification for task "${task.name}" with ID: ${notificationId}`);
+    console.log(`Scheduled notification for task "${task.title}" with ID: ${notificationId}`);
     return notificationId;
   } catch (error) {
     console.error('Error scheduling task notification:', error);
@@ -178,10 +189,49 @@ export async function cleanupNotifications(): Promise<void> {
     await cancelAllNotifications();
     
     // Unregister background tasks
-    await unregisterBackgroundTasks();
+    await unregisterBackgroundTask();
     
     console.log('Notifications cleaned up');
   } catch (error) {
     console.error('Error cleaning up notifications:', error);
+  }
+}
+
+export interface TestNotificationInput {
+  id: number;
+  title: string;
+  body: string;
+  date: Date;
+}
+
+// Schedule a test notification
+export async function scheduleTestNotification(
+  input: TestNotificationInput
+): Promise<string | null> {
+  try {
+    // Schedule notification
+    const notificationId = await Notifications.scheduleNotificationAsync({
+      content: {
+        title: `⚠️ ${input.title}`,
+        body: input.body,
+        data: { taskId: input.id },
+        sound: true,
+        priority: Notifications.AndroidNotificationPriority.MAX,
+        color: '#FF0000',
+        ...(Platform.OS === 'android' && { 
+          channelId: 'reminders',
+          vibrate: [0, 500, 200, 500, 200, 500],
+          lights: true,
+          lightColor: '#FF0000',
+        }),
+      },
+      trigger: input.date,
+    });
+    
+    console.log(`Scheduled test notification with ID: ${notificationId}`);
+    return notificationId;
+  } catch (error) {
+    console.error('Error scheduling test notification:', error);
+    return null;
   }
 } 

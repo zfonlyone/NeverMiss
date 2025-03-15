@@ -1,103 +1,181 @@
-import * as SQLite from 'expo-sqlite';
-import { Task, TaskCycle } from '../models/Task';
+import { openDatabase, SQLTransaction, SQLResultSet, SQLError } from 'expo-sqlite';
+import {
+  Task,
+  TaskCycle,
+  CreateTaskInput,
+  UpdateTaskInput,
+  RecurrenceType,
+  RecurrenceUnit,
+  CycleStatus
+} from '../models/Task';
 import { scheduleTaskNotification } from './notificationService';
+import db from './database';
+import { addTaskToCalendar, removeTaskFromCalendar, updateTaskInCalendar } from './calendarService';
 
 // Open database connection
-const db = SQLite.openDatabase('nevermiss.db');
+const dbExpo = openDatabase('nevermiss.db');
+
+const mapRowToTask = (row: any): Task => ({
+  id: row.id,
+  title: row.title,
+  description: row.description,
+  recurrenceType: row.recurrenceType,
+  recurrenceValue: row.recurrenceValue,
+  recurrenceUnit: row.recurrenceUnit,
+  reminderOffset: row.reminderOffset,
+  reminderUnit: row.reminderUnit,
+  reminderTime: {
+    hour: row.reminderTimeHour,
+    minute: row.reminderTimeMinute,
+  },
+  isActive: Boolean(row.isActive),
+  autoRestart: Boolean(row.autoRestart),
+  syncToCalendar: Boolean(row.syncToCalendar),
+  calendarEventId: row.calendarEventId,
+  createdAt: row.created_at,
+  updatedAt: row.updated_at || row.created_at,
+  currentCycle: row.currentCycleId ? {
+    id: row.currentCycleId,
+    taskId: row.id,
+    startDate: row.cycleStartDate,
+    dueDate: row.cycleDueDate,
+    isCompleted: Boolean(row.isCompleted),
+    isOverdue: Boolean(row.isOverdue),
+    completedDate: row.cycleCompletedDate,
+    createdAt: row.created_at
+  } : undefined
+});
+
+interface TaskCycleWithTask extends TaskCycle {
+  recurrenceType: RecurrenceType;
+  recurrenceValue: number;
+  recurrenceUnit?: RecurrenceUnit;
+  autoRestart: boolean;
+}
 
 /**
  * Create a new task
- * @param task The task to create
+ * @param taskInput The task data to create
  * @returns The created task with ID
  */
-export const createTask = async (task: Omit<Task, 'id' | 'createdAt' | 'updatedAt'>): Promise<Task> => {
-  try {
-    const now = new Date().toISOString();
-    
-    // Insert the task
-    const result = await new Promise<SQLite.SQLResultSet>((resolve, reject) => {
-      db.transaction(tx => {
+export const createTask = async (input: CreateTaskInput): Promise<Task> => {
+  const taskId = await new Promise<number>((resolve, reject) => {
+    dbExpo.transaction(
+      (tx) => {
         tx.executeSql(
           `INSERT INTO tasks (
-            title, description, start_date_time, recurrence_type, 
-            recurrence_value, recurrence_unit, reminder_offset, 
-            is_active, auto_restart, created_at, updated_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            title,
+            description,
+            recurrenceType,
+            recurrenceValue,
+            recurrenceUnit,
+            reminderOffset,
+            reminderUnit,
+            reminderTimeHour,
+            reminderTimeMinute,
+            isActive,
+            autoRestart,
+            syncToCalendar,
+            created_at,
+            updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
           [
-            task.title,
-            task.description || '',
-            task.startDateTime,
-            task.recurrenceType,
-            task.recurrenceValue,
-            task.recurrenceUnit || null,
-            task.reminderOffset,
-            task.isActive ? 1 : 0,
-            task.autoRestart ? 1 : 0,
-            now,
-            now
+            input.title,
+            input.description || null,
+            input.recurrenceType,
+            input.recurrenceValue,
+            input.recurrenceUnit || null,
+            input.reminderOffset,
+            input.reminderUnit,
+            input.reminderTime.hour,
+            input.reminderTime.minute,
+            input.isActive === false ? 0 : 1,
+            input.autoRestart === true ? 1 : 0,
+            input.syncToCalendar === true ? 1 : 0,
+            new Date().toISOString(),
+            new Date().toISOString(),
           ],
-          (_, result) => resolve(result),
-          (_, error) => reject(error)
+          (_, result) => {
+            if (result.insertId === undefined) {
+              reject(new Error('Failed to insert task'));
+              return;
+            }
+            resolve(result.insertId);
+          },
+          (_, error) => {
+            reject(error);
+            return false;
+          }
+        );
+      },
+      (error) => {
+        reject(error);
+      }
+    );
+  });
+
+  // Create initial cycle
+  const cycle = await createTaskCycle(taskId, input.startDate, input.recurrenceType, input.recurrenceValue, input.recurrenceUnit);
+
+  const task = await getTaskById(taskId);
+  if (!task) {
+    throw new Error(`Failed to create task: could not find task with id ${taskId}`);
+  }
+
+  // 如果启用了日历同步，添加到系统日历
+  if (input.syncToCalendar) {
+    try {
+      const eventId = await addTaskToCalendar(task, cycle);
+      await new Promise<void>((resolve, reject) => {
+        dbExpo.transaction(
+          (tx) => {
+            tx.executeSql(
+              'UPDATE tasks SET calendarEventId = ? WHERE id = ?',
+              [eventId, taskId],
+              () => resolve(),
+              (_, error) => {
+                reject(error);
+                return false;
+              }
+            );
+          },
+          (error) => reject(error)
         );
       });
-    });
-    
-    const taskId = result.insertId;
-    
-    // Create the first cycle
-    const cycle = await createTaskCycle(taskId, task.startDateTime, task.recurrenceType, task.recurrenceValue, task.recurrenceUnit);
-    
-    // Schedule notification for the task
-    await scheduleTaskNotification({
-      id: taskId,
-      title: task.title,
-      description: task.description || '',
-      dueDate: cycle.dueDate,
-      reminderOffset: task.reminderOffset
-    });
-    
-    // Return the created task
-    return {
-      id: taskId,
-      ...task,
-      createdAt: now,
-      updatedAt: now,
-      currentCycle: cycle
-    };
-  } catch (error) {
-    console.error('Error creating task:', error);
-    throw error;
+      task.calendarEventId = eventId;
+    } catch (error) {
+      console.error('Failed to sync task to calendar:', error);
+    }
   }
+
+  return task;
 };
 
 /**
  * Create a task cycle
- * @param taskId The task ID
- * @param startDate The start date
- * @param recurrenceType The recurrence type
- * @param recurrenceValue The recurrence value
- * @param recurrenceUnit The recurrence unit (for custom recurrence)
- * @returns The created task cycle
  */
 export const createTaskCycle = async (
   taskId: number,
   startDate: string,
-  recurrenceType: string,
+  recurrenceType: RecurrenceType,
   recurrenceValue: number,
-  recurrenceUnit?: string
+  recurrenceUnit?: RecurrenceUnit
 ): Promise<TaskCycle> => {
+  if (!taskId) {
+    throw new Error('Task ID is required');
+  }
   try {
     const now = new Date().toISOString();
     const startDateTime = new Date(startDate);
     const dueDate = calculateDueDate(startDateTime, recurrenceType, recurrenceValue, recurrenceUnit);
     
     // Insert the cycle
-    const result = await new Promise<SQLite.SQLResultSet>((resolve, reject) => {
-      db.transaction(tx => {
+    const result = await new Promise<SQLResultSet>((resolve, reject) => {
+      dbExpo.transaction((tx: SQLTransaction) => {
         tx.executeSql(
           `INSERT INTO task_cycles (
-            task_id, start_date, due_date, is_completed, 
-            is_overdue, created_at
+            taskId, startDate, dueDate, isCompleted, 
+            isOverdue, created_at
           ) VALUES (?, ?, ?, ?, ?, ?)`,
           [
             taskId,
@@ -107,13 +185,25 @@ export const createTaskCycle = async (
             0, // not overdue
             now
           ],
-          (_, result) => resolve(result),
-          (_, error) => reject(error)
+          (_: SQLTransaction, result: SQLResultSet) => {
+            if (result.insertId === undefined) {
+              reject(new Error('Failed to insert task cycle'));
+              return;
+            }
+            resolve(result);
+          },
+          (_: SQLTransaction, error: SQLError) => {
+            reject(error);
+            return false;
+          }
         );
       });
     });
     
     const cycleId = result.insertId;
+    if (cycleId === undefined) {
+      throw new Error('Failed to get task cycle ID');
+    }
     
     // Return the created cycle
     return {
@@ -136,9 +226,9 @@ export const createTaskCycle = async (
  */
 const calculateDueDate = (
   startDate: Date,
-  recurrenceType: string,
+  recurrenceType: RecurrenceType,
   recurrenceValue: number,
-  recurrenceUnit?: string
+  recurrenceUnit?: RecurrenceUnit
 ): Date => {
   const dueDate = new Date(startDate);
   
@@ -168,61 +258,130 @@ const calculateDueDate = (
 
 /**
  * Update an existing task
- * @param task The task to update
+ * @param taskInput The task data to update
  * @returns The updated task
  */
-export const updateTask = async (task: Task): Promise<Task> => {
-  try {
-    const now = new Date().toISOString();
-    
-    // Update the task
-    await new Promise<void>((resolve, reject) => {
-      db.transaction(tx => {
+export const updateTask = async (taskId: number, input: UpdateTaskInput): Promise<Task> => {
+  const task = await getTaskById(taskId);
+  if (!task) {
+    throw new Error(`Task with id ${taskId} not found`);
+  }
+
+  await new Promise<void>((resolve, reject) => {
+    dbExpo.transaction(
+      (tx) => {
         tx.executeSql(
           `UPDATE tasks SET
-            title = ?, description = ?, start_date_time = ?, 
-            recurrence_type = ?, recurrence_value = ?, recurrence_unit = ?,
-            reminder_offset = ?, is_active = ?, auto_restart = ?, updated_at = ?
+            title = ?,
+            description = ?,
+            recurrenceType = ?,
+            recurrenceValue = ?,
+            recurrenceUnit = ?,
+            reminderOffset = ?,
+            reminderUnit = ?,
+            reminderTimeHour = ?,
+            reminderTimeMinute = ?,
+            isActive = ?,
+            autoRestart = ?,
+            syncToCalendar = ?,
+            updated_at = ?
           WHERE id = ?`,
           [
-            task.title,
-            task.description || '',
-            task.startDateTime,
-            task.recurrenceType,
-            task.recurrenceValue,
-            task.recurrenceUnit || null,
-            task.reminderOffset,
-            task.isActive ? 1 : 0,
-            task.autoRestart ? 1 : 0,
-            now,
-            task.id
+            input.title,
+            input.description || null,
+            input.recurrenceType,
+            input.recurrenceValue,
+            input.recurrenceUnit || null,
+            input.reminderOffset,
+            input.reminderUnit,
+            input.reminderTime.hour,
+            input.reminderTime.minute,
+            input.isActive === false ? 0 : 1,
+            input.autoRestart === true ? 1 : 0,
+            input.syncToCalendar === true ? 1 : 0,
+            new Date().toISOString(),
+            taskId,
           ],
           () => resolve(),
-          (_, error) => reject(error)
+          (_, error) => {
+            reject(error);
+            return false;
+          }
+        );
+      },
+      (error) => reject(error)
+    );
+  });
+
+  // 处理日历同步
+  if (input.syncToCalendar) {
+    if (task.calendarEventId) {
+      // 更新现有的日历事件
+      try {
+        await updateTaskInCalendar(task.calendarEventId, {
+          ...task,
+          ...input,
+        } as Task, task.currentCycle!);
+      } catch (error) {
+        console.error('Failed to update calendar event:', error);
+      }
+    } else {
+      // 创建新的日历事件
+      try {
+        const eventId = await addTaskToCalendar({
+          ...task,
+          ...input,
+        } as Task, task.currentCycle!);
+        await new Promise<void>((resolve, reject) => {
+          dbExpo.transaction(
+            (tx) => {
+              tx.executeSql(
+                'UPDATE tasks SET calendarEventId = ? WHERE id = ?',
+                [eventId, taskId],
+                () => resolve(),
+                (_, error) => {
+                  reject(error);
+                  return false;
+                }
+              );
+            },
+            (error) => reject(error)
+          );
+        });
+      } catch (error) {
+        console.error('Failed to create calendar event:', error);
+      }
+    }
+  } else if (task.calendarEventId) {
+    // 如果禁用了日历同步，删除现有的日历事件
+    try {
+      await removeTaskFromCalendar(task.calendarEventId);
+      await new Promise<void>((resolve, reject) => {
+        dbExpo.transaction(
+          (tx) => {
+            tx.executeSql(
+              'UPDATE tasks SET calendarEventId = NULL WHERE id = ?',
+              [taskId],
+              () => resolve(),
+              (_, error) => {
+                reject(error);
+                return false;
+              }
+            );
+          },
+          (error) => reject(error)
         );
       });
-    });
-    
-    // If the task has a current cycle, update the notification
-    if (task.currentCycle) {
-      await scheduleTaskNotification({
-        id: task.id,
-        title: task.title,
-        description: task.description || '',
-        dueDate: task.currentCycle.dueDate,
-        reminderOffset: task.reminderOffset
-      });
+    } catch (error) {
+      console.error('Failed to remove calendar event:', error);
     }
-    
-    // Return the updated task
-    return {
-      ...task,
-      updatedAt: now
-    };
-  } catch (error) {
-    console.error('Error updating task:', error);
-    throw error;
   }
+
+  const updatedTask = await getTaskById(taskId);
+  if (!updatedTask) {
+    throw new Error(`Failed to update task: could not find task with id ${taskId}`);
+  }
+  return updatedTask;
 };
 
 /**
@@ -230,85 +389,75 @@ export const updateTask = async (task: Task): Promise<Task> => {
  * @param taskId The task ID to delete
  */
 export const deleteTask = async (taskId: number): Promise<void> => {
-  try {
-    await new Promise<void>((resolve, reject) => {
-      db.transaction(tx => {
-        // Delete task cycles first (foreign key constraint)
-        tx.executeSql(
-          'DELETE FROM task_cycles WHERE task_id = ?',
-          [taskId],
-          () => {
-            // Then delete the task
-            tx.executeSql(
-              'DELETE FROM tasks WHERE id = ?',
-              [taskId],
-              () => resolve(),
-              (_, error) => reject(error)
-            );
-          },
-          (_, error) => reject(error)
-        );
-      });
-    });
-  } catch (error) {
-    console.error('Error deleting task:', error);
-    throw error;
+  const task = await getTaskById(taskId);
+  if (!task) {
+    throw new Error(`Task with id ${taskId} not found`);
   }
+
+  // 如果任务已同步到日历，先删除日历事件
+  if (task.syncToCalendar && task.calendarEventId) {
+    try {
+      await removeTaskFromCalendar(task.calendarEventId);
+    } catch (error) {
+      console.error('Failed to remove calendar event:', error);
+    }
+  }
+
+  await new Promise<void>((resolve, reject) => {
+    dbExpo.transaction(
+      (tx) => {
+        tx.executeSql(
+          'DELETE FROM tasks WHERE id = ?',
+          [taskId],
+          () => resolve(),
+          (_, error) => {
+            reject(error);
+            return false;
+          }
+        );
+      },
+      (error) => reject(error)
+    );
+  });
 };
 
 /**
  * Get all tasks with their current cycles
  * @returns Array of tasks with current cycles
  */
-export const getAllTasks = async (): Promise<Task[]> => {
-  try {
-    // Get all tasks
-    const tasks = await new Promise<Task[]>((resolve, reject) => {
-      db.transaction(tx => {
+export const getAllTasks = (): Promise<Task[]> => {
+  return new Promise((resolve, reject) => {
+    dbExpo.transaction(
+      (tx) => {
         tx.executeSql(
           `SELECT 
-            id, title, description, start_date_time, recurrence_type,
-            recurrence_value, recurrence_unit, reminder_offset,
-            is_active, auto_restart, created_at, updated_at
-          FROM tasks
-          ORDER BY created_at DESC`,
+            t.*,
+            c.id as currentCycleId,
+            c.startDate as cycleStartDate,
+            c.dueDate as cycleDueDate,
+            c.isCompleted,
+            c.isOverdue,
+            c.completedDate as cycleCompletedDate,
+            c.created_at as cycleCreatedAt
+          FROM tasks t
+          LEFT JOIN task_cycles c ON t.id = c.taskId AND c.isCompleted = 0
+          ORDER BY t.created_at DESC;`,
           [],
-          (_, { rows }) => {
-            const tasks: Task[] = [];
-            for (let i = 0; i < rows.length; i++) {
-              const row = rows.item(i);
-              tasks.push({
-                id: row.id,
-                title: row.title,
-                description: row.description,
-                startDateTime: row.start_date_time,
-                recurrenceType: row.recurrence_type,
-                recurrenceValue: row.recurrence_value,
-                recurrenceUnit: row.recurrence_unit,
-                reminderOffset: row.reminder_offset,
-                isActive: Boolean(row.is_active),
-                autoRestart: Boolean(row.auto_restart),
-                createdAt: row.created_at,
-                updatedAt: row.updated_at
-              });
-            }
+          (_, { rows: { _array } }) => {
+            const tasks = _array.map(mapRowToTask);
             resolve(tasks);
           },
-          (_, error) => reject(error)
+          (_, error) => {
+            reject(error);
+            return false;
+          }
         );
-      });
-    });
-    
-    // Get current cycles for each task
-    for (const task of tasks) {
-      task.currentCycle = await getCurrentCycleForTask(task.id);
-    }
-    
-    return tasks;
-  } catch (error) {
-    console.error('Error getting all tasks:', error);
-    throw error;
-  }
+      },
+      (error) => {
+        reject(error);
+      }
+    );
+  });
 };
 
 /**
@@ -318,53 +467,44 @@ export const getAllTasks = async (): Promise<Task[]> => {
  */
 export const getTaskById = async (taskId: number): Promise<Task | null> => {
   try {
-    // Get the task
     const task = await new Promise<Task | null>((resolve, reject) => {
       db.transaction(tx => {
         tx.executeSql(
           `SELECT 
-            id, title, description, start_date_time, recurrence_type,
-            recurrence_value, recurrence_unit, reminder_offset,
-            is_active, auto_restart, created_at, updated_at
-          FROM tasks
-          WHERE id = ?`,
+            t.*, 
+            tc.id as currentCycleId, 
+            tc.startDate as cycleStartDate, 
+            tc.dueDate as cycleDueDate,
+            tc.isCompleted, 
+            tc.isOverdue, 
+            tc.completedDate as cycleCompletedDate,
+            tc.created_at as cycleCreatedAt
+          FROM tasks t
+          LEFT JOIN task_cycles tc ON t.id = tc.taskId
+          WHERE t.id = ?
+          ORDER BY tc.startDate DESC
+          LIMIT 1;`,
           [taskId],
           (_, { rows }) => {
             if (rows.length === 0) {
               resolve(null);
               return;
             }
-            
-            const row = rows.item(0);
-            resolve({
-              id: row.id,
-              title: row.title,
-              description: row.description,
-              startDateTime: row.start_date_time,
-              recurrenceType: row.recurrence_type,
-              recurrenceValue: row.recurrence_value,
-              recurrenceUnit: row.recurrence_unit,
-              reminderOffset: row.reminder_offset,
-              isActive: Boolean(row.is_active),
-              autoRestart: Boolean(row.auto_restart),
-              createdAt: row.created_at,
-              updatedAt: row.updated_at
-            });
+            const task = mapRowToTask(rows.item(0));
+            resolve(task);
           },
-          (_, error) => reject(error)
+          (_, error) => {
+            reject(error);
+            return false;
+          }
         );
       });
     });
     
-    if (!task) return null;
-    
-    // Get the current cycle
-    task.currentCycle = await getCurrentCycleForTask(taskId);
-    
     return task;
   } catch (error) {
-    console.error('Error getting task by ID:', error);
-    throw error;
+    console.error(`Error getting task ${taskId}:`, error);
+    return null;
   }
 };
 
@@ -376,7 +516,7 @@ export const getTaskById = async (taskId: number): Promise<Task | null> => {
 export const getCurrentCycleForTask = async (taskId: number): Promise<TaskCycle | null> => {
   try {
     return await new Promise<TaskCycle | null>((resolve, reject) => {
-      db.transaction(tx => {
+      dbExpo.transaction(tx => {
         tx.executeSql(
           `SELECT 
             id, task_id, start_date, due_date, is_completed,
@@ -414,81 +554,118 @@ export const getCurrentCycleForTask = async (taskId: number): Promise<TaskCycle 
   }
 };
 
-/**
- * Mark a task cycle as completed
- * @param cycleId The cycle ID
- * @returns The updated cycle
- */
-export const completeTaskCycle = async (cycleId: number): Promise<TaskCycle> => {
-  try {
-    const now = new Date().toISOString();
-    
-    // Update the cycle
-    await new Promise<void>((resolve, reject) => {
-      db.transaction(tx => {
-        tx.executeSql(
-          `UPDATE task_cycles SET
-            is_completed = ?, completed_date = ?
-          WHERE id = ?`,
-          [1, now, cycleId],
-          () => resolve(),
-          (_, error) => reject(error)
-        );
-      });
-    });
-    
-    // Get the updated cycle
-    const cycle = await new Promise<TaskCycle>((resolve, reject) => {
-      db.transaction(tx => {
-        tx.executeSql(
-          `SELECT 
-            id, task_id, start_date, due_date, is_completed,
-            is_overdue, completed_date, created_at
-          FROM task_cycles
-          WHERE id = ?`,
-          [cycleId],
-          (_, { rows }) => {
-            if (rows.length === 0) {
-              reject(new Error('Cycle not found'));
-              return;
-            }
-            
-            const row = rows.item(0);
-            resolve({
-              id: row.id,
-              taskId: row.task_id,
-              startDate: row.start_date,
-              dueDate: row.due_date,
-              isCompleted: Boolean(row.is_completed),
-              isOverdue: Boolean(row.is_overdue),
-              completedDate: row.completed_date,
-              createdAt: row.created_at
-            });
-          },
-          (_, error) => reject(error)
-        );
-      });
-    });
-    
-    // Get the task to check if we need to create a new cycle
-    const task = await getTaskById(cycle.taskId);
-    
-    if (task && task.autoRestart) {
-      // Create the next cycle
-      const nextStartDate = new Date(cycle.dueDate).toISOString();
-      await createTaskCycle(
-        task.id,
-        nextStartDate,
-        task.recurrenceType,
-        task.recurrenceValue,
-        task.recurrenceUnit
+export const calculateNextCycleDates = (
+  currentStartDate: string,
+  currentDueDate: string,
+  recurrenceType: RecurrenceType,
+  recurrenceValue: number,
+  recurrenceUnit?: RecurrenceUnit
+): { startDate: string; dueDate: string } => {
+  const startDate = new Date(currentStartDate);
+  const dueDate = new Date(currentDueDate);
+  const duration = dueDate.getTime() - startDate.getTime();
+
+  let nextStartDate = new Date(startDate);
+  
+  switch (recurrenceType) {
+    case 'daily':
+      nextStartDate.setDate(nextStartDate.getDate() + 1);
+      break;
+    case 'weekly':
+      nextStartDate.setDate(nextStartDate.getDate() + 7);
+      break;
+    case 'monthly':
+      nextStartDate.setMonth(nextStartDate.getMonth() + 1);
+      break;
+    case 'custom':
+      if (!recurrenceUnit) throw new Error('Recurrence unit is required for custom type');
+      
+      switch (recurrenceUnit) {
+        case 'minutes':
+          nextStartDate.setMinutes(nextStartDate.getMinutes() + recurrenceValue);
+          break;
+        case 'hours':
+          nextStartDate.setHours(nextStartDate.getHours() + recurrenceValue);
+          break;
+        case 'days':
+          nextStartDate.setDate(nextStartDate.getDate() + recurrenceValue);
+          break;
+        case 'weeks':
+          nextStartDate.setDate(nextStartDate.getDate() + (recurrenceValue * 7));
+          break;
+        case 'months':
+          nextStartDate.setMonth(nextStartDate.getMonth() + recurrenceValue);
+          break;
+        case 'years':
+          nextStartDate.setFullYear(nextStartDate.getFullYear() + recurrenceValue);
+          break;
+      }
+      break;
+  }
+
+  const nextDueDate = new Date(nextStartDate.getTime() + duration);
+
+  return {
+    startDate: nextStartDate.toISOString(),
+    dueDate: nextDueDate.toISOString(),
+  };
+};
+
+export const completeTaskCycle = async (cycleId: number): Promise<void> => {
+  const now = new Date().toISOString();
+  
+  // Get the cycle and task details
+  const cycle = await new Promise<TaskCycleWithTask>((resolve, reject) => {
+    dbExpo.transaction(tx => {
+      tx.executeSql(
+        `SELECT tc.*, t.recurrenceType, t.recurrenceValue, t.recurrenceUnit, t.autoRestart
+         FROM task_cycles tc
+         JOIN tasks t ON tc.taskId = t.id
+         WHERE tc.id = ?`,
+        [cycleId],
+        (_, { rows }) => {
+          if (rows.length === 0) {
+            reject(new Error('Cycle not found'));
+            return;
+          }
+          resolve(rows.item(0));
+        },
+        (_, error) => {
+          reject(error);
+          return false;
+        }
       );
-    }
-    
-    return cycle;
-  } catch (error) {
-    console.error('Error completing task cycle:', error);
-    throw error;
+    });
+  });
+
+  // Complete the current cycle
+  await new Promise<void>((resolve, reject) => {
+    dbExpo.transaction(tx => {
+      tx.executeSql(
+        `UPDATE task_cycles 
+         SET isCompleted = 1, completedDate = ?
+         WHERE id = ?`,
+        [now, cycleId],
+        () => resolve(),
+        (_, error) => {
+          reject(error);
+          return false;
+        }
+      );
+    });
+  });
+
+  // If auto-restart is enabled, create the next cycle
+  if (cycle.autoRestart) {
+    const { startDate, dueDate } = calculateNextCycleDates(
+      cycle.startDate,
+      cycle.dueDate,
+      cycle.recurrenceType,
+      cycle.recurrenceValue,
+      cycle.recurrenceUnit
+    );
+
+    await createTaskCycle(cycle.taskId, startDate, cycle.recurrenceType, cycle.recurrenceValue, cycle.recurrenceUnit);
   }
 };
 
@@ -552,4 +729,37 @@ export const checkAndUpdateOverdueTasks = async (): Promise<{ checkedCount: numb
       overdueCount: 0
     };
   }
+};
+
+export const cancelTask = async (taskId: number): Promise<void> => {
+  const task = await getTaskById(taskId);
+  if (!task) {
+    throw new Error(`Task with id ${taskId} not found`);
+  }
+
+  // 如果任务已同步到日历，先删除日历事件
+  if (task.syncToCalendar && task.calendarEventId) {
+    try {
+      await removeTaskFromCalendar(task.calendarEventId);
+    } catch (error) {
+      console.error('Failed to remove calendar event:', error);
+    }
+  }
+
+  await new Promise<void>((resolve, reject) => {
+    dbExpo.transaction(
+      (tx) => {
+        tx.executeSql(
+          'UPDATE tasks SET isActive = 0, updated_at = ? WHERE id = ?',
+          [new Date().toISOString(), taskId],
+          () => resolve(),
+          (_, error) => {
+            reject(error);
+            return false;
+          }
+        );
+      },
+      (error) => reject(error)
+    );
+  });
 }; 

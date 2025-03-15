@@ -1,28 +1,36 @@
-import { v4 as uuidv4 } from 'uuid';
-
-export type CycleStatus = 'pending' | 'completed' | 'failed';
+import { RecurrenceType, RecurrenceUnit } from './Task';
 
 export interface TaskCycle {
-  id: string;
-  taskId: string;
-  cycleStartDateTime: string; // ISO 8601 format
-  cycleEndDateTime: string; // ISO 8601 format
-  status: CycleStatus;
-  completedAt?: string; // ISO 8601 format, nullable
-  failedAt?: string; // ISO 8601 format, nullable
+  id: number;
+  taskId: number;
+  startDate: string;
+  dueDate: string;
+  isCompleted: boolean;
+  isOverdue: boolean;
+  completedDate?: string;
+  createdAt: string;
+}
+
+export interface TaskCycleWithTask extends TaskCycle {
+  recurrenceType: RecurrenceType;
+  recurrenceValue: number;
+  recurrenceUnit?: RecurrenceUnit;
+  autoRestart: boolean;
 }
 
 export function createTaskCycle(
-  taskId: string,
-  cycleStartDateTime: string,
-  cycleEndDateTime: string
+  taskId: number,
+  startDate: string,
+  dueDate: string
 ): TaskCycle {
   return {
-    id: uuidv4(),
+    id: 0, // 数据库会自动生成
     taskId,
-    cycleStartDateTime,
-    cycleEndDateTime,
-    status: 'pending',
+    startDate,
+    dueDate,
+    isCompleted: false,
+    isOverdue: false,
+    createdAt: new Date().toISOString(),
   };
 }
 
