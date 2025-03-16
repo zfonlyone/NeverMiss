@@ -1,6 +1,5 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, Alert } from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
 import TaskList from '../components/TaskList';
 import TaskForm from '../components/TaskForm';
 import TaskDetail from '../components/TaskDetail';
@@ -9,7 +8,7 @@ import { getAllTasks, deleteTask } from '../services/taskService';
 
 export default function HomeScreen() {
   const [tasks, setTasks] = useState<Task[]>([]);
-  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+  const [selectedTask, setSelectedTask] = useState<Task | undefined>(undefined);
   const [showTaskForm, setShowTaskForm] = useState(false);
   const [showTaskDetail, setShowTaskDetail] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -27,11 +26,9 @@ export default function HomeScreen() {
     }
   };
 
-  useFocusEffect(
-    useCallback(() => {
-      loadTasks();
-    }, [])
-  );
+  useEffect(() => {
+    loadTasks();
+  }, []);
 
   const handleTaskPress = (task: Task) => {
     setSelectedTask(task);
@@ -39,7 +36,7 @@ export default function HomeScreen() {
   };
 
   const handleAddTask = () => {
-    setSelectedTask(null);
+    setSelectedTask(undefined);
     setShowTaskForm(true);
   };
 
@@ -48,20 +45,46 @@ export default function HomeScreen() {
     setShowTaskForm(true);
   };
 
-  const handleDeleteTask = async (taskId: number) => {
-    try {
-      await deleteTask(taskId);
-      setShowTaskDetail(false);
+  const handleCloseTaskForm = async (shouldRefresh = false) => {
+    setShowTaskForm(false);
+    if (shouldRefresh) {
       await loadTasks();
-    } catch (error) {
-      console.error('Error deleting task:', error);
-      Alert.alert('错误', '删除任务失败');
     }
   };
 
-  const handleSaveTask = async () => {
-    setShowTaskForm(false);
-    await loadTasks();
+  const handleCloseTaskDetail = () => {
+    setShowTaskDetail(false);
+  };
+
+  const handleDeleteTask = async (taskId: number) => {
+    Alert.alert(
+      '删除任务',
+      '确定要删除这个任务吗？此操作不可撤销。',
+      [
+        {
+          text: '取消',
+          style: 'cancel',
+        },
+        {
+          text: '删除',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setIsLoading(true);
+              await deleteTask(taskId);
+              setShowTaskDetail(false);
+              await loadTasks();
+              Alert.alert('成功', '任务已删除');
+            } catch (error) {
+              console.error('Error deleting task:', error);
+              Alert.alert('错误', '删除任务失败');
+            } finally {
+              setIsLoading(false);
+            }
+          },
+        },
+      ]
+    );
   };
 
   return (
@@ -69,23 +92,24 @@ export default function HomeScreen() {
       <TaskList
         tasks={tasks}
         onTaskPress={handleTaskPress}
-        onRefresh={loadTasks}
+        onAddTask={handleAddTask}
+        isLoading={isLoading}
       />
-
+      
       {showTaskForm && (
         <TaskForm
           task={selectedTask}
-          onSave={handleSaveTask}
-          onCancel={() => setShowTaskForm(false)}
+          onClose={() => handleCloseTaskForm(false)}
+          onSave={() => handleCloseTaskForm(true)}
         />
       )}
-
+      
       {showTaskDetail && selectedTask && (
         <TaskDetail
           task={selectedTask}
-          onClose={() => setShowTaskDetail(false)}
+          onClose={handleCloseTaskDetail}
           onEdit={handleEditTask}
-          onDelete={handleDeleteTask}
+          onDelete={() => handleDeleteTask(selectedTask.id)}
         />
       )}
     </View>

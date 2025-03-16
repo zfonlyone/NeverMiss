@@ -1,45 +1,45 @@
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import * as DocumentPicker from 'expo-document-picker';
-import db from './database';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Task } from '../models/Task';
 import { TaskCycle } from '../models/TaskCycle';
-import { getAllTasks, getCycleHistory, createTaskWithCycle } from './taskService';
+import { getAllTasks } from './taskService';
+import { saveTask, saveTaskCycle } from './storageService';
 
 // Export data to JSON
 export async function exportDataToJSON(): Promise<string> {
   try {
-    // Get all tasks
+    // 获取所有任务
     const tasks = await getAllTasks();
     
-    // Get cycles for each task
-    const tasksWithCycles = await Promise.all(
-      tasks.map(async (task) => {
-        const cycles = await getCycleHistory(task.id);
-        return { task, cycles };
-      })
-    );
+    // 获取所有周期
+    const cyclesJson = await AsyncStorage.getItem('nevermiss_task_cycles') || '[]';
+    const cycles = JSON.parse(cyclesJson);
     
-    // Create export object
+    // 创建导出对象
     const exportData = {
       version: '1.0',
       timestamp: new Date().toISOString(),
-      data: tasksWithCycles,
+      data: {
+        tasks,
+        cycles
+      },
     };
     
-    // Convert to JSON
+    // 转换为 JSON
     const jsonData = JSON.stringify(exportData, null, 2);
     
-    // Create file
+    // 创建文件
     const fileName = `nevermiss_export_${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
     const filePath = `${FileSystem.documentDirectory}${fileName}`;
     
-    // Write to file
+    // 写入文件
     await FileSystem.writeAsStringAsync(filePath, jsonData);
     
     return filePath;
   } catch (error) {
-    console.error('Error exporting data:', error);
+    console.error('导出数据时出错:', error);
     throw error;
   }
 }
@@ -47,27 +47,27 @@ export async function exportDataToJSON(): Promise<string> {
 // Export data to CSV
 export async function exportDataToCSV(): Promise<string> {
   try {
-    // Get all tasks
+    // 获取所有任务
     const tasks = await getAllTasks();
     
-    // Create CSV header
-    let csvData = 'Task ID,Task Name,Start Date Time,Recurrence Type,Recurrence Value,Recurrence Unit,Reminder Offset,Auto Restart,Is Active,Created At,Updated At\n';
+    // 创建 CSV 头
+    let csvData = 'Task ID,Title,Description,Recurrence Type,Recurrence Value,Recurrence Unit,Reminder Offset,Reminder Unit,Is Active,Auto Restart,Created At,Updated At\n';
     
-    // Add task data
+    // 添加任务数据
     tasks.forEach((task) => {
-      csvData += `${task.id},${task.name.replace(/,/g, ';')},${task.startDateTime},${task.recurrenceType},${task.recurrenceValue},${task.recurrenceUnit || ''},${task.reminderOffset},${task.autoRestart},${task.isActive},${task.createdAt},${task.updatedAt}\n`;
+      csvData += `${task.id},"${task.title.replace(/"/g, '""')}","${(task.description || '').replace(/"/g, '""')}",${task.recurrenceType},${task.recurrenceValue},${task.recurrenceUnit || ''},${task.reminderOffset},${task.reminderUnit},${task.isActive},${task.autoRestart},${task.createdAt},${task.updatedAt}\n`;
     });
     
-    // Create file
+    // 创建文件
     const fileName = `nevermiss_export_${new Date().toISOString().replace(/[:.]/g, '-')}.csv`;
     const filePath = `${FileSystem.documentDirectory}${fileName}`;
     
-    // Write to file
+    // 写入文件
     await FileSystem.writeAsStringAsync(filePath, csvData);
     
     return filePath;
   } catch (error) {
-    console.error('Error exporting data to CSV:', error);
+    console.error('导出数据到 CSV 时出错:', error);
     throw error;
   }
 }
@@ -75,17 +75,17 @@ export async function exportDataToCSV(): Promise<string> {
 // Share exported file
 export async function shareFile(filePath: string): Promise<void> {
   try {
-    // Check if sharing is available
+    // 检查分享功能是否可用
     const isAvailable = await Sharing.isAvailableAsync();
     
     if (!isAvailable) {
-      throw new Error('Sharing is not available on this device');
+      throw new Error('此设备不支持分享功能');
     }
     
-    // Share the file
+    // 分享文件
     await Sharing.shareAsync(filePath);
   } catch (error) {
-    console.error('Error sharing file:', error);
+    console.error('分享文件时出错:', error);
     throw error;
   }
 }
@@ -93,76 +93,43 @@ export async function shareFile(filePath: string): Promise<void> {
 // Import data from JSON
 export async function importDataFromJSON(): Promise<void> {
   try {
-    // Pick document
+    // 选择文档
     const result = await DocumentPicker.getDocumentAsync({
       type: 'application/json',
       copyToCacheDirectory: true,
     });
     
     if (result.canceled) {
-      throw new Error('Document picking was canceled');
+      throw new Error('文档选择已取消');
     }
     
-    // Read file
+    // 读取文件
     const fileContent = await FileSystem.readAsStringAsync(result.assets[0].uri);
     
-    // Parse JSON
+    // 解析 JSON
     const importData = JSON.parse(fileContent);
     
-    // Validate import data
+    // 验证导入数据
     if (!importData.version || !importData.data) {
-      throw new Error('Invalid import file format');
+      throw new Error('导入文件格式无效');
     }
     
-    // Import tasks and cycles
-    await db.transaction(
-      (tx) => {
-        importData.data.forEach(({ task, cycles }) => {
-          // Insert task
-          tx.executeSql(
-            `INSERT OR REPLACE INTO tasks (
-              id, name, startDateTime, recurrenceType, recurrenceValue, 
-              recurrenceUnit, reminderOffset, autoRestart, isActive, 
-              createdAt, updatedAt
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
-            [
-              task.id,
-              task.name,
-              task.startDateTime,
-              task.recurrenceType,
-              task.recurrenceValue,
-              task.recurrenceUnit || null,
-              task.reminderOffset,
-              task.autoRestart ? 1 : 0,
-              task.isActive ? 1 : 0,
-              task.createdAt,
-              task.updatedAt,
-            ]
-          );
-          
-          // Insert cycles
-          cycles.forEach((cycle) => {
-            tx.executeSql(
-              `INSERT OR REPLACE INTO taskCycles (
-                id, taskId, cycleStartDateTime, cycleEndDateTime, 
-                status, completedAt, failedAt
-              ) VALUES (?, ?, ?, ?, ?, ?, ?);`,
-              [
-                cycle.id,
-                cycle.taskId,
-                cycle.cycleStartDateTime,
-                cycle.cycleEndDateTime,
-                cycle.status,
-                cycle.completedAt || null,
-                cycle.failedAt || null,
-              ]
-            );
-          });
-        });
-      }
-    );
+    // 导入任务和周期
+    const { tasks, cycles } = importData.data;
+    
+    // 保存任务
+    for (const task of tasks) {
+      await saveTask(task);
+    }
+    
+    // 保存周期
+    for (const cycle of cycles) {
+      await saveTaskCycle(cycle);
+    }
+    
+    console.log('数据导入成功');
   } catch (error) {
-    console.error('Error importing data:', error);
+    console.error('导入数据时出错:', error);
     throw error;
   }
 } 

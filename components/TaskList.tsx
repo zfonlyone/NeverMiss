@@ -7,6 +7,7 @@ import {
   RefreshControl,
   TouchableOpacity,
   useColorScheme,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Task } from '../models/Task';
@@ -15,14 +16,19 @@ import { format } from 'date-fns';
 interface TaskListProps {
   tasks: Task[];
   onTaskPress: (task: Task) => void;
-  onRefresh: () => void;
+  onRefresh?: () => void;
+  onAddTask?: () => void;
+  isLoading?: boolean;
 }
 
-export default function TaskList({ tasks, onTaskPress, onRefresh }: TaskListProps) {
+export default function TaskList({ tasks, onTaskPress, onRefresh, onAddTask, isLoading = false }: TaskListProps) {
   const [refreshing, setRefreshing] = React.useState(false);
   const colorScheme = useColorScheme();
+  const isDarkMode = colorScheme === 'dark';
 
   const handleRefresh = React.useCallback(async () => {
+    if (!onRefresh) return;
+    
     setRefreshing(true);
     await onRefresh();
     setRefreshing(false);
@@ -53,143 +59,173 @@ export default function TaskList({ tasks, onTaskPress, onRefresh }: TaskListProp
         style={[
           styles.taskItem,
           {
-            backgroundColor: isDarkMode ? '#1c1c1e' : '#ffffff',
-            borderColor: isDarkMode ? '#2c2c2e' : '#e5e5e5',
+            backgroundColor: isDarkMode ? '#1e1e1e' : '#ffffff',
           },
         ]}
         onPress={() => onTaskPress(item)}
       >
-        <View style={styles.taskContent}>
-          <View style={styles.taskHeader}>
-            <Text
-              style={[
-                styles.taskTitle,
-                { color: isDarkMode ? '#ffffff' : '#000000' },
-              ]}
-              numberOfLines={1}
-            >
-              {item.title}
-            </Text>
-            <Ionicons
-              name={getStatusIcon(item)}
-              size={24}
-              color={getStatusColor(item)}
+        <View style={styles.taskHeader}>
+          <Text
+            style={[
+              styles.taskTitle,
+              { color: isDarkMode ? '#ffffff' : '#000000' },
+            ]}
+            numberOfLines={1}
+          >
+            {item.title}
+          </Text>
+          {item.currentCycle && (
+            <View style={[
+              styles.statusBadge,
+              item.currentCycle.isCompleted 
+                ? styles.completedBadge 
+                : item.currentCycle.isOverdue 
+                  ? styles.overdueBadge 
+                  : styles.pendingBadge
+            ]}>
+              <Text style={styles.statusText}>
+                {item.currentCycle.isCompleted 
+                  ? '已完成' 
+                  : item.currentCycle.isOverdue 
+                    ? '已逾期' 
+                    : '进行中'}
+              </Text>
+            </View>
+          )}
+        </View>
+        
+        {item.description && (
+          <Text
+            style={[
+              styles.taskDescription,
+              { color: isDarkMode ? '#cccccc' : '#666666' },
+            ]}
+            numberOfLines={2}
+          >
+            {item.description}
+          </Text>
+        )}
+        
+        {item.currentCycle && (
+          <View style={styles.taskFooter}>
+            <View style={styles.taskDateContainer}>
+              <Ionicons 
+                name="calendar" 
+                size={14} 
+                color={isDarkMode ? '#aaaaaa' : '#888888'} 
+              />
+              <Text 
+                style={[
+                  styles.taskDate,
+                  { color: isDarkMode ? '#aaaaaa' : '#888888' }
+                ]}
+              >
+                截止日期: {format(new Date(item.currentCycle.dueDate), 'yyyy-MM-dd')}
+              </Text>
+            </View>
+            
+            <Ionicons 
+              name="chevron-forward" 
+              size={20} 
+              color={isDarkMode ? '#aaaaaa' : '#888888'} 
             />
           </View>
-          {item.description && (
-            <Text
-              style={[
-                styles.taskDescription,
-                { color: isDarkMode ? '#8e8e93' : '#666666' },
-              ]}
-              numberOfLines={2}
-            >
-              {item.description}
-            </Text>
-          )}
-          {item.currentCycle && (
-            <Text
-              style={[
-                styles.taskDueDate,
-                {
-                  color: isOverdue
-                    ? '#ff3b30'
-                    : isDarkMode
-                    ? '#8e8e93'
-                    : '#666666',
-                },
-              ]}
-            >
-              Due: {format(new Date(item.currentCycle.dueDate), 'PPp')}
-            </Text>
-          )}
-          <View style={styles.taskFooter}>
-            <Text
-              style={[
-                styles.taskInfo,
-                { color: isDarkMode ? '#999999' : '#888888' },
-              ]}
-            >
-              {item.currentCycle
-                ? `下次截止：${new Date(item.currentCycle.dueDate).toLocaleString()}`
-                : '无进行中的周期'}
-            </Text>
-            <Text
-              style={[
-                styles.taskRecurrence,
-                { color: isDarkMode ? '#999999' : '#888888' },
-              ]}
-            >
-              {item.recurrenceType === 'daily'
-                ? '每天'
-                : item.recurrenceType === 'weekly'
-                ? '每周'
-                : item.recurrenceType === 'monthly'
-                ? '每月'
-                : `每${item.recurrenceValue}${
-                    item.recurrenceUnit === 'days'
-                      ? '天'
-                      : item.recurrenceUnit === 'weeks'
-                      ? '周'
-                      : '月'
-                  }`}
-            </Text>
-          </View>
-        </View>
+        )}
       </TouchableOpacity>
     );
   };
 
   return (
-    <FlatList
-      style={[
-        styles.container,
-        { backgroundColor: colorScheme === 'dark' ? '#000000' : '#f5f5f5' },
-      ]}
-      data={tasks}
-      renderItem={renderItem}
-      keyExtractor={(item) => item.id.toString()}
-      refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
-      }
-      contentContainerStyle={styles.listContent}
-      ListEmptyComponent={
-        <View style={styles.emptyContainer}>
-          <Ionicons
-            name="list"
-            size={48}
-            color={colorScheme === 'dark' ? '#666666' : '#cccccc'}
-          />
-          <Text
-            style={[
-              styles.emptyText,
-              { color: colorScheme === 'dark' ? '#666666' : '#999999' },
-            ]}
-          >
-            暂无任务
+    <View style={styles.container}>
+      {isLoading && tasks.length === 0 ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#2196F3" />
+          <Text style={[styles.emptyText, { color: isDarkMode ? '#ffffff' : '#666666' }]}>
+            加载任务中...
           </Text>
         </View>
-      }
-    />
+      ) : tasks.length === 0 ? (
+        <View style={styles.emptyContainer}>
+          <Ionicons 
+            name="calendar-outline" 
+            size={64} 
+            color={isDarkMode ? '#555555' : '#cccccc'} 
+          />
+          <Text style={[styles.emptyText, { color: isDarkMode ? '#ffffff' : '#666666' }]}>
+            没有任务
+          </Text>
+          <Text style={[styles.emptySubText, { color: isDarkMode ? '#aaaaaa' : '#999999' }]}>
+            点击右下角的 + 按钮添加新任务
+          </Text>
+        </View>
+      ) : (
+        <FlatList
+          data={tasks}
+          keyExtractor={(item) => item.id.toString()}
+          renderItem={renderItem}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={handleRefresh}
+              colors={['#2196F3']}
+              tintColor={isDarkMode ? '#ffffff' : '#2196F3'}
+            />
+          }
+          contentContainerStyle={styles.listContent}
+        />
+      )}
+      
+      {onAddTask && (
+        <TouchableOpacity
+          style={styles.fab}
+          onPress={onAddTask}
+        >
+          <Ionicons name="add" size={24} color="#ffffff" />
+        </TouchableOpacity>
+      )}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    position: 'relative',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  emptyText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginTop: 16,
+  },
+  emptySubText: {
+    fontSize: 14,
+    marginTop: 8,
+    textAlign: 'center',
   },
   listContent: {
     padding: 16,
-    flexGrow: 1,
   },
   taskItem: {
     borderRadius: 12,
-    marginBottom: 12,
-    borderWidth: 1,
-    overflow: 'hidden',
-  },
-  taskContent: {
     padding: 16,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
   },
   taskHeader: {
     flexDirection: 'row',
@@ -201,35 +237,58 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     flex: 1,
-    marginRight: 8,
+  },
+  statusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    marginLeft: 8,
+  },
+  completedBadge: {
+    backgroundColor: '#4CAF50',
+  },
+  pendingBadge: {
+    backgroundColor: '#2196F3',
+  },
+  overdueBadge: {
+    backgroundColor: '#F44336',
+  },
+  statusText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: 'bold',
   },
   taskDescription: {
     fontSize: 14,
-    marginBottom: 8,
+    marginBottom: 12,
   },
   taskFooter: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  taskInfo: {
-    fontSize: 12,
+  taskDateContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
-  taskRecurrence: {
+  taskDate: {
     fontSize: 12,
+    marginLeft: 4,
   },
-  taskDueDate: {
-    fontSize: 12,
-    marginTop: 4,
-  },
-  emptyContainer: {
-    flex: 1,
+  fab: {
+    position: 'absolute',
+    right: 16,
+    bottom: 16,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#2196F3',
     justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 48,
-  },
-  emptyText: {
-    fontSize: 16,
-    marginTop: 16,
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
   },
 }); 

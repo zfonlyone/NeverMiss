@@ -1,135 +1,100 @@
 # NeverMiss
 
-NeverMiss is a task management app that helps you never miss important deadlines. It features recurring tasks, customizable reminders, and a clean, intuitive interface.
+<div align="center">
 
-## Features
+[![React Native](https://img.shields.io/badge/React%20Native-0.76.0-blue.svg?style=flat-square&logo=react)](https://reactnative.dev/)
+[![Expo](https://img.shields.io/badge/Expo-SDK%2052-black.svg?style=flat-square&logo=expo)](https://expo.dev/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.1.3-blue.svg?style=flat-square&logo=typescript)](https://www.typescriptlang.org/)
+[![License](https://img.shields.io/badge/License-MIT-green.svg?style=flat-square)](LICENSE)
 
-- Create and manage recurring tasks with flexible patterns
-  - Daily, weekly, monthly, or custom intervals
-  - Set custom start and due dates
-  - Automatic cycle creation for recurring tasks
-- Smart reminders and notifications
-  - Customizable reminder times before deadlines
-  - Background task monitoring
-  - Overdue task detection
-- Modern and intuitive UI
-  - Dark mode support
-  - Clean, minimalist design
-  - Smooth animations and transitions
-- Offline-first architecture
-  - SQLite local database
-  - No internet connection required
-  - Fast and reliable data access
+</div>
 
-## Getting Started
+<p align="center">
+  <img src="assets/icon.png" alt="NeverMiss Logo" width="120" height="120">
+</p>
 
-### Prerequisites
+<p align="center">
+  永不错过重要任务的智能提醒应用
+</p>
 
-- Node.js (v18 or later)
-- npm (v9 or later) or yarn (v1.22 or later)
-- Expo CLI (`npm install -g expo-cli`)
-- For Android development:
-  - Android Studio
-  - Android SDK (API Level 33 or higher)
-  - Java Development Kit (JDK)
-- For iOS development:
-  - Xcode (Mac only)
-  - iOS Simulator or physical device
+## ✨ 功能特点
 
-### Installation
+- 🔄 **灵活的循环任务** - 每日、每周、每月或自定义间隔
+- 🔔 **智能提醒系统** - 自定义提醒时间，后台监控
+- 🌙 **深色模式支持** - 简洁优雅的用户界面
+- 📱 **离线优先架构** - 基于 AsyncStorage 的本地数据存储
 
-1. Clone the repository:
+## 📱 截图
+
+<div align="center">
+  <img src="assets/screenshots/home.png" alt="主页" width="200">
+  <img src="assets/screenshots/task.png" alt="任务详情" width="200">
+  <img src="assets/screenshots/form.png" alt="创建任务" width="200">
+</div>
+
+## 🚀 快速开始
+
+### 环境要求
+
+- Node.js (v18+)
+- npm (v9+) 或 yarn (v1.22+)
+- [Expo CLI](https://docs.expo.dev/get-started/installation/)
+
+### 安装步骤
+
 ```bash
+# 克隆仓库
 git clone https://github.com/yourusername/nevermiss.git
 cd nevermiss
-```
 
-2. Install dependencies:
-```bash
+# 安装依赖
 npm install
-# or
-yarn install
-```
 
-3. Start the development server:
-```bash
+# 启动开发服务器
 npm start
-# or
-yarn start
 ```
 
-4. Run on your device:
-- For Android:
-  ```bash
-  npm run android
-  # or
-  yarn android
-  ```
-- For iOS:
-  ```bash
-  npm run ios
-  # or
-  yarn ios
-  ```
+详细的安装和构建指南:
+- [安装指南](安装指南.md)
+- [构建指南](构建指南.md)
 
-### Development Scripts
+## 🛠️ 技术栈
 
-- `npm start` - Start the Expo development server
-- `npm run android` - Start the app on Android
-- `npm run ios` - Start the app on iOS
-- `npm run web` - Start the app in a web browser
-- `npm run test` - Run tests
-- `npm run lint` - Run ESLint
-- `npm run type-check` - Run TypeScript type checking
-- `npm run clean` - Clear cache and restart the development server
+- [React Native](https://reactnative.dev/) - 移动应用框架
+- [Expo](https://expo.dev/) - 开发平台
+- [TypeScript](https://www.typescriptlang.org/) - 类型安全
+- [AsyncStorage](https://react-native-async-storage.github.io/async-storage/) - 本地数据存储
+- [Expo Router](https://docs.expo.dev/router/introduction/) - 文件路由系统
 
-## Project Structure
+## 📂 项目结构
 
 ```
 nevermiss/
-├── app/                    # App routes and navigation
-│   ├── _layout.tsx        # Root layout with navigation setup
-│   └── index.tsx          # Home screen
-├── assets/                 # Static assets (images, fonts)
-├── components/            # Reusable React components
-│   ├── TaskList.tsx      # Task list component
-│   ├── TaskForm.tsx      # Task creation/editing form
-│   └── TaskDetail.tsx    # Task details view
-├── models/                # TypeScript interfaces and types
-│   └── Task.ts          # Task and cycle type definitions
-├── services/             # Business logic and database services
-│   ├── database.ts      # SQLite database setup and management
-│   ├── taskService.ts   # Task CRUD operations
-│   └── notificationService.ts # Push notification handling
-└── types/                # Type declarations
+├── app/                # 应用路由和导航
+├── components/         # 可复用 React 组件
+├── models/             # TypeScript 类型定义
+├── services/           # 业务逻辑和数据服务
+└── assets/             # 静态资源
 ```
 
-## Tech Stack
+## 🔧 常见问题
 
-- [React Native](https://reactnative.dev/) - Mobile app framework
-- [Expo](https://expo.dev/) - Development platform
-- [TypeScript](https://www.typescriptlang.org/) - Type safety
-- [SQLite](https://www.sqlite.org/) (via expo-sqlite) - Local database
-- [date-fns](https://date-fns.org/) - Date manipulation
-- [React Navigation](https://reactnavigation.org/) - Navigation
-- [Expo Router](https://docs.expo.dev/router/introduction/) - File-based routing
+遇到问题? 查看我们的[常见问题解决方案](安装指南.md#常见问题解决方案)。
 
-## Contributing
+## 🤝 贡献指南
 
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+1. Fork 仓库
+2. 创建功能分支 (`git checkout -b feature/amazing-feature`)
+3. 提交更改 (`git commit -m '添加新功能'`)
+4. 推送到分支 (`git push origin feature/amazing-feature`)
+5. 打开 Pull Request
 
-## License
+## 📄 许可证
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+本项目采用 MIT 许可证 - 详情请参阅 [LICENSE](LICENSE) 文件。
 
-## Acknowledgments
+## 👏 致谢
 
-- [Expo](https://expo.dev/) for the amazing development platform
-- [React Native](https://reactnative.dev/) for the mobile framework
-- [SQLite](https://www.sqlite.org/) for the reliable database engine
-- [date-fns](https://date-fns.org/) for date manipulation utilities
-- [React Navigation](https://reactnavigation.org/) for navigation solutions 
+- [Expo](https://expo.dev/) - 提供了出色的开发平台
+- [React Native](https://reactnative.dev/) - 提供了移动框架
+- [AsyncStorage](https://react-native-async-storage.github.io/async-storage/) - 提供了可靠的数据存储解决方案

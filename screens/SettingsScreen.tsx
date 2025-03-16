@@ -23,6 +23,7 @@ export default function SettingsScreen() {
   const [dbInfo, setDbInfo] = useState<DatabaseInfo | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const colorScheme = useColorScheme();
+  const isDarkMode = colorScheme === 'dark';
 
   const loadDatabaseInfo = async () => {
     try {
@@ -51,7 +52,7 @@ export default function SettingsScreen() {
           style: 'cancel',
         },
         {
-          text: '重置',
+          text: '确定',
           style: 'destructive',
           onPress: async () => {
             try {
@@ -75,14 +76,14 @@ export default function SettingsScreen() {
     <ScrollView
       style={[
         styles.container,
-        { backgroundColor: colorScheme === 'dark' ? '#000000' : '#f5f5f5' },
+        { backgroundColor: isDarkMode ? '#000000' : '#f5f5f5' },
       ]}
     >
       <View style={styles.section}>
         <Text
           style={[
             styles.sectionTitle,
-            { color: colorScheme === 'dark' ? '#ffffff' : '#000000' },
+            { color: isDarkMode ? '#ffffff' : '#000000' },
           ]}
         >
           数据库信息
@@ -95,7 +96,7 @@ export default function SettingsScreen() {
               <Text
                 style={[
                   styles.infoLabel,
-                  { color: colorScheme === 'dark' ? '#cccccc' : '#666666' },
+                  { color: isDarkMode ? '#cccccc' : '#666666' },
                 ]}
               >
                 版本
@@ -103,7 +104,7 @@ export default function SettingsScreen() {
               <Text
                 style={[
                   styles.infoValue,
-                  { color: colorScheme === 'dark' ? '#ffffff' : '#000000' },
+                  { color: isDarkMode ? '#ffffff' : '#000000' },
                 ]}
               >
                 {dbInfo.version}
@@ -113,7 +114,7 @@ export default function SettingsScreen() {
               <Text
                 style={[
                   styles.infoLabel,
-                  { color: colorScheme === 'dark' ? '#cccccc' : '#666666' },
+                  { color: isDarkMode ? '#cccccc' : '#666666' },
                 ]}
               >
                 任务数量
@@ -121,7 +122,7 @@ export default function SettingsScreen() {
               <Text
                 style={[
                   styles.infoValue,
-                  { color: colorScheme === 'dark' ? '#ffffff' : '#000000' },
+                  { color: isDarkMode ? '#ffffff' : '#000000' },
                 ]}
               >
                 {dbInfo.tasksCount}
@@ -131,7 +132,7 @@ export default function SettingsScreen() {
               <Text
                 style={[
                   styles.infoLabel,
-                  { color: colorScheme === 'dark' ? '#cccccc' : '#666666' },
+                  { color: isDarkMode ? '#cccccc' : '#666666' },
                 ]}
               >
                 周期数量
@@ -139,7 +140,7 @@ export default function SettingsScreen() {
               <Text
                 style={[
                   styles.infoValue,
-                  { color: colorScheme === 'dark' ? '#ffffff' : '#000000' },
+                  { color: isDarkMode ? '#ffffff' : '#000000' },
                 ]}
               >
                 {dbInfo.cyclesCount}
@@ -149,7 +150,7 @@ export default function SettingsScreen() {
               <Text
                 style={[
                   styles.infoLabel,
-                  { color: colorScheme === 'dark' ? '#cccccc' : '#666666' },
+                  { color: isDarkMode ? '#cccccc' : '#666666' },
                 ]}
               >
                 历史记录数量
@@ -157,7 +158,7 @@ export default function SettingsScreen() {
               <Text
                 style={[
                   styles.infoValue,
-                  { color: colorScheme === 'dark' ? '#ffffff' : '#000000' },
+                  { color: isDarkMode ? '#ffffff' : '#000000' },
                 ]}
               >
                 {dbInfo.historyCount}
@@ -171,7 +172,7 @@ export default function SettingsScreen() {
         <Text
           style={[
             styles.sectionTitle,
-            { color: colorScheme === 'dark' ? '#ffffff' : '#000000' },
+            { color: isDarkMode ? '#ffffff' : '#000000' },
           ]}
         >
           数据管理

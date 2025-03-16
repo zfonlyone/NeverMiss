@@ -8,13 +8,26 @@ import { registerBackgroundTask, unregisterBackgroundTask } from './backgroundTa
 // Configure notifications
 export async function configureNotifications(): Promise<boolean> {
   try {
-    // Set notification handler
+    // 请求通知权限
+    const { status: existingStatus } = await Notifications.getPermissionsAsync();
+    let finalStatus = existingStatus;
+    
+    if (existingStatus !== 'granted') {
+      const { status } = await Notifications.requestPermissionsAsync();
+      finalStatus = status;
+    }
+    
+    if (finalStatus !== 'granted') {
+      console.log('未获得通知权限!');
+      return false;
+    }
+
+    // 配置通知处理
     Notifications.setNotificationHandler({
       handleNotification: async () => ({
         shouldShowAlert: true,
         shouldPlaySound: true,
         shouldSetBadge: true,
-        priority: Notifications.AndroidNotificationPriority.MAX,
       }),
     });
     
@@ -41,47 +54,12 @@ export async function configureNotifications(): Promise<boolean> {
       });
     }
     
-    // Request permissions
-    const permissionResult = await requestNotificationPermissions();
-    
     // Register background tasks
     await registerBackgroundTask();
     
-    return permissionResult;
-  } catch (error) {
-    console.error('Error configuring notifications:', error);
-    return false;
-  }
-}
-
-// Request notification permissions
-export async function requestNotificationPermissions(): Promise<boolean> {
-  try {
-    // Check if physical device
-    if (!Device.isDevice) {
-      console.warn('Notifications not available on simulator/emulator');
-      return false;
-    }
-    
-    // Check existing permissions
-    const { status: existingStatus } = await Notifications.getPermissionsAsync();
-    let finalStatus = existingStatus;
-    
-    // Request permissions if not granted
-    if (existingStatus !== 'granted') {
-      const { status } = await Notifications.requestPermissionsAsync();
-      finalStatus = status;
-    }
-    
-    // Check if granted
-    if (finalStatus !== 'granted') {
-      console.warn('Notification permissions not granted');
-      return false;
-    }
-    
     return true;
   } catch (error) {
-    console.error('Error requesting notification permissions:', error);
+    console.error('Error configuring notifications:', error);
     return false;
   }
 }

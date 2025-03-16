@@ -1,176 +1,102 @@
-import * as SQLite from 'expo-sqlite';
 import { Platform } from 'react-native';
-import * as FileSystem from 'expo-file-system';
-import { Asset } from 'expo-asset';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const DATABASE_NAME = 'nevermiss.db';
 const DATABASE_VERSION = 1;
 
-const db = SQLite.openDatabase(DATABASE_NAME);
+// 获取数据库版本
+export async function getDatabaseVersion(): Promise<number> {
+  return DATABASE_VERSION;
+}
 
-const createTasksTable = `
-  CREATE TABLE IF NOT EXISTS tasks (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    title TEXT NOT NULL,
-    description TEXT,
-    recurrenceType TEXT NOT NULL,
-    recurrenceValue INTEGER NOT NULL,
-    recurrenceUnit TEXT,
-    reminderOffset INTEGER NOT NULL DEFAULT 0,
-    reminderUnit TEXT NOT NULL DEFAULT 'minutes',
-    reminderTimeHour INTEGER NOT NULL DEFAULT 9,
-    reminderTimeMinute INTEGER NOT NULL DEFAULT 0,
-    isActive INTEGER NOT NULL DEFAULT 1,
-    autoRestart INTEGER NOT NULL DEFAULT 0,
-    syncToCalendar INTEGER NOT NULL DEFAULT 0,
-    calendarEventId TEXT,
-    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-  );
-`;
-
-const createTaskCyclesTable = `
-  CREATE TABLE IF NOT EXISTS task_cycles (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    taskId INTEGER NOT NULL,
-    startDate TEXT NOT NULL,
-    dueDate TEXT NOT NULL,
-    isCompleted INTEGER NOT NULL DEFAULT 0,
-    isOverdue INTEGER NOT NULL DEFAULT 0,
-    completedDate TEXT,
-    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (taskId) REFERENCES tasks (id) ON DELETE CASCADE
-  );
-`;
-
-const createTaskHistoryTable = `
-  CREATE TABLE IF NOT EXISTS task_history (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    taskId INTEGER NOT NULL,
-    cycleId INTEGER NOT NULL,
-    action TEXT NOT NULL,
-    timestamp TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (taskId) REFERENCES tasks (id) ON DELETE CASCADE,
-    FOREIGN KEY (cycleId) REFERENCES task_cycles (id) ON DELETE CASCADE
-  );
-`;
-
-const createIndexes = [
-  'CREATE INDEX IF NOT EXISTS idx_tasks_isActive ON tasks (isActive);',
-  'CREATE INDEX IF NOT EXISTS idx_task_cycles_taskId ON task_cycles (taskId);',
-  'CREATE INDEX IF NOT EXISTS idx_task_cycles_isCompleted ON task_cycles (isCompleted);',
-  'CREATE INDEX IF NOT EXISTS idx_task_cycles_isOverdue ON task_cycles (isOverdue);',
-  'CREATE INDEX IF NOT EXISTS idx_task_history_taskId ON task_history (taskId);',
-  'CREATE INDEX IF NOT EXISTS idx_task_history_cycleId ON task_history (cycleId);',
-];
-
-export const initDatabase = async (): Promise<void> => {
-  return new Promise<void>((resolve, reject) => {
-    try {
-      // Enable foreign key support and create tables
-      db.transaction(
-        (tx) => {
-          // Drop existing tables if they exist
-          tx.executeSql('DROP TABLE IF EXISTS task_history;');
-          tx.executeSql('DROP TABLE IF EXISTS task_cycles;');
-          tx.executeSql('DROP TABLE IF EXISTS tasks;');
-
-          // Enable foreign key support
-          tx.executeSql('PRAGMA foreign_keys = ON;');
-
-          // Create tables
-          tx.executeSql(createTasksTable);
-          tx.executeSql(createTaskCyclesTable);
-          tx.executeSql(createTaskHistoryTable);
-
-          // Create indexes
-          createIndexes.forEach((sql) => {
-            tx.executeSql(sql);
-          });
-        },
-        (error) => {
-          console.error('Error creating database:', error);
-          reject(error);
-        },
-        () => {
-          console.log('Database initialized successfully');
-          resolve();
-        }
-      );
-    } catch (error) {
-      console.error('Error initializing database:', error);
-      reject(error);
-    }
-  });
-};
-
-export const clearDatabase = async (): Promise<void> => {
-  return new Promise<void>((resolve, reject) => {
-    db.transaction(
-      (tx) => {
-        tx.executeSql('DROP TABLE IF EXISTS task_history;');
-        tx.executeSql('DROP TABLE IF EXISTS task_cycles;');
-        tx.executeSql('DROP TABLE IF EXISTS tasks;');
-      },
-      (error) => {
-        console.error('Error clearing database:', error);
-        reject(error);
-      },
-      () => {
-        console.log('Database cleared successfully');
-        resolve();
-      }
-    );
-  });
-};
-
-export const resetDatabase = async (): Promise<void> => {
+// 初始化数据库函数
+export async function initDatabase() {
   try {
-    await clearDatabase();
-    await initDatabase();
-    console.log('Database reset successfully');
+    // 检查是否已初始化
+    const version = await AsyncStorage.getItem('nevermiss_db_version');
+    
+    if (!version) {
+      // 首次初始化
+      await AsyncStorage.setItem('nevermiss_db_version', DATABASE_VERSION.toString());
+      console.log('数据库初始化成功');
+    } else {
+      console.log(`数据库已初始化，版本: ${version}`);
+      // 这里可以添加版本迁移逻辑
+    }
   } catch (error) {
-    console.error('Error resetting database:', error);
+    console.error('初始化数据库时出错:', error);
+    throw error;
+  }
+}
+
+// 清除数据库
+export const clearDatabase = async (): Promise<void> => {
+  try {
+    const keys = await AsyncStorage.getAllKeys();
+    const nevermissKeys = keys.filter(key => key.startsWith('nevermiss_'));
+    
+    if (nevermissKeys.length > 0) {
+      await AsyncStorage.multiRemove(nevermissKeys);
+    }
+    
+    console.log('数据库清除成功');
+  } catch (error) {
+    console.error('清除数据库时出错:', error);
     throw error;
   }
 };
 
-export const getDatabaseVersion = async (): Promise<number> => {
-  return DATABASE_VERSION;
+// 重置数据库
+export const resetDatabase = async (): Promise<void> => {
+  try {
+    await clearDatabase();
+    await initDatabase();
+    console.log('数据库重置成功');
+  } catch (error) {
+    console.error('重置数据库时出错:', error);
+    throw error;
+  }
 };
 
+// 获取数据库信息
 export const getDatabaseInfo = async (): Promise<{
   version: number;
   tasksCount: number;
   cyclesCount: number;
   historyCount: number;
 }> => {
-  return new Promise((resolve, reject) => {
-    db.transaction(
-      (tx) => {
-        tx.executeSql(
-          `SELECT 
-            (SELECT COUNT(*) FROM tasks) as tasksCount,
-            (SELECT COUNT(*) FROM task_cycles) as cyclesCount,
-            (SELECT COUNT(*) FROM task_history) as historyCount;`,
-          [],
-          (_, { rows: { _array } }) => {
-            resolve({
-              version: DATABASE_VERSION,
-              ..._array[0],
-            });
-          }
-        );
-      },
-      (error) => {
-        console.error('Error getting database info:', error);
-        reject(error);
-      }
-    );
-  });
+  try {
+    // 获取版本
+    const version = await AsyncStorage.getItem('nevermiss_db_version') || '0';
+    
+    // 获取任务数量
+    const tasksJson = await AsyncStorage.getItem('nevermiss_tasks') || '[]';
+    const tasks = JSON.parse(tasksJson);
+    
+    // 获取周期数量
+    const cyclesJson = await AsyncStorage.getItem('nevermiss_task_cycles') || '[]';
+    const cycles = JSON.parse(cyclesJson);
+    
+    // 获取历史记录数量
+    const historyJson = await AsyncStorage.getItem('nevermiss_task_history') || '[]';
+    const history = JSON.parse(historyJson);
+    
+    return {
+      version: parseInt(version, 10),
+      tasksCount: tasks.length,
+      cyclesCount: cycles.length,
+      historyCount: history.length,
+    };
+  } catch (error) {
+    console.error('获取数据库信息时出错:', error);
+    throw error;
+  }
 };
 
-// Initialize database on import
-initDatabase();
-
-export default db; 
+// 导出函数
+export default {
+  initDatabase,
+  clearDatabase,
+  resetDatabase,
+  getDatabaseVersion,
+  getDatabaseInfo
+}; 
