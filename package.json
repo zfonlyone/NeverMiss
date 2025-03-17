@@ -10,7 +10,12 @@
     "test": "jest --watchAll",
     "lint": "eslint .",
     "type-check": "tsc",
-    "clean": "expo start --clear"
+    "clean": "expo start --clear",
+    "doctor": "npx expo-doctor",
+    "update-deps": "expo install --check",
+    "prebuild": "expo prebuild",
+    "build:android": "eas build -p android",
+    "build:ios": "eas build -p ios"
   },
   "jest": {
     "preset": "jest-expo"
@@ -18,19 +23,21 @@
   "dependencies": {
     "@expo/vector-icons": "^14.0.0",
     "@react-native-async-storage/async-storage": "1.23.1",
-    "@react-native-community/datetimepicker": "8.2.0",
-    "@react-navigation/native": "^6.1.9",
+    "@react-native-community/datetimepicker": "^8.2.0",
+    "@react-navigation/native": "^7.0.14",
     "date-fns": "^3.6.0",
     "expo": "~52.0.21",
     "expo-asset": "~11.0.4",
     "expo-background-fetch": "~13.0.5",
     "expo-calendar": "~14.0.6",
     "expo-device": "~7.0.2",
+    "expo-document-picker": "~13.0.3",
     "expo-file-system": "~18.0.11",
     "expo-font": "~13.0.4",
     "expo-linking": "~7.0.5",
     "expo-notifications": "~0.29.14",
     "expo-router": "~4.0.19",
+    "expo-sharing": "~13.0.1",
     "expo-splash-screen": "~0.29.22",
     "expo-status-bar": "~2.0.1",
     "expo-system-ui": "~4.0.8",
@@ -43,16 +50,17 @@
     "react-native-reanimated": "~3.16.1",
     "react-native-safe-area-context": "4.12.0",
     "react-native-screens": "~4.4.0",
+    "react-native-svg": "15.8.0",
     "react-native-web": "~0.19.6"
   },
   "devDependencies": {
     "@babel/core": "^7.20.0",
     "@babel/preset-react": "^7.26.3",
-    "@types/react": "~18.2.79",
+    "@types/react": "~18.3.12",
     "@types/uuid": "^10.0.0",
     "babel-plugin-module-resolver": "^5.0.2",
     "jest": "^29.2.1",
-    "jest-expo": "~50.0.4",
+    "jest-expo": "~52.0.6",
     "react-test-renderer": "18.2.0",
     "typescript": "^5.1.3"
   },
@@ -61,5 +69,47 @@
     "removedDependencies": [
       "expo-sqlite - 在 Expo SDK 52 中已移除，改用 AsyncStorage 存储数据"
     ]
+  },
+  "expo": {
+    "name": "NeverMiss",
+    "slug": "nevermiss",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.nevermiss.app"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "package": "com.nevermiss.app"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-notifications",
+      "expo-calendar",
+      "expo-document-picker",
+      "expo-sharing"
+    ],
+    "doctor": {
+      "reactNativeDirectoryCheck": {
+        "listUnknownPackages": false
+      }
+    }
   }
 }

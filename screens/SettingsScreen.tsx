@@ -6,11 +6,14 @@ import {
   TouchableOpacity,
   Alert,
   ScrollView,
-  useColorScheme,
+  Switch,
+  Linking,
   ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { getDatabaseInfo, resetDatabase } from '../services/database';
+import { useTheme } from '../contexts/ThemeContext';
+import { useLanguage } from '../contexts/LanguageContext';
 
 interface DatabaseInfo {
   version: number;
@@ -22,8 +25,8 @@ interface DatabaseInfo {
 export default function SettingsScreen() {
   const [dbInfo, setDbInfo] = useState<DatabaseInfo | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const colorScheme = useColorScheme();
-  const isDarkMode = colorScheme === 'dark';
+  const { themeMode, isDarkMode, setThemeMode, colors } = useTheme();
+  const { language, t, changeLanguage } = useLanguage();
 
   const loadDatabaseInfo = async () => {
     try {
@@ -32,7 +35,7 @@ export default function SettingsScreen() {
       setDbInfo(info);
     } catch (error) {
       console.error('Error loading database info:', error);
-      Alert.alert('错误', '加载数据库信息失败');
+      Alert.alert(t.common.error, t.settings.loadDatabaseFailed);
     } finally {
       setIsLoading(false);
     }
@@ -44,25 +47,25 @@ export default function SettingsScreen() {
 
   const handleResetDatabase = () => {
     Alert.alert(
-      '重置数据库',
-      '确定要重置数据库吗？此操作将删除所有数据且不可恢复。',
+      t.settings.resetData,
+      t.settings.resetDataConfirmation,
       [
         {
-          text: '取消',
+          text: t.common.cancel,
           style: 'cancel',
         },
         {
-          text: '确定',
+          text: t.settings.reset,
           style: 'destructive',
           onPress: async () => {
             try {
               setIsLoading(true);
               await resetDatabase();
               await loadDatabaseInfo();
-              Alert.alert('成功', '数据库已重置');
+              Alert.alert(t.common.success, t.settings.resetDataSuccess);
             } catch (error) {
               console.error('Error resetting database:', error);
-              Alert.alert('错误', '重置数据库失败');
+              Alert.alert(t.common.error, t.settings.resetDataFailed);
             } finally {
               setIsLoading(false);
             }
@@ -72,39 +75,237 @@ export default function SettingsScreen() {
     );
   };
 
+  const openGitHubRepo = () => {
+    Linking.openURL('https://github.com/zfonlyone/NeverMiss').catch((err) => {
+      console.error('Error opening URL:', err);
+      Alert.alert(t.common.error, t.settings.cannotOpenUrl);
+    });
+  };
+
   return (
     <ScrollView
       style={[
         styles.container,
-        { backgroundColor: isDarkMode ? '#000000' : '#f5f5f5' },
+        { backgroundColor: colors.background },
       ]}
     >
-      <View style={styles.section}>
+      {/* 主题设置 */}
+      <View style={[styles.section, { backgroundColor: colors.card, borderRadius: 12, marginHorizontal: 16, marginTop: 16 }]}>
         <Text
           style={[
             styles.sectionTitle,
-            { color: isDarkMode ? '#ffffff' : '#000000' },
+            { color: colors.text },
           ]}
         >
-          数据库信息
+          {t.settings.themeSettings}
+        </Text>
+        
+        <View style={styles.settingRow}>
+          <View style={styles.settingInfo}>
+            <Ionicons name="sync" size={24} color={colors.primary} style={styles.settingIcon} />
+            <View>
+              <Text style={[styles.settingLabel, { color: colors.text }]}>
+                {t.settings.themeAuto}
+              </Text>
+              <Text style={[styles.settingDesc, { color: colors.subText }]}>
+                {t.settings.themeAutoDesc}
+              </Text>
+            </View>
+          </View>
+          <Switch 
+            value={themeMode === 'auto'} 
+            onValueChange={(value) => {
+              if (value) setThemeMode('auto');
+            }}
+            trackColor={{ false: colors.border, true: colors.primary }}
+            thumbColor="#ffffff"
+          />
+        </View>
+        
+        <View style={styles.settingRow}>
+          <View style={styles.settingInfo}>
+            <Ionicons name="sunny" size={24} color={colors.primary} style={styles.settingIcon} />
+            <View>
+              <Text style={[styles.settingLabel, { color: colors.text }]}>
+                {t.settings.themeLight}
+              </Text>
+              <Text style={[styles.settingDesc, { color: colors.subText }]}>
+                {t.settings.themeLightDesc}
+              </Text>
+            </View>
+          </View>
+          <Switch 
+            value={themeMode === 'light'} 
+            onValueChange={(value) => {
+              if (value) setThemeMode('light');
+            }}
+            trackColor={{ false: colors.border, true: colors.primary }}
+            thumbColor="#ffffff"
+          />
+        </View>
+        
+        <View style={styles.settingRow}>
+          <View style={styles.settingInfo}>
+            <Ionicons name="moon" size={24} color={colors.primary} style={styles.settingIcon} />
+            <View>
+              <Text style={[styles.settingLabel, { color: colors.text }]}>
+                {t.settings.themeDark}
+              </Text>
+              <Text style={[styles.settingDesc, { color: colors.subText }]}>
+                {t.settings.themeDarkDesc}
+              </Text>
+            </View>
+          </View>
+          <Switch 
+            value={themeMode === 'dark'} 
+            onValueChange={(value) => {
+              if (value) setThemeMode('dark');
+            }}
+            trackColor={{ false: colors.border, true: colors.primary }}
+            thumbColor="#ffffff"
+          />
+        </View>
+      </View>
+
+      {/* 语言设置 */}
+      <View style={[styles.section, { backgroundColor: colors.card, borderRadius: 12, marginHorizontal: 16, marginTop: 16 }]}>
+        <Text
+          style={[
+            styles.sectionTitle,
+            { color: colors.text },
+          ]}
+        >
+          {t.settings.languageSettings}
+        </Text>
+        
+        <View style={styles.settingRow}>
+          <View style={styles.settingInfo}>
+            <Text style={[styles.languageIcon, { color: colors.primary }]}>中</Text>
+            <View>
+              <Text style={[styles.settingLabel, { color: colors.text }]}>
+                中文
+              </Text>
+              <Text style={[styles.settingDesc, { color: colors.subText }]}>
+                使用中文显示应用界面
+              </Text>
+            </View>
+          </View>
+          <Switch 
+            value={language === 'zh'} 
+            onValueChange={(value) => {
+              if (value) changeLanguage('zh');
+            }}
+            trackColor={{ false: colors.border, true: colors.primary }}
+            thumbColor="#ffffff"
+          />
+        </View>
+        
+        <View style={styles.settingRow}>
+          <View style={styles.settingInfo}>
+            <Text style={[styles.languageIcon, { color: colors.primary }]}>En</Text>
+            <View>
+              <Text style={[styles.settingLabel, { color: colors.text }]}>
+                English
+              </Text>
+              <Text style={[styles.settingDesc, { color: colors.subText }]}>
+                Display app interface in English
+              </Text>
+            </View>
+          </View>
+          <Switch 
+            value={language === 'en'} 
+            onValueChange={(value) => {
+              if (value) changeLanguage('en');
+            }}
+            trackColor={{ false: colors.border, true: colors.primary }}
+            thumbColor="#ffffff"
+          />
+        </View>
+      </View>
+
+      {/* 权限管理 */}
+      <View style={[styles.section, { backgroundColor: colors.card, borderRadius: 12, marginHorizontal: 16, marginTop: 16 }]}>
+        <Text
+          style={[
+            styles.sectionTitle,
+            { color: colors.text },
+          ]}
+        >
+          {t.settings.permissionSettings}
+        </Text>
+        
+        <View style={styles.settingRow}>
+          <View style={styles.settingInfo}>
+            <Ionicons name="notifications" size={24} color={colors.primary} style={styles.settingIcon} />
+            <View>
+              <Text style={[styles.settingLabel, { color: colors.text }]}>
+                {t.permissions.notificationPermissionTitle}
+              </Text>
+              <Text style={[styles.settingDesc, { color: colors.subText }]}>
+                {t.settings.notificationPermissionDesc}
+              </Text>
+            </View>
+          </View>
+          <TouchableOpacity
+            style={[
+              styles.permissionButton,
+              { backgroundColor: colors.primary }
+            ]}
+          >
+            <Text style={styles.permissionButtonText}>{t.settings.permissionGranted}</Text>
+          </TouchableOpacity>
+        </View>
+        
+        <View style={styles.settingRow}>
+          <View style={styles.settingInfo}>
+            <Ionicons name="calendar" size={24} color={colors.primary} style={styles.settingIcon} />
+            <View>
+              <Text style={[styles.settingLabel, { color: colors.text }]}>
+                {t.permissions.calendarPermissionTitle}
+              </Text>
+              <Text style={[styles.settingDesc, { color: colors.subText }]}>
+                {t.settings.calendarPermissionDesc}
+              </Text>
+            </View>
+          </View>
+          <TouchableOpacity
+            style={[
+              styles.permissionButton,
+              { backgroundColor: colors.primary }
+            ]}
+          >
+            <Text style={styles.permissionButtonText}>{t.settings.permissionGranted}</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* 数据库信息 */}
+      <View style={[styles.section, { backgroundColor: colors.card, borderRadius: 12, marginHorizontal: 16, marginTop: 16 }]}>
+        <Text
+          style={[
+            styles.sectionTitle,
+            { color: colors.text },
+          ]}
+        >
+          {t.settings.databaseInfo}
         </Text>
         {isLoading ? (
-          <ActivityIndicator size="large" color="#2196F3" />
+          <ActivityIndicator size="large" color={colors.primary} />
         ) : dbInfo ? (
           <View style={styles.infoContainer}>
             <View style={styles.infoRow}>
               <Text
                 style={[
                   styles.infoLabel,
-                  { color: isDarkMode ? '#cccccc' : '#666666' },
+                  { color: colors.subText },
                 ]}
               >
-                版本
+                {t.settings.version}
               </Text>
               <Text
                 style={[
                   styles.infoValue,
-                  { color: isDarkMode ? '#ffffff' : '#000000' },
+                  { color: colors.text },
                 ]}
               >
                 {dbInfo.version}
@@ -114,15 +315,15 @@ export default function SettingsScreen() {
               <Text
                 style={[
                   styles.infoLabel,
-                  { color: isDarkMode ? '#cccccc' : '#666666' },
+                  { color: colors.subText },
                 ]}
               >
-                任务数量
+                {t.settings.tasksCount}
               </Text>
               <Text
                 style={[
                   styles.infoValue,
-                  { color: isDarkMode ? '#ffffff' : '#000000' },
+                  { color: colors.text },
                 ]}
               >
                 {dbInfo.tasksCount}
@@ -132,15 +333,15 @@ export default function SettingsScreen() {
               <Text
                 style={[
                   styles.infoLabel,
-                  { color: isDarkMode ? '#cccccc' : '#666666' },
+                  { color: colors.subText },
                 ]}
               >
-                周期数量
+                {t.settings.cyclesCount}
               </Text>
               <Text
                 style={[
                   styles.infoValue,
-                  { color: isDarkMode ? '#ffffff' : '#000000' },
+                  { color: colors.text },
                 ]}
               >
                 {dbInfo.cyclesCount}
@@ -150,15 +351,15 @@ export default function SettingsScreen() {
               <Text
                 style={[
                   styles.infoLabel,
-                  { color: isDarkMode ? '#cccccc' : '#666666' },
+                  { color: colors.subText },
                 ]}
               >
-                历史记录数量
+                {t.settings.historyCount}
               </Text>
               <Text
                 style={[
                   styles.infoValue,
-                  { color: isDarkMode ? '#ffffff' : '#000000' },
+                  { color: colors.text },
                 ]}
               >
                 {dbInfo.historyCount}
@@ -168,14 +369,15 @@ export default function SettingsScreen() {
         ) : null}
       </View>
 
-      <View style={styles.section}>
+      {/* 数据管理 */}
+      <View style={[styles.section, { backgroundColor: colors.card, borderRadius: 12, marginHorizontal: 16, marginTop: 16 }]}>
         <Text
           style={[
             styles.sectionTitle,
-            { color: isDarkMode ? '#ffffff' : '#000000' },
+            { color: colors.text },
           ]}
         >
-          数据管理
+          {t.settings.dataManagement}
         </Text>
         <TouchableOpacity
           style={[
@@ -187,8 +389,37 @@ export default function SettingsScreen() {
           disabled={isLoading}
         >
           <Ionicons name="trash" size={24} color="#ffffff" />
-          <Text style={styles.buttonText}>重置数据库</Text>
+          <Text style={styles.buttonText}>{t.settings.resetData}</Text>
         </TouchableOpacity>
+      </View>
+
+      {/* 关于 */}
+      <View style={[styles.section, { backgroundColor: colors.card, borderRadius: 12, margin: 16 }]}>
+        <Text
+          style={[
+            styles.sectionTitle,
+            { color: colors.text },
+          ]}
+        >
+          {t.settings.about}
+        </Text>
+        
+        <View style={styles.settingRow}>
+          <View style={styles.settingInfo}>
+            <Ionicons name="logo-github" size={24} color={colors.primary} style={styles.settingIcon} />
+            <View>
+              <Text style={[styles.settingLabel, { color: colors.text }]}>
+                {t.settings.projectInfo}
+              </Text>
+              <Text style={[styles.settingDesc, { color: colors.subText }]}>
+                https://github.com/zfonlyone/NeverMiss
+              </Text>
+            </View>
+          </View>
+          <TouchableOpacity onPress={openGitHubRepo}>
+            <Ionicons name="open-outline" size={24} color={colors.primary} />
+          </TouchableOpacity>
+        </View>
       </View>
     </ScrollView>
   );
@@ -200,17 +431,56 @@ const styles = StyleSheet.create({
   },
   section: {
     padding: 16,
-    marginBottom: 16,
+    marginBottom: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
   },
   sectionTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: 'bold',
     marginBottom: 16,
   },
+  settingRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 16,
+    minHeight: 72,
+    borderBottomWidth: 0.5,
+    borderBottomColor: '#e0e0e0',
+  },
+  settingInfo: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    flex: 1,
+  },
+  settingIcon: {
+    marginRight: 12,
+    marginTop: 2,
+  },
+  languageIcon: {
+    width: 24,
+    textAlign: 'center',
+    fontWeight: 'bold',
+    fontSize: 16,
+    marginRight: 12,
+    marginTop: 2,
+  },
+  settingLabel: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 6,
+  },
+  settingDesc: {
+    fontSize: 13,
+    color: '#666666',
+    lineHeight: 18,
+  },
   infoContainer: {
     backgroundColor: 'transparent',
-    borderRadius: 12,
-    padding: 16,
   },
   infoRow: {
     flexDirection: 'row',
@@ -241,5 +511,17 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
     marginLeft: 8,
+  },
+  permissionButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  permissionButtonText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: 'bold',
   },
 }); 

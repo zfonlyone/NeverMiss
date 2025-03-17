@@ -1,13 +1,47 @@
 import React, { useEffect, useState } from 'react';
-import { View, useColorScheme } from 'react-native';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { initStorage } from '../services/storageService';
+import { LanguageProvider } from '../contexts/LanguageContext';
+import { ThemeProvider, useTheme } from '../contexts/ThemeContext';
+
+// 确保启动屏幕保持可见，直到明确隐藏
+SplashScreen.preventAutoHideAsync().catch(() => {});
+
+// 根布局包装器
+const RootLayoutContent = () => {
+  const { colors, isDarkMode } = useTheme();
+
+  return (
+    <Stack
+      screenOptions={{
+        headerStyle: {
+          backgroundColor: colors.card,
+        },
+        headerTintColor: colors.text,
+        headerTitleStyle: {
+          fontWeight: 'bold',
+        },
+        contentStyle: {
+          backgroundColor: colors.background,
+        },
+        headerShown: false, // 默认隐藏标题栏，在各个页面中单独控制
+        animation: 'slide_from_right',
+      }}
+    >
+      <Stack.Screen
+        name="index"
+        options={{
+          title: 'NeverMiss',
+          headerShown: false,
+        }}
+      />
+    </Stack>
+  );
+};
 
 export default function RootLayout() {
   const [appIsReady, setAppIsReady] = useState(false);
-  const colorScheme = useColorScheme();
-  const isDarkMode = colorScheme === 'dark';
 
   useEffect(() => {
     async function prepare() {
@@ -40,28 +74,10 @@ export default function RootLayout() {
   }
 
   return (
-    <Stack
-      screenOptions={{
-        headerStyle: {
-          backgroundColor: isDarkMode ? '#121212' : '#ffffff',
-        },
-        headerTintColor: isDarkMode ? '#ffffff' : '#000000',
-        headerTitleStyle: {
-          fontWeight: 'bold',
-        },
-        contentStyle: {
-          backgroundColor: isDarkMode ? '#121212' : '#f5f5f5',
-        },
-        headerShown: false, // 默认隐藏标题栏，在各个页面中单独控制
-      }}
-    >
-      <Stack.Screen
-        name="index"
-        options={{
-          title: 'NeverMiss',
-          headerShown: false,
-        }}
-      />
-    </Stack>
+    <ThemeProvider>
+      <LanguageProvider>
+        <RootLayoutContent />
+      </LanguageProvider>
+    </ThemeProvider>
   );
 }

@@ -1,23 +1,25 @@
+/**
+ * Notification Service for NeverMiss
+ * @author zfonlyone
+ * 
+ * This service handles scheduling and managing notifications
+ */
+
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 import * as Device from 'expo-device';
 import { Task } from '../models/Task';
 import { TaskCycle } from '../models/TaskCycle';
 import { registerBackgroundTask, unregisterBackgroundTask } from './backgroundTaskService';
+import { checkNotificationPermission, requestNotificationPermission } from './permissionService';
 
 // Configure notifications
 export async function configureNotifications(): Promise<boolean> {
   try {
     // 请求通知权限
-    const { status: existingStatus } = await Notifications.getPermissionsAsync();
-    let finalStatus = existingStatus;
+    const permissionResult = await requestNotificationPermission();
     
-    if (existingStatus !== 'granted') {
-      const { status } = await Notifications.requestPermissionsAsync();
-      finalStatus = status;
-    }
-    
-    if (finalStatus !== 'granted') {
+    if (permissionResult.status !== 'granted') {
       console.log('未获得通知权限!');
       return false;
     }
@@ -70,9 +72,32 @@ export async function scheduleTaskNotification(
   cycle: TaskCycle
 ): Promise<string | null> {
   try {
-    // Calculate notification time
-    const notificationDate = new Date(cycle.cycleStartDateTime);
-    notificationDate.setMinutes(notificationDate.getMinutes() - task.reminderOffset);
+    // Check permission first
+    const permissionResult = await checkNotificationPermission();
+    if (permissionResult.status !== 'granted') {
+      console.log('没有通知权限，无法安排提醒');
+      return null;
+    }
+    
+    // Calculate notification time based on cycle start date and reminder offset
+    const startDate = new Date(cycle.startDate);
+    const notificationDate = new Date(startDate);
+    
+    // Apply reminder offset based on unit
+    switch (task.reminderUnit) {
+      case 'minutes':
+        notificationDate.setMinutes(notificationDate.getMinutes() - task.reminderOffset);
+        break;
+      case 'hours':
+        notificationDate.setHours(notificationDate.getHours() - task.reminderOffset);
+        break;
+      case 'days':
+        notificationDate.setDate(notificationDate.getDate() - task.reminderOffset);
+        break;
+      case 'months':
+        notificationDate.setMonth(notificationDate.getMonth() - task.reminderOffset);
+        break;
+    }
     
     // Don't schedule if the notification time is in the past
     if (notificationDate <= new Date()) {
@@ -100,10 +125,10 @@ export async function scheduleTaskNotification(
       trigger: notificationDate,
     });
     
-    console.log(`Scheduled notification for task "${task.title}" with ID: ${notificationId}`);
+    console.log(`已为任务 "${task.title}" 安排通知，ID: ${notificationId}, 时间: ${notificationDate.toLocaleString()}`);
     return notificationId;
   } catch (error) {
-    console.error('Error scheduling task notification:', error);
+    console.error('安排任务通知时出错:', error);
     return null;
   }
 }
@@ -187,29 +212,19 @@ export async function scheduleTestNotification(
   input: TestNotificationInput
 ): Promise<string | null> {
   try {
-    // Schedule notification
     const notificationId = await Notifications.scheduleNotificationAsync({
       content: {
-        title: `⚠️ ${input.title}`,
+        title: `测试通知 #${input.id}: ${input.title}`,
         body: input.body,
-        data: { taskId: input.id },
-        sound: true,
-        priority: Notifications.AndroidNotificationPriority.MAX,
-        color: '#FF0000',
-        ...(Platform.OS === 'android' && { 
-          channelId: 'reminders',
-          vibrate: [0, 500, 200, 500, 200, 500],
-          lights: true,
-          lightColor: '#FF0000',
-        }),
+        data: { testId: input.id },
       },
       trigger: input.date,
     });
     
-    console.log(`Scheduled test notification with ID: ${notificationId}`);
+    console.log(`已安排测试通知，ID: ${notificationId}`);
     return notificationId;
   } catch (error) {
-    console.error('Error scheduling test notification:', error);
+    console.error('安排测试通知时出错:', error);
     return null;
   }
 } 

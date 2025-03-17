@@ -6,12 +6,13 @@ import {
   FlatList,
   RefreshControl,
   TouchableOpacity,
-  useColorScheme,
   ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Task } from '../models/Task';
 import { format } from 'date-fns';
+import { useLanguage } from '../contexts/LanguageContext';
+import { useTheme } from '../contexts/ThemeContext';
 
 interface TaskListProps {
   tasks: Task[];
@@ -23,8 +24,8 @@ interface TaskListProps {
 
 export default function TaskList({ tasks, onTaskPress, onRefresh, onAddTask, isLoading = false }: TaskListProps) {
   const [refreshing, setRefreshing] = React.useState(false);
-  const colorScheme = useColorScheme();
-  const isDarkMode = colorScheme === 'dark';
+  const { t } = useLanguage();
+  const { colors } = useTheme();
 
   const handleRefresh = React.useCallback(async () => {
     if (!onRefresh) return;
@@ -51,15 +52,35 @@ export default function TaskList({ tasks, onTaskPress, onRefresh, onAddTask, isL
   };
 
   const renderItem = ({ item }: { item: Task }) => {
-    const isDarkMode = colorScheme === 'dark';
-    const isOverdue = item.currentCycle && new Date(item.currentCycle.dueDate) < new Date();
+    // 计算剩余天数
+    const daysLeft = item.currentCycle 
+      ? Math.ceil((new Date(item.currentCycle.dueDate).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))
+      : 0;
+    
+    // 获取状态文本
+    const getStatusText = () => {
+      if (!item.currentCycle) return '';
+      if (item.currentCycle.isCompleted) return t.task.statusCompleted;
+      if (item.currentCycle.isOverdue) return t.task.statusOverdue;
+      if (!item.isActive) return t.task.taskDisabled;
+      return daysLeft <= 0 ? t.task.statusOverdue : t.task.daysLeft.replace('{days}', daysLeft.toString());
+    };
+
+    // 获取状态徽章样式
+    const getStatusBadgeStyle = () => {
+      if (!item.currentCycle) return styles.disabledBadge;
+      if (item.currentCycle.isCompleted) return styles.completedBadge;
+      if (item.currentCycle.isOverdue) return styles.overdueBadge;
+      if (!item.isActive) return styles.disabledBadge;
+      return daysLeft <= 3 ? styles.warningBadge : styles.pendingBadge;
+    };
 
     return (
       <TouchableOpacity
         style={[
           styles.taskItem,
           {
-            backgroundColor: isDarkMode ? '#1e1e1e' : '#ffffff',
+            backgroundColor: colors.card,
           },
         ]}
         onPress={() => onTaskPress(item)}
@@ -68,37 +89,27 @@ export default function TaskList({ tasks, onTaskPress, onRefresh, onAddTask, isL
           <Text
             style={[
               styles.taskTitle,
-              { color: isDarkMode ? '#ffffff' : '#000000' },
+              { color: colors.text },
             ]}
             numberOfLines={1}
           >
             {item.title}
           </Text>
-          {item.currentCycle && (
-            <View style={[
-              styles.statusBadge,
-              item.currentCycle.isCompleted 
-                ? styles.completedBadge 
-                : item.currentCycle.isOverdue 
-                  ? styles.overdueBadge 
-                  : styles.pendingBadge
-            ]}>
-              <Text style={styles.statusText}>
-                {item.currentCycle.isCompleted 
-                  ? '已完成' 
-                  : item.currentCycle.isOverdue 
-                    ? '已逾期' 
-                    : '进行中'}
-              </Text>
-            </View>
-          )}
+          <View style={[
+            styles.statusBadge,
+            getStatusBadgeStyle()
+          ]}>
+            <Text style={styles.statusText}>
+              {getStatusText()}
+            </Text>
+          </View>
         </View>
         
         {item.description && (
           <Text
             style={[
               styles.taskDescription,
-              { color: isDarkMode ? '#cccccc' : '#666666' },
+              { color: colors.subText },
             ]}
             numberOfLines={2}
           >
@@ -106,31 +117,65 @@ export default function TaskList({ tasks, onTaskPress, onRefresh, onAddTask, isL
           </Text>
         )}
         
-        {item.currentCycle && (
-          <View style={styles.taskFooter}>
+        <View style={styles.taskFooter}>
+          {item.currentCycle && (
             <View style={styles.taskDateContainer}>
               <Ionicons 
                 name="calendar" 
                 size={14} 
-                color={isDarkMode ? '#aaaaaa' : '#888888'} 
+                color={colors.subText} 
               />
               <Text 
                 style={[
                   styles.taskDate,
-                  { color: isDarkMode ? '#aaaaaa' : '#888888' }
+                  { color: colors.subText }
                 ]}
               >
-                截止日期: {format(new Date(item.currentCycle.dueDate), 'yyyy-MM-dd')}
+                {t.task.dueDate}: {format(new Date(item.currentCycle.dueDate), 'yyyy-MM-dd')}
               </Text>
             </View>
-            
+          )}
+          
+          <View style={styles.taskDateContainer}>
             <Ionicons 
-              name="chevron-forward" 
-              size={20} 
-              color={isDarkMode ? '#aaaaaa' : '#888888'} 
+              name="alarm" 
+              size={14} 
+              color={colors.subText} 
             />
+            <Text 
+              style={[
+                styles.taskDate,
+                { color: colors.subText }
+              ]}
+            >
+              {`${item.reminderTime.hour.toString().padStart(2, '0')}:${item.reminderTime.minute.toString().padStart(2, '0')}`}
+            </Text>
           </View>
-        )}
+          
+          {item.lastCompletedDate && (
+            <View style={styles.taskDateContainer}>
+              <Ionicons 
+                name="checkmark-circle" 
+                size={14} 
+                color={colors.subText} 
+              />
+              <Text 
+                style={[
+                  styles.taskDate,
+                  { color: colors.subText }
+                ]}
+              >
+                {format(new Date(item.lastCompletedDate), 'MM-dd')}
+              </Text>
+            </View>
+          )}
+          
+          <Ionicons 
+            name="chevron-forward" 
+            size={20} 
+            color={colors.subText} 
+          />
+        </View>
       </TouchableOpacity>
     );
   };
@@ -139,9 +184,9 @@ export default function TaskList({ tasks, onTaskPress, onRefresh, onAddTask, isL
     <View style={styles.container}>
       {isLoading && tasks.length === 0 ? (
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#2196F3" />
-          <Text style={[styles.emptyText, { color: isDarkMode ? '#ffffff' : '#666666' }]}>
-            加载任务中...
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={[styles.emptyText, { color: colors.text }]}>
+            {t.common.loading}
           </Text>
         </View>
       ) : tasks.length === 0 ? (
@@ -149,13 +194,13 @@ export default function TaskList({ tasks, onTaskPress, onRefresh, onAddTask, isL
           <Ionicons 
             name="calendar-outline" 
             size={64} 
-            color={isDarkMode ? '#555555' : '#cccccc'} 
+            color={colors.border} 
           />
-          <Text style={[styles.emptyText, { color: isDarkMode ? '#ffffff' : '#666666' }]}>
-            没有任务
+          <Text style={[styles.emptyText, { color: colors.text }]}>
+            {t.task.noTasks}
           </Text>
-          <Text style={[styles.emptySubText, { color: isDarkMode ? '#aaaaaa' : '#999999' }]}>
-            点击右下角的 + 按钮添加新任务
+          <Text style={[styles.emptySubText, { color: colors.subText }]}>
+            {t.task.addTaskHint}
           </Text>
         </View>
       ) : (
@@ -167,8 +212,8 @@ export default function TaskList({ tasks, onTaskPress, onRefresh, onAddTask, isL
             <RefreshControl
               refreshing={refreshing}
               onRefresh={handleRefresh}
-              colors={['#2196F3']}
-              tintColor={isDarkMode ? '#ffffff' : '#2196F3'}
+              colors={[colors.primary]}
+              tintColor={colors.primary}
             />
           }
           contentContainerStyle={styles.listContent}
@@ -177,7 +222,7 @@ export default function TaskList({ tasks, onTaskPress, onRefresh, onAddTask, isL
       
       {onAddTask && (
         <TouchableOpacity
-          style={styles.fab}
+          style={[styles.fab, { backgroundColor: colors.primary }]}
           onPress={onAddTask}
         >
           <Ionicons name="add" size={24} color="#ffffff" />
@@ -250,8 +295,14 @@ const styles = StyleSheet.create({
   pendingBadge: {
     backgroundColor: '#2196F3',
   },
+  warningBadge: {
+    backgroundColor: '#FF9800',
+  },
   overdueBadge: {
     backgroundColor: '#F44336',
+  },
+  disabledBadge: {
+    backgroundColor: '#999999',
   },
   statusText: {
     color: '#ffffff',
@@ -270,6 +321,7 @@ const styles = StyleSheet.create({
   taskDateContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginRight: 10,
   },
   taskDate: {
     fontSize: 12,

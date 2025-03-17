@@ -5,12 +5,18 @@ import {
   StyleSheet,
   ScrollView,
   ActivityIndicator,
-  useColorScheme,
+  TouchableOpacity,
+  FlatList,
 } from 'react-native';
 import { Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { getTasks } from '../services/storageService';
+import { useLanguage } from '../contexts/LanguageContext';
+import { useTheme } from '../contexts/ThemeContext';
+import { getCompletedTasks, getOverdueTasks } from '../services/taskService';
 import { Task } from '../models/Task';
+import { format } from 'date-fns';
+import { zhCN } from 'date-fns/locale';
 
 export default function StatisticsScreen() {
   const [isLoading, setIsLoading] = useState(true);
@@ -20,8 +26,12 @@ export default function StatisticsScreen() {
     overdueTasks: 0,
     completionRate: 0,
   });
-  const colorScheme = useColorScheme();
-  const isDarkMode = colorScheme === 'dark';
+  const [completedTasksList, setCompletedTasksList] = useState<Task[]>([]);
+  const [overdueTasksList, setOverdueTasksList] = useState<Task[]>([]);
+  const [activeTab, setActiveTab] = useState<'completed' | 'overdue'>('completed');
+  
+  const { t, language } = useLanguage();
+  const { colors } = useTheme();
 
   useEffect(() => {
     loadStatistics();
@@ -31,15 +41,13 @@ export default function StatisticsScreen() {
     try {
       setIsLoading(true);
       const tasks = await getTasks();
+      const completed = await getCompletedTasks();
+      const overdue = await getOverdueTasks();
       
       // 计算统计数据
       const totalTasks = tasks.length;
-      const completedTasks = tasks.filter(task => 
-        task.currentCycle && task.currentCycle.isCompleted
-      ).length;
-      const overdueTasks = tasks.filter(task => 
-        task.currentCycle && task.currentCycle.isOverdue && !task.currentCycle.isCompleted
-      ).length;
+      const completedTasks = completed.length;
+      const overdueTasks = overdue.length;
       const completionRate = totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0;
       
       setStats({
@@ -48,6 +56,9 @@ export default function StatisticsScreen() {
         overdueTasks,
         completionRate,
       });
+      
+      setCompletedTasksList(completed);
+      setOverdueTasksList(overdue);
     } catch (error) {
       console.error('加载统计数据时出错:', error);
     } finally {
@@ -55,38 +66,98 @@ export default function StatisticsScreen() {
     }
   };
 
+  const formatDate = (date: string) => {
+    return format(
+      new Date(date), 
+      language === 'zh' ? 'yyyy年MM月dd日' : 'MMM dd, yyyy', 
+      { locale: language === 'zh' ? zhCN : undefined }
+    );
+  };
+
+  const renderTaskItem = ({ item }: { item: Task }) => (
+    <View style={[
+      styles.taskItem,
+      { backgroundColor: colors.card }
+    ]}>
+      <View style={styles.taskHeader}>
+        <Text style={[
+          styles.taskTitle,
+          { color: colors.text }
+        ]}>{item.title}</Text>
+        <View style={[
+          styles.statusBadge,
+          { backgroundColor: activeTab === 'completed' ? '#4CAF50' : '#F44336' }
+        ]}>
+          <Text style={styles.statusText}>
+            {activeTab === 'completed' ? t.task.statusCompleted : t.task.statusOverdue}
+          </Text>
+        </View>
+      </View>
+      
+      {item.description ? (
+        <Text style={[
+          styles.taskDescription,
+          { color: colors.subText }
+        ]} numberOfLines={2}>
+          {item.description}
+        </Text>
+      ) : null}
+      
+      {item.currentCycle && (
+        <View style={styles.taskFooter}>
+          <View style={styles.taskDateContainer}>
+            <Ionicons name="calendar" size={14} color={colors.subText} />
+            <Text style={[
+              styles.taskDate,
+              { color: colors.subText }
+            ]}>
+              {activeTab === 'completed' 
+                ? `${t.statistics.completedDate}: ${formatDate(item.currentCycle.completedDate || new Date().toISOString())}` 
+                : `${t.task.dueDate}: ${formatDate(item.currentCycle.dueDate)}`
+              }
+            </Text>
+          </View>
+        </View>
+      )}
+    </View>
+  );
+
   return (
     <>
       <Stack.Screen
         options={{
-          title: '统计分析',
+          title: t.menu.statistics,
           headerShown: true,
+          headerStyle: {
+            backgroundColor: colors.card,
+          },
+          headerTintColor: colors.text,
         }}
       />
       <ScrollView 
         style={[
           styles.container,
-          { backgroundColor: isDarkMode ? '#121212' : '#f5f5f5' }
+          { backgroundColor: colors.background }
         ]}
       >
         {isLoading ? (
           <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#2196f3" />
+            <ActivityIndicator size="large" color={colors.primary} />
             <Text style={[
               styles.loadingText,
-              { color: isDarkMode ? '#ffffff' : '#000000' }
-            ]}>加载统计数据...</Text>
+              { color: colors.text }
+            ]}>{t.common.loading}</Text>
           </View>
         ) : (
           <View style={styles.content}>
             <View style={[
               styles.card,
-              { backgroundColor: isDarkMode ? '#1e1e1e' : '#ffffff' }
+              { backgroundColor: colors.card }
             ]}>
               <Text style={[
                 styles.cardTitle,
-                { color: isDarkMode ? '#ffffff' : '#000000' }
-              ]}>任务概览</Text>
+                { color: colors.text }
+              ]}>{t.statistics.overview}</Text>
               
               <View style={styles.statItem}>
                 <View style={[styles.iconContainer, { backgroundColor: '#2196f3' }]}>
@@ -95,11 +166,11 @@ export default function StatisticsScreen() {
                 <View style={styles.statTextContainer}>
                   <Text style={[
                     styles.statLabel,
-                    { color: isDarkMode ? '#aaaaaa' : '#666666' }
-                  ]}>总任务数</Text>
+                    { color: colors.subText }
+                  ]}>{t.statistics.totalTasks}</Text>
                   <Text style={[
                     styles.statValue,
-                    { color: isDarkMode ? '#ffffff' : '#000000' }
+                    { color: colors.text }
                   ]}>{stats.totalTasks}</Text>
                 </View>
               </View>
@@ -111,11 +182,11 @@ export default function StatisticsScreen() {
                 <View style={styles.statTextContainer}>
                   <Text style={[
                     styles.statLabel,
-                    { color: isDarkMode ? '#aaaaaa' : '#666666' }
-                  ]}>已完成任务</Text>
+                    { color: colors.subText }
+                  ]}>{t.statistics.completedTasks}</Text>
                   <Text style={[
                     styles.statValue,
-                    { color: isDarkMode ? '#ffffff' : '#000000' }
+                    { color: colors.text }
                   ]}>{stats.completedTasks}</Text>
                 </View>
               </View>
@@ -127,11 +198,11 @@ export default function StatisticsScreen() {
                 <View style={styles.statTextContainer}>
                   <Text style={[
                     styles.statLabel,
-                    { color: isDarkMode ? '#aaaaaa' : '#666666' }
-                  ]}>逾期任务</Text>
+                    { color: colors.subText }
+                  ]}>{t.statistics.overdueTasks}</Text>
                   <Text style={[
                     styles.statValue,
-                    { color: isDarkMode ? '#ffffff' : '#000000' }
+                    { color: colors.text }
                   ]}>{stats.overdueTasks}</Text>
                 </View>
               </View>
@@ -139,49 +210,140 @@ export default function StatisticsScreen() {
             
             <View style={[
               styles.card,
-              { backgroundColor: isDarkMode ? '#1e1e1e' : '#ffffff' }
+              { backgroundColor: colors.card }
             ]}>
               <Text style={[
                 styles.cardTitle,
-                { color: isDarkMode ? '#ffffff' : '#000000' }
-              ]}>完成率</Text>
+                { color: colors.text }
+              ]}>{t.statistics.completionRate}</Text>
               
               <View style={styles.completionRateContainer}>
                 <View style={styles.progressBarContainer}>
                   <View 
                     style={[
                       styles.progressBar,
-                      { width: `${stats.completionRate}%` }
+                      { width: `${stats.completionRate}%`, backgroundColor: colors.primary }
                     ]}
                   />
                 </View>
                 <Text style={[
                   styles.completionRateText,
-                  { color: isDarkMode ? '#ffffff' : '#000000' }
+                  { color: colors.text }
                 ]}>{stats.completionRate.toFixed(1)}%</Text>
               </View>
             </View>
             
             <View style={[
               styles.card,
-              { backgroundColor: isDarkMode ? '#1e1e1e' : '#ffffff' }
+              { backgroundColor: colors.card }
             ]}>
               <Text style={[
                 styles.cardTitle,
-                { color: isDarkMode ? '#ffffff' : '#000000' }
-              ]}>提示</Text>
+                { color: colors.text }
+              ]}>{t.statistics.tips}</Text>
               
               <Text style={[
                 styles.tipText,
-                { color: isDarkMode ? '#aaaaaa' : '#666666' }
+                { color: colors.subText }
               ]}>
                 {stats.completionRate < 50 
-                  ? '您的任务完成率较低，建议合理安排时间，提高任务完成效率。'
+                  ? t.statistics.tipLow
                   : stats.completionRate < 80
-                    ? '您的任务完成情况良好，继续保持！'
-                    : '太棒了！您的任务完成率非常高，继续保持这种高效率！'
+                    ? t.statistics.tipMedium
+                    : t.statistics.tipHigh
                 }
               </Text>
+            </View>
+            
+            {/* 任务列表标签页 */}
+            <View style={[
+              styles.tabContainer,
+              { backgroundColor: colors.card }
+            ]}>
+              <TouchableOpacity
+                style={[
+                  styles.tab,
+                  activeTab === 'completed' && [
+                    styles.activeTab,
+                    { borderBottomColor: colors.primary }
+                  ]
+                ]}
+                onPress={() => setActiveTab('completed')}
+              >
+                <Text style={[
+                  styles.tabText,
+                  { color: activeTab === 'completed' ? colors.primary : colors.subText }
+                ]}>
+                  {t.statistics.completedTasks} ({stats.completedTasks})
+                </Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={[
+                  styles.tab,
+                  activeTab === 'overdue' && [
+                    styles.activeTab,
+                    { borderBottomColor: colors.primary }
+                  ]
+                ]}
+                onPress={() => setActiveTab('overdue')}
+              >
+                <Text style={[
+                  styles.tabText,
+                  { color: activeTab === 'overdue' ? colors.primary : colors.subText }
+                ]}>
+                  {t.statistics.overdueTasks} ({stats.overdueTasks})
+                </Text>
+              </TouchableOpacity>
+            </View>
+            
+            {/* 任务列表 */}
+            <View style={styles.tasksContainer}>
+              {activeTab === 'completed' ? (
+                completedTasksList.length > 0 ? (
+                  completedTasksList.map((task, index) => (
+                    <React.Fragment key={`completed-${task.id}`}>
+                      {renderTaskItem({ item: task })}
+                    </React.Fragment>
+                  ))
+                ) : (
+                  <View style={styles.emptyContainer}>
+                    <Ionicons 
+                      name="checkmark-circle-outline" 
+                      size={60} 
+                      color={colors.border} 
+                    />
+                    <Text style={[
+                      styles.emptyText,
+                      { color: colors.text }
+                    ]}>
+                      {t.statistics.noCompletedTasks}
+                    </Text>
+                  </View>
+                )
+              ) : (
+                overdueTasksList.length > 0 ? (
+                  overdueTasksList.map((task, index) => (
+                    <React.Fragment key={`overdue-${task.id}`}>
+                      {renderTaskItem({ item: task })}
+                    </React.Fragment>
+                  ))
+                ) : (
+                  <View style={styles.emptyContainer}>
+                    <Ionicons 
+                      name="alert-circle-outline" 
+                      size={60} 
+                      color={colors.border} 
+                    />
+                    <Text style={[
+                      styles.emptyText,
+                      { color: colors.text }
+                    ]}>
+                      {t.statistics.noOverdueTasks}
+                    </Text>
+                  </View>
+                )
+              )}
             </View>
           </View>
         )}
@@ -244,7 +406,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   statValue: {
-    fontSize: 20,
+    fontSize: 24,
     fontWeight: 'bold',
   },
   completionRateContainer: {
@@ -252,15 +414,14 @@ const styles = StyleSheet.create({
   },
   progressBarContainer: {
     width: '100%',
-    height: 20,
+    height: 12,
     backgroundColor: '#e0e0e0',
-    borderRadius: 10,
+    borderRadius: 6,
     overflow: 'hidden',
     marginBottom: 8,
   },
   progressBar: {
     height: '100%',
-    backgroundColor: '#4caf50',
   },
   completionRateText: {
     fontSize: 24,
@@ -268,7 +429,89 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   tipText: {
+    fontSize: 16,
+    lineHeight: 24,
+  },
+  tabContainer: {
+    flexDirection: 'row',
+    borderRadius: 8,
+    marginBottom: 16,
+    overflow: 'hidden',
+  },
+  tab: {
+    flex: 1,
+    paddingVertical: 16,
+    alignItems: 'center',
+  },
+  activeTab: {
+    borderBottomWidth: 2,
+  },
+  tabText: {
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  tasksContainer: {
+    marginBottom: 24,
+  },
+  taskItem: {
+    borderRadius: 8,
+    padding: 16,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  taskHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  taskTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    flex: 1,
+  },
+  statusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    marginLeft: 8,
+  },
+  statusText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  taskDescription: {
     fontSize: 14,
-    lineHeight: 20,
+    marginBottom: 12,
+  },
+  taskFooter: {
+    flexDirection: 'row',
+    justifyContent: 'flex-start',
+    alignItems: 'center',
+  },
+  taskDateContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  taskDate: {
+    fontSize: 12,
+    marginLeft: 4,
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 32,
+    backgroundColor: 'rgba(0,0,0,0.03)',
+    borderRadius: 8,
+  },
+  emptyText: {
+    fontSize: 16,
+    marginTop: 16,
+    textAlign: 'center',
   },
 }); 

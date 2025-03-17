@@ -316,8 +316,22 @@ export const exportData = async (): Promise<string> => {
     const cycles = await getTaskCycles();
     const history = await getTaskHistory();
     
+    // 从app.json获取应用版本号
+    let appVersion = "1.0.0"; // 默认版本号
+    try {
+      // 尝试导入app.json获取版本号
+      const appConfig = require('../app.json');
+      if (appConfig && appConfig.expo && appConfig.expo.version) {
+        appVersion = appConfig.expo.version;
+      }
+    } catch (error) {
+      console.warn('无法获取应用版本号:', error);
+    }
+    
     const data = {
-      version: DATABASE_VERSION,
+      appVersion: appVersion,
+      dbVersion: DATABASE_VERSION,
+      version: DATABASE_VERSION, // 保留旧版本字段以兼容
       tasks,
       cycles,
       history,

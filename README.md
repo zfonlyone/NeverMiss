@@ -44,8 +44,8 @@
 
 ```bash
 # 克隆仓库
-git clone https://github.com/yourusername/nevermiss.git
-cd nevermiss
+git clone https://github.com/zfonlyone/NeverMiss.git
+cd NeverMiss
 
 # 安装依赖
 npm install
@@ -55,8 +55,7 @@ npm start
 ```
 
 详细的安装和构建指南:
-- [安装指南](安装指南.md)
-- [构建指南](构建指南.md)
+- [安装与构建指南](安装指南.md)
 
 ## 🛠️ 技术栈
 

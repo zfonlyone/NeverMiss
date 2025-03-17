@@ -1,13 +1,22 @@
+/**
+ * Calendar Service for NeverMiss
+ * @author zfonlyone
+ * 
+ * This service handles calendar integration
+ */
+
 import * as Calendar from 'expo-calendar';
 import { Platform } from 'react-native';
 import { Task } from '../models/Task';
 import { TaskCycle } from '../models/TaskCycle';
+import { checkCalendarPermission, requestCalendarPermission } from './permissionService';
 
 // 获取或创建应用专属的日历
 async function getOrCreateCalendar() {
   try {
-    const { status } = await Calendar.requestCalendarPermissionsAsync();
-    if (status !== 'granted') {
+    // 检查日历权限
+    const permissionResult = await requestCalendarPermission();
+    if (permissionResult.status !== 'granted') {
       throw new Error('需要日历权限来同步任务');
     }
 
@@ -36,7 +45,7 @@ async function getOrCreateCalendar() {
 
     return { id: newCalendarId, title: 'NeverMiss 任务' };
   } catch (error) {
-    console.error('Error getting or creating calendar:', error);
+    console.error('获取或创建日历时出错:', error);
     throw error;
   }
 }
@@ -47,6 +56,12 @@ export async function addTaskToCalendar(
   cycle: TaskCycle
 ): Promise<string> {
   try {
+    // 检查日历权限
+    const permissionResult = await checkCalendarPermission();
+    if (permissionResult.status !== 'granted') {
+      throw new Error('没有日历权限，无法添加任务到日历');
+    }
+    
     const calendar = await getOrCreateCalendar();
     
     // 计算提醒时间
@@ -73,7 +88,7 @@ export async function addTaskToCalendar(
 
     return eventId;
   } catch (error) {
-    console.error('Error adding task to calendar:', error);
+    console.error('添加任务到日历时出错:', error);
     throw error;
   }
 }
@@ -81,9 +96,15 @@ export async function addTaskToCalendar(
 // 从系统日历中删除任务
 export async function removeTaskFromCalendar(eventId: string): Promise<void> {
   try {
+    // 检查日历权限
+    const permissionResult = await checkCalendarPermission();
+    if (permissionResult.status !== 'granted') {
+      throw new Error('没有日历权限，无法从日历中删除任务');
+    }
+    
     await Calendar.deleteEventAsync(eventId);
   } catch (error) {
-    console.error('Error removing task from calendar:', error);
+    console.error('从日历中删除任务时出错:', error);
     throw error;
   }
 }
@@ -95,14 +116,18 @@ export async function updateTaskInCalendar(
   cycle: TaskCycle
 ): Promise<void> {
   try {
+    // 检查日历权限
+    const permissionResult = await checkCalendarPermission();
+    if (permissionResult.status !== 'granted') {
+      throw new Error('没有日历权限，无法更新日历中的任务');
+    }
+    
     const calendar = await getOrCreateCalendar();
     
     // 计算提醒时间
     const startDate = new Date(cycle.startDate);
     const endDate = new Date(cycle.dueDate);
-    const reminderDate = new Date(startDate);
-    reminderDate.setMinutes(reminderDate.getMinutes() - task.reminderOffset);
-
+    
     // 更新日历事件
     await Calendar.updateEventAsync(eventId, {
       title: `[NeverMiss] ${task.title}`,
@@ -117,7 +142,7 @@ export async function updateTaskInCalendar(
       ],
     });
   } catch (error) {
-    console.error('Error updating task in calendar:', error);
+    console.error('更新日历中的任务时出错:', error);
     throw error;
   }
 } 

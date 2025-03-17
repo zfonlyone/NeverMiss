@@ -5,17 +5,18 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  useColorScheme,
   Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Link, useRouter } from 'expo-router';
+import { useLanguage } from '../contexts/LanguageContext';
+import { useTheme } from '../contexts/ThemeContext';
 
 export default function IndexScreen() {
-  const colorScheme = useColorScheme();
-  const isDarkMode = colorScheme === 'dark';
   const router = useRouter();
+  const { t } = useLanguage();
+  const { colors } = useTheme();
 
   const navigateTo = (screen: string) => {
     router.push(screen);
@@ -24,17 +25,17 @@ export default function IndexScreen() {
   return (
     <SafeAreaView style={[
       styles.container,
-      { backgroundColor: isDarkMode ? '#121212' : '#f5f5f5' }
+      { backgroundColor: colors.background }
     ]}>
       <View style={styles.header}>
         <Text style={[
           styles.title,
-          { color: isDarkMode ? '#ffffff' : '#000000' }
+          { color: colors.text }
         ]}>NeverMiss</Text>
         <Text style={[
           styles.subtitle,
-          { color: isDarkMode ? '#cccccc' : '#666666' }
-        ]}>永不错过重要任务</Text>
+          { color: colors.subText }
+        ]}>{t.app.tagline}</Text>
       </View>
 
       <ScrollView style={styles.scrollView}>
@@ -43,7 +44,7 @@ export default function IndexScreen() {
           <TouchableOpacity
             style={[
               styles.menuItem,
-              { backgroundColor: isDarkMode ? '#1e1e1e' : '#ffffff' }
+              { backgroundColor: colors.card }
             ]}
             onPress={() => navigateTo('/tasks')}
           >
@@ -53,21 +54,21 @@ export default function IndexScreen() {
             <View style={styles.menuTextContainer}>
               <Text style={[
                 styles.menuTitle,
-                { color: isDarkMode ? '#ffffff' : '#000000' }
-              ]}>任务管理</Text>
+                { color: colors.text }
+              ]}>{t.menu.taskManagement}</Text>
               <Text style={[
                 styles.menuDescription,
-                { color: isDarkMode ? '#aaaaaa' : '#666666' }
-              ]}>查看和管理您的所有任务</Text>
+                { color: colors.subText }
+              ]}>{t.menu.taskManagementDesc}</Text>
             </View>
-            <Ionicons name="chevron-forward" size={20} color={isDarkMode ? '#666666' : '#999999'} />
+            <Ionicons name="chevron-forward" size={20} color={colors.subText} />
           </TouchableOpacity>
 
           {/* 新建任务 */}
           <TouchableOpacity
             style={[
               styles.menuItem,
-              { backgroundColor: isDarkMode ? '#1e1e1e' : '#ffffff' }
+              { backgroundColor: colors.card }
             ]}
             onPress={() => navigateTo('/new-task')}
           >
@@ -77,21 +78,21 @@ export default function IndexScreen() {
             <View style={styles.menuTextContainer}>
               <Text style={[
                 styles.menuTitle,
-                { color: isDarkMode ? '#ffffff' : '#000000' }
-              ]}>新建任务</Text>
+                { color: colors.text }
+              ]}>{t.menu.newTask}</Text>
               <Text style={[
                 styles.menuDescription,
-                { color: isDarkMode ? '#aaaaaa' : '#666666' }
-              ]}>创建新的任务和提醒</Text>
+                { color: colors.subText }
+              ]}>{t.menu.newTaskDesc}</Text>
             </View>
-            <Ionicons name="chevron-forward" size={20} color={isDarkMode ? '#666666' : '#999999'} />
+            <Ionicons name="chevron-forward" size={20} color={colors.subText} />
           </TouchableOpacity>
 
           {/* 统计分析 */}
           <TouchableOpacity
             style={[
               styles.menuItem,
-              { backgroundColor: isDarkMode ? '#1e1e1e' : '#ffffff' }
+              { backgroundColor: colors.card }
             ]}
             onPress={() => navigateTo('/statistics')}
           >
@@ -101,21 +102,21 @@ export default function IndexScreen() {
             <View style={styles.menuTextContainer}>
               <Text style={[
                 styles.menuTitle,
-                { color: isDarkMode ? '#ffffff' : '#000000' }
-              ]}>统计分析</Text>
+                { color: colors.text }
+              ]}>{t.menu.statistics}</Text>
               <Text style={[
                 styles.menuDescription,
-                { color: isDarkMode ? '#aaaaaa' : '#666666' }
-              ]}>查看任务完成情况和统计</Text>
+                { color: colors.subText }
+              ]}>{t.menu.statisticsDesc}</Text>
             </View>
-            <Ionicons name="chevron-forward" size={20} color={isDarkMode ? '#666666' : '#999999'} />
+            <Ionicons name="chevron-forward" size={20} color={colors.subText} />
           </TouchableOpacity>
 
           {/* 设置 */}
           <TouchableOpacity
             style={[
               styles.menuItem,
-              { backgroundColor: isDarkMode ? '#1e1e1e' : '#ffffff' }
+              { backgroundColor: colors.card }
             ]}
             onPress={() => navigateTo('/settings')}
           >
@@ -125,33 +126,33 @@ export default function IndexScreen() {
             <View style={styles.menuTextContainer}>
               <Text style={[
                 styles.menuTitle,
-                { color: isDarkMode ? '#ffffff' : '#000000' }
-              ]}>设置</Text>
+                { color: colors.text }
+              ]}>{t.menu.settings}</Text>
               <Text style={[
                 styles.menuDescription,
-                { color: isDarkMode ? '#aaaaaa' : '#666666' }
-              ]}>应用设置和数据管理</Text>
+                { color: colors.subText }
+              ]}>{t.menu.settingsDesc}</Text>
             </View>
-            <Ionicons name="chevron-forward" size={20} color={isDarkMode ? '#666666' : '#999999'} />
+            <Ionicons name="chevron-forward" size={20} color={colors.subText} />
           </TouchableOpacity>
         </View>
 
         <View style={styles.infoContainer}>
           <Text style={[
             styles.infoTitle,
-            { color: isDarkMode ? '#ffffff' : '#000000' }
-          ]}>关于 NeverMiss</Text>
+            { color: colors.text }
+          ]}>{t.app.about}</Text>
           <Text style={[
             styles.infoText,
-            { color: isDarkMode ? '#aaaaaa' : '#666666' }
+            { color: colors.subText }
           ]}>
-            NeverMiss 是一款帮助您管理重复性任务的应用，让您永不错过重要事项。
+            {t.app.description}
           </Text>
           <Text style={[
             styles.versionText,
-            { color: isDarkMode ? '#888888' : '#999999' }
+            { color: colors.subText }
           ]}>
-            版本 1.0.0
+            {t.settings.version} 1.0.0
           </Text>
         </View>
       </ScrollView>

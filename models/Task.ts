@@ -39,6 +39,7 @@ export interface Task {
   createdAt: string;
   updatedAt: string;
   currentCycle?: TaskCycle;
+  lastCompletedDate?: string;
 }
 
 export interface TaskWithCycles extends Task {

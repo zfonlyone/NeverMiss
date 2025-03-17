@@ -1,26 +1,30 @@
 import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, Alert } from 'react-native';
 import TaskList from '../components/TaskList';
-import TaskForm from '../components/TaskForm';
 import TaskDetail from '../components/TaskDetail';
 import { Task } from '../models/Task';
 import { getAllTasks, deleteTask } from '../services/taskService';
+import { useRouter } from 'expo-router';
+import { useLanguage } from '../contexts/LanguageContext';
+import { useTheme } from '../contexts/ThemeContext';
 
 export default function HomeScreen() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [selectedTask, setSelectedTask] = useState<Task | undefined>(undefined);
-  const [showTaskForm, setShowTaskForm] = useState(false);
   const [showTaskDetail, setShowTaskDetail] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const { t } = useLanguage();
+  const { colors } = useTheme();
+  const router = useRouter();
 
   const loadTasks = async () => {
     try {
       setIsLoading(true);
-      const loadedTasks = await getAllTasks();
+      const loadedTasks = await getAllTasks(false, false);
       setTasks(loadedTasks);
     } catch (error) {
       console.error('Error loading tasks:', error);
-      Alert.alert('错误', '加载任务失败');
+      Alert.alert(t.common.error, t.task.loadTaskFailed);
     } finally {
       setIsLoading(false);
     }
@@ -36,19 +40,16 @@ export default function HomeScreen() {
   };
 
   const handleAddTask = () => {
-    setSelectedTask(undefined);
-    setShowTaskForm(true);
+    router.push('/new-task');
   };
 
   const handleEditTask = () => {
     setShowTaskDetail(false);
-    setShowTaskForm(true);
-  };
-
-  const handleCloseTaskForm = async (shouldRefresh = false) => {
-    setShowTaskForm(false);
-    if (shouldRefresh) {
-      await loadTasks();
+    if (selectedTask) {
+      router.push({
+        pathname: '/edit-task',
+        params: { taskId: selectedTask.id }
+      });
     }
   };
 
@@ -58,15 +59,15 @@ export default function HomeScreen() {
 
   const handleDeleteTask = async (taskId: number) => {
     Alert.alert(
-      '删除任务',
-      '确定要删除这个任务吗？此操作不可撤销。',
+      t.common.delete,
+      t.task.deleteConfirmation,
       [
         {
-          text: '取消',
+          text: t.common.cancel,
           style: 'cancel',
         },
         {
-          text: '删除',
+          text: t.common.delete,
           style: 'destructive',
           onPress: async () => {
             try {
@@ -74,10 +75,10 @@ export default function HomeScreen() {
               await deleteTask(taskId);
               setShowTaskDetail(false);
               await loadTasks();
-              Alert.alert('成功', '任务已删除');
+              Alert.alert(t.common.success, t.task.deleteSuccess);
             } catch (error) {
               console.error('Error deleting task:', error);
-              Alert.alert('错误', '删除任务失败');
+              Alert.alert(t.common.error, t.task.deleteFailed);
             } finally {
               setIsLoading(false);
             }
@@ -88,28 +89,24 @@ export default function HomeScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[
+      styles.container,
+      { backgroundColor: colors.background }
+    ]}>
       <TaskList
         tasks={tasks}
         onTaskPress={handleTaskPress}
         onAddTask={handleAddTask}
+        onRefresh={loadTasks}
         isLoading={isLoading}
       />
-      
-      {showTaskForm && (
-        <TaskForm
-          task={selectedTask}
-          onClose={() => handleCloseTaskForm(false)}
-          onSave={() => handleCloseTaskForm(true)}
-        />
-      )}
       
       {showTaskDetail && selectedTask && (
         <TaskDetail
           task={selectedTask}
           onClose={handleCloseTaskDetail}
           onEdit={handleEditTask}
-          onDelete={() => handleDeleteTask(selectedTask.id)}
+          onDelete={handleDeleteTask}
         />
       )}
     </View>
@@ -119,6 +116,5 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
   },
 }); 
