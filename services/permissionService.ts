@@ -104,7 +104,7 @@ export const checkSharingAvailability = async (): Promise<boolean> => {
  * Check all required permissions for a feature
  */
 export const checkPermissionsForFeature = async (
-  feature: 'notification' | 'calendar' | 'export' | 'import'
+  feature: 'notification' | 'calendar'
 ): Promise<{
   granted: boolean;
   missingPermissions: PermissionType[];
@@ -131,16 +131,7 @@ export const checkPermissionsForFeature = async (
       }
       break;
     
-    case 'export':
-      const sharingAvailable = await checkSharingAvailability();
-      if (!sharingAvailable) {
-        result.granted = false;
-        result.missingPermissions.push('sharing');
-      }
-      break;
-    
-    case 'import':
-      // Document picker doesn't require explicit permissions
+    default:
       break;
   }
 

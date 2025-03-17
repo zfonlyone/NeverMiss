@@ -5,7 +5,11 @@ import {
   UpdateTaskInput,
   RecurrenceType,
   RecurrenceUnit,
-  CycleStatus
+  CycleStatus,
+  DateType,
+  RecurrencePattern,
+  WeekDay,
+  WeekType,
 } from '../models/Task';
 import { scheduleTaskNotification } from './notificationService';
 import { addTaskToCalendar, removeTaskFromCalendar, updateTaskInCalendar } from './calendarService';
@@ -19,12 +23,11 @@ import {
   getTaskCycles,
   saveTaskHistory
 } from './storageService';
-import { format, addDays, addWeeks, addMonths } from 'date-fns';
+import { format, addDays, addWeeks, addMonths, addYears } from 'date-fns';
+import lunarService from './lunarService';
 
 interface TaskCycleWithTask extends TaskCycle {
-  recurrenceType: RecurrenceType;
-  recurrenceValue: number;
-  recurrenceUnit?: RecurrenceUnit;
+  recurrencePattern: RecurrencePattern;
   autoRestart: boolean;
 }
 
@@ -41,12 +44,11 @@ export const createTask = async (input: CreateTaskInput): Promise<Task> => {
       id: 0, // 将由 saveTask 分配
       title: input.title,
       description: input.description || '',
-      recurrenceType: input.recurrenceType,
-      recurrenceValue: input.recurrenceValue,
-      recurrenceUnit: input.recurrenceUnit,
+      recurrencePattern: input.recurrencePattern,
       reminderOffset: input.reminderOffset,
       reminderUnit: input.reminderUnit,
       reminderTime: input.reminderTime,
+      dateType: input.dateType || 'solar',
       isActive: input.isActive !== undefined ? input.isActive : true,
       autoRestart: input.autoRestart !== undefined ? input.autoRestart : true,
       syncToCalendar: input.syncToCalendar !== undefined ? input.syncToCalendar : false,
@@ -63,6 +65,7 @@ export const createTask = async (input: CreateTaskInput): Promise<Task> => {
       taskId: savedTask.id,
       startDate: input.startDate,
       dueDate: input.dueDate,
+      dateType: input.dateType || 'solar',
       isCompleted: false,
       isOverdue: false,
       createdAt: now,
@@ -92,14 +95,76 @@ export const createTask = async (input: CreateTaskInput): Promise<Task> => {
 };
 
 /**
+ * Calculate the due date based on the start date and recurrence pattern
+ */
+const calculateDueDate = (startDate: string, recurrencePattern: RecurrencePattern, dateType: DateType = 'solar'): string => {
+  let start: Date;
+  if (dateType === 'lunar') {
+    const lunarDate = lunarService.parseLunarDate(startDate);
+    start = lunarService.convertToSolar(lunarDate.year, lunarDate.month, lunarDate.day, lunarDate.isLeap);
+  } else {
+    start = new Date(startDate);
+  }
+  
+  switch (recurrencePattern.type) {
+    case 'daily':
+      return addDays(start, recurrencePattern.value).toISOString();
+      
+    case 'weekly':
+      if (recurrencePattern.weekDay !== undefined) {
+        // 找到下一个指定的星期几
+        let dueDate = start;
+        const targetDay = recurrencePattern.weekDay;
+        while (dueDate.getDay() !== targetDay) {
+          dueDate = addDays(dueDate, 1);
+        }
+        return dueDate.toISOString();
+      } else {
+        // 每隔几周
+        return addDays(start, recurrencePattern.value * 7).toISOString();
+      }
+      
+    case 'monthly':
+      if (recurrencePattern.monthDay !== undefined) {
+        // 下个月的指定日期
+        const dueDate = new Date(start);
+        dueDate.setMonth(dueDate.getMonth() + 1);
+        dueDate.setDate(recurrencePattern.monthDay);
+        return dueDate.toISOString();
+      } else {
+        // 每隔几个月
+        const dueDate = new Date(start);
+        dueDate.setMonth(dueDate.getMonth() + recurrencePattern.value);
+        return dueDate.toISOString();
+      }
+      
+    case 'custom':
+      switch (recurrencePattern.unit) {
+        case 'days':
+          return addDays(start, recurrencePattern.value).toISOString();
+        case 'weeks':
+          return addDays(start, recurrencePattern.value * 7).toISOString();
+        case 'months':
+          const dueDate = new Date(start);
+          dueDate.setMonth(dueDate.getMonth() + recurrencePattern.value);
+          return dueDate.toISOString();
+        default:
+          throw new Error(`不支持的重复单位: ${recurrencePattern.unit}`);
+      }
+      
+    default:
+      throw new Error(`不支持的重复类型: ${recurrencePattern.type}`);
+  }
+};
+
+/**
  * Create a task cycle
  */
 export const createTaskCycle = async (
   taskId: number,
   startDate: string,
-  recurrenceType: RecurrenceType,
-  recurrenceValue: number,
-  recurrenceUnit?: RecurrenceUnit
+  pattern: RecurrencePattern,
+  dateType: DateType = 'solar'
 ): Promise<TaskCycle> => {
   if (!taskId) {
     throw new Error('Task ID is required');
@@ -107,15 +172,15 @@ export const createTaskCycle = async (
   
   try {
     const now = new Date().toISOString();
-    const startDateTime = new Date(startDate);
-    const dueDate = calculateDueDate(startDateTime, recurrenceType, recurrenceValue, recurrenceUnit);
+    const dueDate = calculateDueDate(startDate, pattern, dateType);
     
     // 创建新的周期
     const cycle: TaskCycle = {
       id: 0, // 将由 saveTaskCycle 分配
       taskId: taskId,
-      startDate: startDateTime.toISOString(),
-      dueDate: dueDate.toISOString(),
+      startDate: startDate,
+      dueDate: dueDate,
+      dateType,
       isCompleted: false,
       isOverdue: false,
       createdAt: now,
@@ -128,41 +193,6 @@ export const createTaskCycle = async (
     console.error('Error creating task cycle:', error);
     throw error;
   }
-};
-
-/**
- * Calculate the due date based on recurrence settings
- */
-const calculateDueDate = (
-  startDate: Date,
-  recurrenceType: RecurrenceType,
-  recurrenceValue: number,
-  recurrenceUnit?: RecurrenceUnit
-): Date => {
-  const dueDate = new Date(startDate);
-  
-  switch (recurrenceType) {
-    case 'daily':
-      dueDate.setDate(dueDate.getDate() + recurrenceValue);
-      break;
-    case 'weekly':
-      dueDate.setDate(dueDate.getDate() + (recurrenceValue * 7));
-      break;
-    case 'monthly':
-      dueDate.setMonth(dueDate.getMonth() + recurrenceValue);
-      break;
-    case 'custom':
-      if (recurrenceUnit === 'days') {
-        dueDate.setDate(dueDate.getDate() + recurrenceValue);
-      } else if (recurrenceUnit === 'weeks') {
-        dueDate.setDate(dueDate.getDate() + (recurrenceValue * 7));
-      } else if (recurrenceUnit === 'months') {
-        dueDate.setMonth(dueDate.getMonth() + recurrenceValue);
-      }
-      break;
-  }
-  
-  return dueDate;
 };
 
 /**
@@ -188,12 +218,11 @@ export const updateTask = async (id: number, input: UpdateTaskInput): Promise<Ta
       ...existingTask,
       title: input.title,
       description: input.description || existingTask.description,
-      recurrenceType: input.recurrenceType,
-      recurrenceValue: input.recurrenceValue,
-      recurrenceUnit: input.recurrenceUnit,
+      recurrencePattern: input.recurrencePattern,
       reminderOffset: input.reminderOffset,
       reminderUnit: input.reminderUnit,
       reminderTime: input.reminderTime,
+      dateType: input.dateType,
       isActive: input.isActive !== undefined ? input.isActive : existingTask.isActive,
       autoRestart: input.autoRestart !== undefined ? input.autoRestart : existingTask.autoRestart,
       syncToCalendar: input.syncToCalendar !== undefined ? input.syncToCalendar : existingTask.syncToCalendar,
@@ -207,48 +236,49 @@ export const updateTask = async (id: number, input: UpdateTaskInput): Promise<Ta
         ...existingTask.currentCycle,
         startDate: input.startDate,
         dueDate: input.dueDate,
+        dateType: input.dateType,
       };
       
       updatedCycle = await saveTaskCycle(updatedCycle);
-    }
-    
-    // 处理日历同步
-    if (updatedTask.syncToCalendar) {
-      if (updatedCycle) {
-        try {
-          // 如果已有日历事件ID，更新事件
-          if (existingTask.calendarEventId) {
-            await updateTaskInCalendar(existingTask.calendarEventId, updatedTask, updatedCycle);
-          } 
-          // 如果是新启用同步或没有日历事件ID，创建新事件
-          else if (calendarSyncChanged || !existingTask.calendarEventId) {
-            const eventId = await addTaskToCalendar(updatedTask, updatedCycle);
-            updatedTask.calendarEventId = eventId;
-          }
-        } catch (error) {
-          console.error('同步任务到日历时出错:', error);
-          // 继续执行，不中断任务更新流程
-        }
-      }
-    } 
-    // 如果取消了日历同步，删除日历事件
-    else if (calendarSyncChanged && existingTask.calendarEventId) {
-      try {
-        await removeTaskFromCalendar(existingTask.calendarEventId);
-        updatedTask.calendarEventId = undefined;
-      } catch (error) {
-        console.error('从日历中删除任务时出错:', error);
-        // 继续执行，不中断任务更新流程
-      }
     }
     
     // 保存更新后的任务
     const savedTask = await saveTask(updatedTask);
     savedTask.currentCycle = updatedCycle;
     
+    // 处理日历同步
+    if (calendarSyncChanged) {
+      if (input.syncToCalendar && updatedCycle) {
+        // 添加到日历
+        try {
+          const eventId = await addTaskToCalendar(savedTask, updatedCycle);
+          savedTask.calendarEventId = eventId;
+          await saveTask(savedTask);
+        } catch (error) {
+          console.error('同步任务到日历时出错:', error);
+        }
+      } else if (savedTask.calendarEventId) {
+        // 从日历中移除
+        try {
+          await removeTaskFromCalendar(savedTask.calendarEventId);
+          savedTask.calendarEventId = undefined;
+          await saveTask(savedTask);
+        } catch (error) {
+          console.error('从日历中移除任务时出错:', error);
+        }
+      }
+    } else if (savedTask.syncToCalendar && updatedCycle && savedTask.calendarEventId) {
+      // 更新日历事件
+      try {
+        await updateTaskInCalendar(savedTask.calendarEventId, savedTask, updatedCycle);
+      } catch (error) {
+        console.error('更新日历事件时出错:', error);
+      }
+    }
+    
     return savedTask;
   } catch (error) {
-    console.error(`更新任务 ${id} 时出错:`, error);
+    console.error('更新任务时出错:', error);
     throw error;
   }
 };
@@ -358,44 +388,65 @@ export const getCurrentCycleForTask = async (taskId: number): Promise<TaskCycle 
   }
 };
 
-export const calculateNextCycleDates = (
-  task: Task,
-  currentStartDate: string,
-  currentDueDate: string
-): { startDate: string; dueDate: string } => {
-  const startDate = new Date(currentStartDate);
-  const dueDate = new Date(currentDueDate);
-  const duration = dueDate.getTime() - startDate.getTime();
-
+/**
+ * Get the next cycle's start and due dates
+ */
+const getNextCycleDates = (task: Task, currentCycle: TaskCycle): { startDate: string; dueDate: string } => {
+  const startDate = new Date(currentCycle.dueDate);
+  const duration = new Date(currentCycle.dueDate).getTime() - new Date(currentCycle.startDate).getTime();
   let newStartDate: Date;
   let newDueDate: Date;
   
-  switch (task.recurrenceType) {
+  switch (task.recurrencePattern.type) {
     case 'daily':
-      newStartDate = addDays(startDate, task.recurrenceValue);
+      newStartDate = addDays(startDate, task.recurrencePattern.value);
       newDueDate = new Date(newStartDate.getTime() + duration);
       break;
       
     case 'weekly':
-      newStartDate = addWeeks(startDate, task.recurrenceValue);
+      if (task.recurrencePattern.weekDay !== undefined) {
+        // 找到下一个指定的星期几
+        newStartDate = startDate;
+        const targetDay = task.recurrencePattern.weekDay;
+        while (newStartDate.getDay() !== targetDay) {
+          newStartDate = addDays(newStartDate, 1);
+        }
+      } else {
+        // 每隔几周
+        newStartDate = addDays(startDate, task.recurrencePattern.value * 7);
+      }
       newDueDate = new Date(newStartDate.getTime() + duration);
       break;
       
     case 'monthly':
-      newStartDate = addMonths(startDate, task.recurrenceValue);
+      if (task.recurrencePattern.monthDay !== undefined) {
+        // 下个月的指定日期
+        newStartDate = new Date(startDate);
+        newStartDate.setMonth(newStartDate.getMonth() + 1);
+        newStartDate.setDate(task.recurrencePattern.monthDay);
+      } else {
+        // 每隔几个月
+        newStartDate = new Date(startDate);
+        newStartDate.setMonth(newStartDate.getMonth() + task.recurrencePattern.value);
+      }
       newDueDate = new Date(newStartDate.getTime() + duration);
       break;
       
     case 'custom':
-      if (task.recurrenceUnit === 'days') {
-        newStartDate = addDays(startDate, task.recurrenceValue);
-      } else if (task.recurrenceUnit === 'weeks') {
-        newStartDate = addWeeks(startDate, task.recurrenceValue);
-      } else if (task.recurrenceUnit === 'months') {
-        newStartDate = addMonths(startDate, task.recurrenceValue);
-      } else {
-        // 默认为天
-        newStartDate = addDays(startDate, task.recurrenceValue);
+      switch (task.recurrencePattern.unit) {
+        case 'days':
+          newStartDate = addDays(startDate, task.recurrencePattern.value);
+          break;
+        case 'weeks':
+          newStartDate = addDays(startDate, task.recurrencePattern.value * 7);
+          break;
+        case 'months':
+          newStartDate = new Date(startDate);
+          newStartDate.setMonth(newStartDate.getMonth() + task.recurrencePattern.value);
+          break;
+        default:
+          // 默认为天
+          newStartDate = addDays(startDate, task.recurrencePattern.value);
       }
       newDueDate = new Date(newStartDate.getTime() + duration);
       break;
@@ -411,142 +462,115 @@ export const calculateNextCycleDates = (
   };
 };
 
-export const completeTaskCycle = async (cycleId: number): Promise<void> => {
+/**
+ * Complete a task cycle
+ */
+export const completeTaskCycle = async (taskId: number, cycleId: number): Promise<TaskCycle> => {
   try {
-    // 获取所有周期
-    const allCycles = await getTaskCycles();
-    const cycle = allCycles.find(c => c.id === cycleId);
+    // Get the task and cycle
+    const task = await getTaskById(taskId);
+    const cycles = await getTaskCyclesByTaskId(taskId);
+    const currentCycle = cycles.find(c => c.id === cycleId);
     
-    if (!cycle) {
-      throw new Error('Cycle not found');
+    if (!task || !currentCycle) {
+      throw new Error('Task or cycle not found');
     }
     
-    // 获取任务信息
-    const task = await getTaskById(cycle.taskId);
-    if (!task) {
-      throw new Error('Task not found');
-    }
+    // Mark the current cycle as completed
+    currentCycle.isCompleted = true;
+    currentCycle.completedDate = new Date().toISOString();
+    await saveTaskCycle(currentCycle);
     
-    // 更新周期为已完成
-    const now = new Date().toISOString();
-    const updatedCycle: TaskCycle = {
-      ...cycle,
-      isCompleted: true,
-      completedDate: now
-    };
-    
-    await saveTaskCycle(updatedCycle);
-    
-    // 更新任务的上次完成时间
-    const updatedTask: Task = {
-      ...task,
-      lastCompletedDate: now,
-      updatedAt: now
-    };
-    
-    await saveTask(updatedTask);
-    
-    // 添加任务完成历史记录
+    // Save task history
     await saveTaskHistory({
-      taskId: task.id,
-      cycleId: cycle.id,
-      action: 'completed',
-      timestamp: now
+      id: 0,
+      taskId,
+      cycleId,
+      action: 'complete',
+      timestamp: new Date().toISOString()
     });
     
-    // 如果启用了自动重置，创建下一个周期
+    // If auto restart is enabled, create next cycle
     if (task.autoRestart) {
-      // 检查是否在截止日期之前完成
-      const currentDate = new Date();
-      const dueDate = new Date(cycle.dueDate);
+      const nextCycle = await createTaskCycle(
+        taskId,
+        currentCycle.completedDate || currentCycle.dueDate,
+        task.recurrencePattern,
+        currentCycle.dateType
+      );
       
-      if (currentDate < dueDate) {
-        // 在截止日期之前完成，使用当前时间作为新周期的开始时间
-        const newStartDate = new Date();
-        let newDueDate: Date;
-        
-        // 根据任务的循环周期类型计算新的截止日期
-        switch (task.recurrenceType) {
-          case 'daily':
-            newDueDate = addDays(newStartDate, task.recurrenceValue);
-            break;
-            
-          case 'weekly':
-            newDueDate = addWeeks(newStartDate, task.recurrenceValue);
-            break;
-            
-          case 'monthly':
-            newDueDate = addMonths(newStartDate, task.recurrenceValue);
-            break;
-            
-          case 'custom':
-            if (task.recurrenceUnit === 'days') {
-              newDueDate = addDays(newStartDate, task.recurrenceValue);
-            } else if (task.recurrenceUnit === 'weeks') {
-              newDueDate = addWeeks(newStartDate, task.recurrenceValue);
-            } else if (task.recurrenceUnit === 'months') {
-              newDueDate = addMonths(newStartDate, task.recurrenceValue);
-            } else {
-              // 默认为天
-              newDueDate = addDays(newStartDate, task.recurrenceValue);
-            }
-            break;
-            
-          default:
-            newDueDate = addDays(newStartDate, 1);
+      // Update task's current cycle
+      task.currentCycle = nextCycle;
+      await saveTask(task);
+      
+      // If sync to calendar is enabled, create calendar event for next cycle
+      if (task.syncToCalendar) {
+        try {
+          const eventId = await addTaskToCalendar(task, nextCycle);
+          task.calendarEventId = eventId;
+          await saveTask(task);
+        } catch (error) {
+          console.error('Error syncing task to calendar:', error);
         }
-        
-        // 创建新周期
-        const newCycle: TaskCycle = {
-          id: 0, // 将由 saveTaskCycle 分配
-          taskId: cycle.taskId,
-          startDate: newStartDate.toISOString(),
-          dueDate: newDueDate.toISOString(),
-          isCompleted: false,
-          isOverdue: false,
-          createdAt: now
-        };
-        
-        const savedCycle = await saveTaskCycle(newCycle);
-        
-        // 添加周期重启历史记录
-        await saveTaskHistory({
-          taskId: task.id,
-          cycleId: savedCycle.id,
-          action: 'restarted',
-          timestamp: now
-        });
-      } else {
-        // 在截止日期之后完成，使用原有的计算方式
-        const { startDate, dueDate } = calculateNextCycleDates(
-          task,
-          cycle.startDate,
-          cycle.dueDate
-        );
-        
-        const newCycle: TaskCycle = {
-          id: 0, // 将由 saveTaskCycle 分配
-          taskId: cycle.taskId,
-          startDate: startDate,
-          dueDate: dueDate,
-          isCompleted: false,
-          isOverdue: false,
-          createdAt: now
-        };
-        
-        const savedCycle = await saveTaskCycle(newCycle);
-        
-        // 添加周期重启历史记录
-        await saveTaskHistory({
-          taskId: task.id,
-          cycleId: savedCycle.id,
-          action: 'restarted',
-          timestamp: now
-        });
       }
     }
+    
+    return currentCycle;
   } catch (error) {
     console.error('Error completing task cycle:', error);
+    throw error;
+  }
+};
+
+/**
+ * Skip a task cycle
+ */
+export const skipTaskCycle = async (taskId: number, cycleId: number): Promise<TaskCycle> => {
+  try {
+    // Get the task and cycle
+    const task = await getTaskById(taskId);
+    const cycles = await getTaskCyclesByTaskId(taskId);
+    const currentCycle = cycles.find(c => c.id === cycleId);
+    
+    if (!task || !currentCycle) {
+      throw new Error('Task or cycle not found');
+    }
+    
+    // Save task history
+    await saveTaskHistory({
+      id: 0,
+      taskId,
+      cycleId,
+      action: 'skip',
+      timestamp: new Date().toISOString()
+    });
+    
+    // Create next cycle
+    const nextCycle = await createTaskCycle(
+      taskId,
+      currentCycle.dueDate,
+      task.recurrencePattern,
+      currentCycle.dateType
+    );
+    
+    // Update task's current cycle
+    task.currentCycle = nextCycle;
+    await saveTask(task);
+    
+    // If sync to calendar is enabled, create calendar event for next cycle
+    if (task.syncToCalendar) {
+      try {
+        const eventId = await addTaskToCalendar(task, nextCycle);
+        task.calendarEventId = eventId;
+        await saveTask(task);
+      } catch (error) {
+        console.error('Error syncing task to calendar:', error);
+      }
+    }
+    
+    return nextCycle;
+  } catch (error) {
+    console.error('Error skipping task cycle:', error);
     throw error;
   }
 };

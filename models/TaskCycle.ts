@@ -1,10 +1,11 @@
-import { RecurrenceType, RecurrenceUnit } from './Task';
+import { RecurrenceType, RecurrenceUnit, DateType } from './Task';
 
 export interface TaskCycle {
   id: number;
   taskId: number;
   startDate: string;
   dueDate: string;
+  dateType: DateType;
   isCompleted: boolean;
   isOverdue: boolean;
   completedDate?: string;
@@ -21,13 +22,15 @@ export interface TaskCycleWithTask extends TaskCycle {
 export function createTaskCycle(
   taskId: number,
   startDate: string,
-  dueDate: string
+  dueDate: string,
+  dateType: DateType = 'solar'
 ): TaskCycle {
   return {
     id: 0, // 数据库会自动生成
     taskId,
     startDate,
     dueDate,
+    dateType,
     isCompleted: false,
     isOverdue: false,
     createdAt: new Date().toISOString(),
@@ -48,4 +51,10 @@ export function failTaskCycle(cycle: TaskCycle): TaskCycle {
     status: 'failed',
     failedAt: new Date().toISOString(),
   };
+}
+
+export function getTaskCycleStatus(cycle: TaskCycle): 'completed' | 'overdue' | 'in_progress' {
+  if (cycle.isCompleted) return 'completed';
+  if (cycle.isOverdue) return 'overdue';
+  return 'in_progress';
 } 

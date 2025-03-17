@@ -22,12 +22,12 @@ import Constants from 'expo-constants';
 export interface ExportData {
   appVersion: string;
   dbVersion: number;
-  version: string;
-  timestamp: string;
-  author: string;
+  exportTimestamp: string;
+  platform: string;
   data: {
     tasks: Task[];
     cycles: TaskCycle[];
+    history: any[];
   };
 }
 
@@ -47,284 +47,207 @@ export interface ImportResult {
 }
 
 // Export data to JSON
-export async function exportDataToJSON(): Promise<ExportResult> {
+export const exportDataToJSON = async (): Promise<{ success: boolean; filePath?: string; error?: string }> => {
   try {
-    // 检查分享功能是否可用
-    const isAvailable = await checkSharingAvailability();
-    if (!isAvailable) {
-      return {
-        success: false,
-        error: '此设备不支持分享功能'
-      };
+    // 检查是否可以分享
+    const canShare = await checkSharingAvailability();
+    if (!canShare) {
+      return { success: false, error: '设备不支持分享功能' };
     }
-    
-    // 获取所有任务
-    const tasks = await getAllTasks();
-    
-    // 获取所有周期
-    const cycles = await getTaskCycles();
-    
-    // 获取数据库版本
-    const dbVersion = await getDatabaseVersion();
-    
-    // 获取应用版本
-    const appVersion = Constants.expoConfig?.version || '1.0.0';
-    
-    // 创建导出对象
+
+    // 获取版本信息
+    const { dbVersion, appVersion } = await getDatabaseVersion();
+
+    // 获取所有数据
+    const tasksJson = await AsyncStorage.getItem('nevermiss_tasks');
+    const cyclesJson = await AsyncStorage.getItem('nevermiss_task_cycles');
+    const historyJson = await AsyncStorage.getItem('nevermiss_task_history');
+
+    const tasks = tasksJson ? JSON.parse(tasksJson) : [];
+    const cycles = cyclesJson ? JSON.parse(cyclesJson) : [];
+    const history = historyJson ? JSON.parse(historyJson) : [];
+
+    // 构建导出数据
     const exportData: ExportData = {
       appVersion,
       dbVersion,
-      version: '1.1',
-      timestamp: new Date().toISOString(),
-      author: 'zfonlyone',
+      exportTimestamp: new Date().toISOString(),
+      platform: Platform.OS,
       data: {
         tasks,
-        cycles
-      },
+        cycles,
+        history
+      }
     };
-    
-    // 转换为 JSON
-    const jsonData = JSON.stringify(exportData, null, 2);
-    
-    // 创建文件
-    const fileName = `nevermiss_export_${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
+
+    // 生成文件名
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const fileName = `nevermiss_backup_${timestamp}.json`;
     const filePath = `${FileSystem.documentDirectory}${fileName}`;
-    
+
     // 写入文件
-    await FileSystem.writeAsStringAsync(filePath, jsonData);
-    
-    return {
-      success: true,
-      filePath
-    };
+    await FileSystem.writeAsStringAsync(filePath, JSON.stringify(exportData, null, 2));
+
+    return { success: true, filePath };
   } catch (error) {
-    console.error('导出数据时出错:', error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : '未知错误'
-    };
+    console.error('导出数据失败:', error);
+    return { success: false, error: '导出数据时发生错误' };
   }
-}
+};
 
 // Export data to CSV
-export async function exportDataToCSV(): Promise<ExportResult> {
+export const exportDataToCSV = async (): Promise<{ success: boolean; filePath?: string; error?: string }> => {
   try {
-    // 检查分享功能是否可用
-    const isAvailable = await checkSharingAvailability();
-    if (!isAvailable) {
-      return {
-        success: false,
-        error: '此设备不支持分享功能'
-      };
+    // 检查是否可以分享
+    const canShare = await checkSharingAvailability();
+    if (!canShare) {
+      return { success: false, error: '设备不支持分享功能' };
     }
+
+    // 获取版本信息
+    const { dbVersion, appVersion } = await getDatabaseVersion();
+
+    // 获取任务数据
+    const tasksJson = await AsyncStorage.getItem('nevermiss_tasks');
+    const tasks = tasksJson ? JSON.parse(tasksJson) : [];
+
+    // 构建CSV内容
+    let csvContent = 'App Version,DB Version,Task ID,Title,Description,Recurrence Type,Recurrence Value,Reminder Offset,Is Active,Created At\n';
     
-    // 获取所有任务
-    const tasks = await getAllTasks();
-    
-    // 创建 CSV 头
-    let csvData = 'Task ID,Title,Description,Recurrence Type,Recurrence Value,Recurrence Unit,Reminder Offset,Reminder Unit,Reminder Hour,Reminder Minute,Is Active,Auto Restart,Sync To Calendar,Created At,Updated At\n';
-    
-    // 添加任务数据
-    tasks.forEach((task) => {
-      csvData += `${task.id},"${task.title.replace(/"/g, '""')}","${(task.description || '').replace(/"/g, '""')}",${task.recurrenceType},${task.recurrenceValue},${task.recurrenceUnit || ''},${task.reminderOffset},${task.reminderUnit},${task.reminderTime.hour},${task.reminderTime.minute},${task.isActive},${task.autoRestart},${task.syncToCalendar},${task.createdAt},${task.updatedAt}\n`;
+    tasks.forEach((task: Task) => {
+      csvContent += `${appVersion},${dbVersion},${task.id},"${task.title}","${task.description || ''}",${task.recurrenceType},${task.recurrenceValue},${task.reminderOffset},${task.isActive},${task.createdAt}\n`;
     });
-    
-    // 创建文件
-    const fileName = `nevermiss_export_${new Date().toISOString().replace(/[:.]/g, '-')}.csv`;
+
+    // 生成文件名
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const fileName = `nevermiss_tasks_${timestamp}.csv`;
     const filePath = `${FileSystem.documentDirectory}${fileName}`;
-    
+
     // 写入文件
-    await FileSystem.writeAsStringAsync(filePath, csvData);
-    
-    return {
-      success: true,
-      filePath
-    };
+    await FileSystem.writeAsStringAsync(filePath, csvContent);
+
+    return { success: true, filePath };
   } catch (error) {
-    console.error('导出数据到 CSV 时出错:', error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : '未知错误'
-    };
+    console.error('导出CSV失败:', error);
+    return { success: false, error: '导出CSV时发生错误' };
   }
-}
+};
 
 // Share exported file
-export async function shareFile(filePath: string): Promise<boolean> {
+export const shareFile = async (filePath: string): Promise<boolean> => {
   try {
-    // 检查分享功能是否可用
-    const isAvailable = await Sharing.isAvailableAsync();
-    
-    if (!isAvailable) {
-      throw new Error('此设备不支持分享功能');
-    }
-    
-    // 分享文件
-    await Sharing.shareAsync(filePath);
+    await Sharing.shareAsync(filePath, {
+      mimeType: filePath.endsWith('.json') ? 'application/json' : 'text/csv',
+      dialogTitle: '分享备份文件'
+    });
     return true;
   } catch (error) {
-    console.error('分享文件时出错:', error);
+    console.error('分享文件失败:', error);
     return false;
   }
-}
+};
 
 // Import data from JSON
-export async function importDataFromJSON(): Promise<ImportResult> {
+export const importDataFromJSON = async (uri: string): Promise<{ success: boolean; error?: string }> => {
   try {
-    // 选择文档
-    const result = await DocumentPicker.getDocumentAsync({
-      type: 'application/json',
-      copyToCacheDirectory: true,
-    });
-    
-    if (result.canceled) {
-      return {
-        success: false,
-        error: '文档选择已取消'
+    // 读取文件内容
+    const fileContent = await FileSystem.readAsStringAsync(uri);
+    const importData: ExportData = JSON.parse(fileContent);
+
+    // 验证数据格式
+    if (!importData.appVersion || !importData.dbVersion || !importData.data) {
+      return { success: false, error: '无效的备份文件格式' };
+    }
+
+    // 获取当前版本
+    const { dbVersion: currentDbVersion, appVersion: currentAppVersion } = await getDatabaseVersion();
+
+    // 检查版本兼容性
+    if (importData.dbVersion > currentDbVersion) {
+      return { 
+        success: false, 
+        error: `备份文件的数据库版本(${importData.dbVersion})高于当前版本(${currentDbVersion})，无法导入` 
       };
     }
-    
-    // 读取文件
-    const fileContent = await FileSystem.readAsStringAsync(result.assets[0].uri);
-    
-    // 解析 JSON
-    const importData = JSON.parse(fileContent) as ExportData;
-    
-    // 验证导入数据
-    if (!importData.version || !importData.data) {
-      return {
-        success: false,
-        error: '导入文件格式无效'
-      };
-    }
-    
-    // 导入任务和周期
-    const { tasks, cycles } = importData.data;
-    
-    // 保存任务
-    for (const task of tasks) {
-      await saveTask(task);
-    }
-    
-    // 保存周期
-    for (const cycle of cycles) {
-      await saveTaskCycle(cycle);
-    }
-    
-    return {
-      success: true,
-      tasksCount: tasks.length,
-      cyclesCount: cycles.length
-    };
+
+    // 保存数据
+    await AsyncStorage.setItem('nevermiss_tasks', JSON.stringify(importData.data.tasks));
+    await AsyncStorage.setItem('nevermiss_task_cycles', JSON.stringify(importData.data.cycles));
+    await AsyncStorage.setItem('nevermiss_task_history', JSON.stringify(importData.data.history));
+
+    return { success: true };
   } catch (error) {
-    console.error('导入数据时出错:', error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : '未知错误'
-    };
+    console.error('导入数据失败:', error);
+    return { success: false, error: '导入数据时发生错误' };
   }
-}
+};
 
 // Import data from CSV
-export async function importDataFromCSV(): Promise<ImportResult> {
+export const importDataFromCSV = async (uri: string): Promise<{ success: boolean; error?: string }> => {
   try {
-    // 选择文档
-    const result = await DocumentPicker.getDocumentAsync({
-      type: 'text/csv',
-      copyToCacheDirectory: true,
-    });
+    // 读取文件内容
+    const fileContent = await FileSystem.readAsStringAsync(uri);
     
-    if (result.canceled) {
-      return {
-        success: false,
-        error: '文档选择已取消'
-      };
-    }
-    
-    // 读取文件
-    const fileContent = await FileSystem.readAsStringAsync(result.assets[0].uri);
-    
-    // 解析 CSV
+    // 解析CSV
     const lines = fileContent.split('\n');
-    const header = lines[0].split(',');
-    
-    // 验证 CSV 格式
-    if (lines.length < 2 || !header.includes('Task ID') || !header.includes('Title')) {
-      return {
-        success: false,
-        error: 'CSV 文件格式无效'
-      };
+    if (lines.length < 2) {
+      return { success: false, error: 'CSV文件为空' };
     }
-    
+
+    // 验证标题行
+    const headers = lines[0].split(',');
+    if (!headers.includes('App Version') || !headers.includes('DB Version')) {
+      return { success: false, error: '无效的CSV文件格式' };
+    }
+
+    // 获取当前版本
+    const { dbVersion: currentDbVersion } = await getDatabaseVersion();
+
     // 解析任务数据
     const tasks: Task[] = [];
     for (let i = 1; i < lines.length; i++) {
       if (!lines[i].trim()) continue;
       
-      const values = parseCSVLine(lines[i]);
-      if (values.length < header.length) continue;
+      const values = lines[i].split(',');
+      const importDbVersion = parseInt(values[1]);
       
+      // 检查版本兼容性
+      if (importDbVersion > currentDbVersion) {
+        return { 
+          success: false, 
+          error: `CSV文件的数据库版本(${importDbVersion})高于当前版本(${currentDbVersion})，无法导入` 
+        };
+      }
+
+      // 构建任务对象
       const task: Task = {
-        id: parseInt(values[0]),
-        title: values[1].replace(/^"|"$/g, ''),
-        description: values[2].replace(/^"|"$/g, ''),
-        recurrenceType: values[3] as any,
-        recurrenceValue: parseInt(values[4]),
-        recurrenceUnit: values[5] ? values[5] as any : undefined,
-        reminderOffset: parseInt(values[6]),
-        reminderUnit: values[7] as any,
+        id: parseInt(values[2]),
+        title: values[3].replace(/^"|"$/g, ''),
+        description: values[4].replace(/^"|"$/g, ''),
+        recurrenceType: values[5] as any,
+        recurrenceValue: parseInt(values[6]),
+        reminderOffset: parseInt(values[7]),
+        reminderUnit: 'minutes',
         reminderTime: {
-          hour: parseInt(values[8]),
-          minute: parseInt(values[9])
+          hour: 9,
+          minute: 0
         },
-        isActive: values[10] === 'true',
-        autoRestart: values[11] === 'true',
-        syncToCalendar: values[12] === 'true',
-        createdAt: values[13],
-        updatedAt: values[14],
+        isActive: values[8].toLowerCase() === 'true',
+        autoRestart: true,
+        syncToCalendar: false,
+        createdAt: values[9],
+        updatedAt: new Date().toISOString(),
       };
-      
+
       tasks.push(task);
     }
-    
-    // 保存任务
-    for (const task of tasks) {
-      await saveTask(task);
-    }
-    
-    return {
-      success: true,
-      tasksCount: tasks.length,
-      cyclesCount: 0
-    };
-  } catch (error) {
-    console.error('导入 CSV 数据时出错:', error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : '未知错误'
-    };
-  }
-}
 
-// 解析 CSV 行，处理引号内的逗号
-function parseCSVLine(line: string): string[] {
-  const result: string[] = [];
-  let current = '';
-  let inQuotes = false;
-  
-  for (let i = 0; i < line.length; i++) {
-    const char = line[i];
-    
-    if (char === '"') {
-      inQuotes = !inQuotes;
-    } else if (char === ',' && !inQuotes) {
-      result.push(current);
-      current = '';
-    } else {
-      current += char;
-    }
+    // 保存任务数据
+    await AsyncStorage.setItem('nevermiss_tasks', JSON.stringify(tasks));
+
+    return { success: true };
+  } catch (error) {
+    console.error('导入CSV失败:', error);
+    return { success: false, error: '导入CSV时发生错误' };
   }
-  
-  result.push(current);
-  return result;
-} 
+}; 

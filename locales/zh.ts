@@ -114,6 +114,9 @@ export default {
     testCalendarFailed: '创建测试日历事件失败',
     testFeatures: '测试功能',
     lastCompleted: '上次完成时间',
+    dateType: '日期类型',
+    lunarCalendar: '农历',
+    solarCalendar: '公历',
   },
   validation: {
     titleRequired: '请输入任务标题',

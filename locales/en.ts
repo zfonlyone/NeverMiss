@@ -114,6 +114,9 @@ export default {
     testCalendarFailed: 'Failed to create test calendar event',
     testFeatures: 'Test Features',
     lastCompleted: 'Last Completed',
+    dateType: 'Date Type',
+    lunarCalendar: 'Lunar Calendar',
+    solarCalendar: 'Solar Calendar',
   },
   validation: {
     titleRequired: 'Please enter a task title',

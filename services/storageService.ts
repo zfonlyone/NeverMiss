@@ -5,9 +5,9 @@ import { TaskHistory } from '../models/TaskHistory';
 
 // 存储键
 const STORAGE_KEYS = {
-  TASKS: 'nevermiss_tasks',
-  TASK_CYCLES: 'nevermiss_task_cycles',
-  TASK_HISTORY: 'nevermiss_task_history',
+  TASKS: '@NeverMiss:tasks',
+  TASK_CYCLES: '@NeverMiss:task_cycles',
+  TASK_HISTORY: '@NeverMiss:task_history',
   DATABASE_VERSION: 'nevermiss_db_version'
 };
 
@@ -55,6 +55,7 @@ export const saveTask = async (task: Task): Promise<Task> => {
       task.id = newId;
       task.createdAt = now;
       task.updatedAt = now;
+      task.dateType = task.dateType || 'solar';
       tasks.push(task);
     }
     
@@ -69,7 +70,12 @@ export const saveTask = async (task: Task): Promise<Task> => {
 export const getTasks = async (): Promise<Task[]> => {
   try {
     const tasksJson = await AsyncStorage.getItem(STORAGE_KEYS.TASKS);
-    return tasksJson ? JSON.parse(tasksJson) : [];
+    const tasks = tasksJson ? JSON.parse(tasksJson) : [];
+    // 确保所有任务都有日期类型字段
+    return tasks.map((task: Task) => ({
+      ...task,
+      dateType: task.dateType || 'solar',
+    }));
   } catch (error) {
     console.error('获取任务时出错:', error);
     throw error;
@@ -116,14 +122,20 @@ export const saveTaskCycle = async (cycle: TaskCycle): Promise<TaskCycle> => {
       // 更新现有周期
       const index = cycles.findIndex(c => c.id === cycle.id);
       if (index !== -1) {
-        cycles[index] = { ...cycle };
+        cycles[index] = {
+          ...cycles[index],
+          ...cycle,
+          dateType: cycle.dateType || cycles[index].dateType || 'solar'
+        };
       }
     } else {
       // 添加新周期
       const newId = cycles.length > 0 ? Math.max(...cycles.map(c => c.id || 0)) + 1 : 1;
-      const now = new Date().toISOString();
-      cycle.id = newId;
-      cycle.createdAt = now;
+      cycle = {
+        ...cycle,
+        id: newId,
+        dateType: cycle.dateType || 'solar'
+      };
       cycles.push(cycle);
     }
     
@@ -138,7 +150,12 @@ export const saveTaskCycle = async (cycle: TaskCycle): Promise<TaskCycle> => {
 export const getTaskCycles = async (): Promise<TaskCycle[]> => {
   try {
     const cyclesJson = await AsyncStorage.getItem(STORAGE_KEYS.TASK_CYCLES);
-    return cyclesJson ? JSON.parse(cyclesJson) : [];
+    const cycles = cyclesJson ? JSON.parse(cyclesJson) : [];
+    // 确保所有周期都有日期类型字段
+    return cycles.map((cycle: TaskCycle) => ({
+      ...cycle,
+      dateType: cycle.dateType || 'solar',
+    }));
   } catch (error) {
     console.error('获取任务周期时出错:', error);
     throw error;

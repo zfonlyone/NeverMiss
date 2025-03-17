@@ -18,6 +18,7 @@ import { useLanguage } from '../contexts/LanguageContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { scheduleTaskNotification } from '../services/notificationService';
 import { addTaskToCalendar } from '../services/calendarService';
+import lunarService from '../services/lunarService';
 
 interface TaskDetailProps {
   task: Task;
@@ -143,7 +144,7 @@ export default function TaskDetail({
 
     try {
       setIsProcessing(true);
-      await completeTaskCycle(task.currentCycle.id);
+      await completeTaskCycle(task.id, task.currentCycle.id);
       Alert.alert(t.common.success, t.task.completeSuccess);
       onClose(); // Close detail view and return to task list
     } catch (error) {
@@ -154,9 +155,14 @@ export default function TaskDetail({
     }
   };
 
-  const formatDate = (date: string) => {
-    return format(new Date(date), language === 'zh' ? 'yyyy年MM月dd日 HH:mm' : 'yyyy-MM-dd HH:mm', 
-      { locale: language === 'zh' ? zhCN : undefined });
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    const solarDate = format(date, 'yyyy-MM-dd HH:mm', { locale: language === 'zh' ? zhCN : undefined });
+    if (task.dateType === 'lunar') {
+      const lunarDate = lunarService.formatDate(dateString, 'lunar');
+      return `${solarDate} (${lunarDate})`;
+    }
+    return solarDate;
   };
 
   const getRecurrenceText = (task: Task) => {
@@ -361,6 +367,24 @@ export default function TaskDetail({
                   ]}
                 >
                   {getRecurrenceText(task)}
+                </Text>
+              </View>
+              <View style={styles.infoRow}>
+                <Text
+                  style={[
+                    styles.infoLabel,
+                    { color: colors.subText },
+                  ]}
+                >
+                  {t.task.dateType}:
+                </Text>
+                <Text
+                  style={[
+                    styles.infoValue,
+                    { color: colors.text },
+                  ]}
+                >
+                  {task.dateType === 'lunar' ? t.task.lunarCalendar : t.task.solarCalendar}
                 </Text>
               </View>
             </View>

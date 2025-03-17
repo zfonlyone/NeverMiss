@@ -18,20 +18,34 @@ import {
   Alert,
   KeyboardAvoidingView,
 } from 'react-native';
-import { Task, CreateTaskInput } from '../models/Task';
+import {
+  Task,
+  CreateTaskInput,
+  UpdateTaskInput,
+  RecurrencePattern,
+  ReminderUnit,
+  ReminderTime,
+  DateType,
+} from '../models/Task';
 import { createTask, updateTask } from '../services/taskService';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
-import { format } from 'date-fns';
+import { format, addDays } from 'date-fns';
 import { scheduleTestNotification } from '../services/notificationService';
 import { checkPermissionsForFeature, requestPermissionsForFeature } from '../services/permissionService';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useTheme } from '../contexts/ThemeContext';
+import lunarService from '../services/lunarService';
 
 interface TaskFormInlineProps {
   task?: Task;
   onSave: () => void;
   onCancel: () => void;
+}
+
+interface FormData extends Omit<CreateTaskInput, 'startDate' | 'dueDate'> {
+  startDate: string;
+  dueDate: string;
 }
 
 export default function TaskFormInline({ task, onSave, onCancel }: TaskFormInlineProps) {
@@ -42,40 +56,46 @@ export default function TaskFormInline({ task, onSave, onCancel }: TaskFormInlin
   const [showDuePicker, setShowDuePicker] = useState(false);
   const [showReminderTimePicker, setShowReminderTimePicker] = useState(false);
   const [pickerMode, setPickerMode] = useState<'date' | 'time'>('date');
+  const [useLunar, setUseLunar] = useState(task?.dateType === 'lunar' || false);
 
-  const [formData, setFormData] = useState<CreateTaskInput>({
+  const [formData, setFormData] = useState<FormData>({
     title: task?.title || '',
     description: task?.description || '',
-    recurrenceType: task?.recurrenceType || 'daily',
-    recurrenceValue: task?.recurrenceValue || 1,
-    recurrenceUnit: task?.recurrenceUnit,
+    recurrencePattern: task?.recurrencePattern || {
+      type: 'daily',
+      value: 1,
+    },
     reminderOffset: task?.reminderOffset || 30,
     reminderUnit: task?.reminderUnit || 'minutes',
     reminderTime: task?.reminderTime || { hour: 9, minute: 0 },
-    isActive: task?.isActive !== false,
-    autoRestart: task?.autoRestart !== false,
-    syncToCalendar: task?.syncToCalendar || false,
+    dateType: task?.dateType || 'solar',
+    isActive: task?.isActive !== undefined ? task?.isActive : true,
+    autoRestart: task?.autoRestart !== undefined ? task?.autoRestart : true,
+    syncToCalendar: task?.syncToCalendar !== undefined ? task?.syncToCalendar : false,
     startDate: task?.currentCycle?.startDate || new Date().toISOString(),
-    dueDate: task?.currentCycle?.dueDate || (() => {
-      const date = new Date();
-      date.setDate(date.getDate() + 1);
-      return date.toISOString();
-    })(),
+    dueDate: task?.currentCycle?.dueDate || addDays(new Date(), 1).toISOString(),
   });
 
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
 
-  const validateForm = () => {
-    const newErrors: { [key: string]: string } = {};
+  const formatDisplayDate = (dateString: string) => {
+    if (useLunar) {
+      return lunarService.formatDate(dateString, 'lunar');
+    }
+    return format(new Date(dateString), 'yyyy-MM-dd HH:mm');
+  };
 
-    if (!formData.title.trim()) {
+  const validateForm = (): boolean => {
+    const newErrors: { [key: string]: string } = {};
+    
+    if (!formData.title?.trim()) {
       newErrors.title = t.validation.titleRequired;
     }
-
-    if (formData.recurrenceValue <= 0) {
+    
+    if (formData.recurrencePattern?.value <= 0) {
       newErrors.recurrenceValue = t.validation.recurrenceValuePositive;
     }
-
+    
     if (formData.reminderOffset < 0) {
       newErrors.reminderOffset = t.validation.reminderOffsetPositive;
     }
@@ -85,147 +105,134 @@ export default function TaskFormInline({ task, onSave, onCancel }: TaskFormInlin
     }
 
     setErrors(newErrors);
-    return Object.keys(newErrors).length === 0 ? {} : newErrors;
+    return Object.keys(newErrors).length === 0;
   };
 
   const handleSave = async () => {
     // Validate form
-    const validationErrors = validateForm();
-    if (Object.keys(validationErrors).length > 0) {
-      setErrors(validationErrors);
+    const isValid = validateForm();
+    if (!isValid) {
       return;
     }
 
     setIsLoading(true);
     try {
-      // Check permissions for calendar if needed
+      // Check calendar permissions if needed
       if (formData.syncToCalendar) {
-        const permissionResult = await checkPermissionsForFeature('calendar');
-        if (!permissionResult.granted) {
+        const hasPermission = await checkPermissionsForFeature('calendar');
+        if (!hasPermission) {
           const granted = await requestPermissionsForFeature('calendar');
           if (!granted) {
             Alert.alert(
               t.permissions.calendarPermissionTitle,
-              t.permissions.calendarPermissionMessage
+              t.permissions.calendarPermissionMessage,
+              [{ text: t.common.cancel }]
             );
             setFormData({ ...formData, syncToCalendar: false });
-            setIsLoading(false);
             return;
           }
         }
       }
 
-      // Check permissions for notifications
-      const notificationPermission = await checkPermissionsForFeature('notification');
-      if (!notificationPermission.granted) {
+      // Check notification permissions
+      const hasPermission = await checkPermissionsForFeature('notification');
+      if (!hasPermission) {
         const granted = await requestPermissionsForFeature('notification');
         if (!granted) {
           Alert.alert(
             t.permissions.notificationPermissionTitle,
-            t.permissions.notificationPermissionMessage
+            t.permissions.notificationPermissionMessage,
+            [{ text: t.common.cancel }]
           );
-          setIsLoading(false);
           return;
         }
       }
 
-      // Save task
+      // Create or update task
       if (task) {
         // Update existing task
-        await updateTask(task.id, {
-          ...formData,
-          isActive: formData.isActive, // 确保isActive属性被正确传递
-          autoRestart: formData.autoRestart, // 确保autoRestart属性被正确传递
-          syncToCalendar: formData.syncToCalendar, // 确保syncToCalendar属性被正确传递
-        });
+        await updateTask(task.id, formData);
       } else {
         // Create new task
         await createTask(formData);
       }
 
+      // Test notification
+      const testDate = new Date();
+      testDate.setSeconds(testDate.getSeconds() + 30);
+      await scheduleTestNotification({
+        id: Date.now(),
+        title: t.task.testNotificationTitle,
+        body: t.task.testNotificationBody,
+        date: testDate
+      });
+
       onSave();
     } catch (error) {
       console.error('Error saving task:', error);
-      Alert.alert(t.common.error, t.task.saveTaskFailed);
+      Alert.alert(
+        t.common.error,
+        t.task.saveTaskFailed,
+        [{ text: t.common.cancel }]
+      );
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleDateChange = (
-    event: DateTimePickerEvent,
-    selectedDate: Date | undefined,
-    field: 'startDate' | 'dueDate'
-  ) => {
-    if (Platform.OS === 'android') {
-      setShowStartPicker(false);
-      setShowDuePicker(false);
-    }
-
-    if (event.type === 'dismissed') {
-      return;
-    }
-
-    if (selectedDate) {
+  const handleDateChange = (event: DateTimePickerEvent, selectedDate: Date | undefined, field: 'startDate' | 'dueDate') => {
+    if (event.type === 'set' && selectedDate) {
       const currentDate = new Date(formData[field]);
       let newDate = new Date(selectedDate);
       
       if (pickerMode === 'date') {
-        // 在日期模式下，保持原来的时间
+        // Keep the original time when in date mode
         newDate.setHours(currentDate.getHours());
         newDate.setMinutes(currentDate.getMinutes());
-        
-        if (Platform.OS === 'android') {
-          // 在 Android 上，选择完日期后显示时间选择器
-          setPickerMode('time');
-          setTimeout(() => {
-            if (field === 'startDate') {
-              setShowStartPicker(true);
-            } else {
-              setShowDuePicker(true);
-            }
-          }, 100);
-        }
       } else {
-        // 在时间模式下，保持原来的日期
+        // Keep the original date when in time mode
         newDate = new Date(currentDate);
         newDate.setHours(selectedDate.getHours());
         newDate.setMinutes(selectedDate.getMinutes());
       }
 
-      // 更新表单数据
-      setFormData(prev => ({
-        ...prev,
-        [field]: newDate.toISOString()
-      }));
-
-      // 如果是 iOS 或者是 Android 的时间选择完成，重置为日期模式
-      if (Platform.OS === 'ios' || pickerMode === 'time') {
-        setPickerMode('date');
+      setFormData({
+        ...formData,
+        [field]: newDate.toISOString(),
+        dateType: useLunar ? 'lunar' : 'solar',
+      });
+    }
+    
+    if (field === 'startDate') {
+      setShowStartPicker(false);
+      if (Platform.OS === 'android' && pickerMode === 'date' && event.type === 'set') {
+        setPickerMode('time');
+        setTimeout(() => setShowStartPicker(true), 100);
       }
+    } else {
+      setShowDuePicker(false);
+      if (Platform.OS === 'android' && pickerMode === 'date' && event.type === 'set') {
+        setPickerMode('time');
+        setTimeout(() => setShowDuePicker(true), 100);
+      }
+    }
+    
+    if (Platform.OS === 'ios' || (pickerMode === 'time' && event.type === 'set')) {
+      setPickerMode('date');
     }
   };
 
-  const handleReminderTimeChange = (event: any, selectedDate?: Date) => {
-    if (Platform.OS === 'android') {
-      setShowReminderTimePicker(false);
+  const handleReminderTimeChange = (event: DateTimePickerEvent, selectedDate: Date | undefined) => {
+    if (event.type === 'set' && selectedDate) {
+      setFormData({
+        ...formData,
+        reminderTime: {
+          hour: selectedDate.getHours(),
+          minute: selectedDate.getMinutes(),
+        },
+      });
     }
-
-    if (event.type === 'dismissed') {
-      return;
-    }
-
-    if (selectedDate) {
-      const newTime = {
-        hour: selectedDate.getHours(),
-        minute: selectedDate.getMinutes(),
-      };
-
-      setFormData((prev) => ({
-        ...prev,
-        reminderTime: newTime,
-      }));
-    }
+    setShowReminderTimePicker(false);
   };
 
   return (
@@ -310,16 +317,22 @@ export default function TaskFormInline({ task, onSave, onCancel }: TaskFormInlin
             <TouchableOpacity
               style={[
                 styles.recurrenceTypeButton,
-                formData.recurrenceType === 'daily' && [styles.recurrenceTypeButtonActive, { backgroundColor: colors.primary }],
+                formData.recurrencePattern?.type === 'daily' && [styles.recurrenceTypeButtonActive, { backgroundColor: colors.primary }],
                 { borderColor: colors.border }
               ]}
-              onPress={() => setFormData({ ...formData, recurrenceType: 'daily', recurrenceValue: 1 })}
+              onPress={() => setFormData({
+                ...formData,
+                recurrencePattern: {
+                  type: 'daily',
+                  value: 1,
+                }
+              })}
             >
               <Text
                 style={[
                   styles.recurrenceTypeText,
-                  formData.recurrenceType === 'daily' && styles.recurrenceTypeTextActive,
-                  { color: formData.recurrenceType === 'daily' ? 'white' : colors.text }
+                  formData.recurrencePattern?.type === 'daily' && styles.recurrenceTypeTextActive,
+                  { color: formData.recurrencePattern?.type === 'daily' ? 'white' : colors.text }
                 ]}
               >
                 {t.task.daily}
@@ -328,16 +341,22 @@ export default function TaskFormInline({ task, onSave, onCancel }: TaskFormInlin
             <TouchableOpacity
               style={[
                 styles.recurrenceTypeButton,
-                formData.recurrenceType === 'weekly' && [styles.recurrenceTypeButtonActive, { backgroundColor: colors.primary }],
+                formData.recurrencePattern?.type === 'weekly' && [styles.recurrenceTypeButtonActive, { backgroundColor: colors.primary }],
                 { borderColor: colors.border }
               ]}
-              onPress={() => setFormData({ ...formData, recurrenceType: 'weekly', recurrenceValue: 1 })}
+              onPress={() => setFormData({
+                ...formData,
+                recurrencePattern: {
+                  type: 'weekly',
+                  value: 1,
+                }
+              })}
             >
               <Text
                 style={[
                   styles.recurrenceTypeText,
-                  formData.recurrenceType === 'weekly' && styles.recurrenceTypeTextActive,
-                  { color: formData.recurrenceType === 'weekly' ? 'white' : colors.text }
+                  formData.recurrencePattern?.type === 'weekly' && styles.recurrenceTypeTextActive,
+                  { color: formData.recurrencePattern?.type === 'weekly' ? 'white' : colors.text }
                 ]}
               >
                 {t.task.weekly}
@@ -346,16 +365,22 @@ export default function TaskFormInline({ task, onSave, onCancel }: TaskFormInlin
             <TouchableOpacity
               style={[
                 styles.recurrenceTypeButton,
-                formData.recurrenceType === 'monthly' && [styles.recurrenceTypeButtonActive, { backgroundColor: colors.primary }],
+                formData.recurrencePattern?.type === 'monthly' && [styles.recurrenceTypeButtonActive, { backgroundColor: colors.primary }],
                 { borderColor: colors.border }
               ]}
-              onPress={() => setFormData({ ...formData, recurrenceType: 'monthly', recurrenceValue: 1 })}
+              onPress={() => setFormData({
+                ...formData,
+                recurrencePattern: {
+                  type: 'monthly',
+                  value: 1,
+                }
+              })}
             >
               <Text
                 style={[
                   styles.recurrenceTypeText,
-                  formData.recurrenceType === 'monthly' && styles.recurrenceTypeTextActive,
-                  { color: formData.recurrenceType === 'monthly' ? 'white' : colors.text }
+                  formData.recurrencePattern?.type === 'monthly' && styles.recurrenceTypeTextActive,
+                  { color: formData.recurrencePattern?.type === 'monthly' ? 'white' : colors.text }
                 ]}
               >
                 {t.task.monthly}
@@ -364,21 +389,23 @@ export default function TaskFormInline({ task, onSave, onCancel }: TaskFormInlin
             <TouchableOpacity
               style={[
                 styles.recurrenceTypeButton,
-                formData.recurrenceType === 'custom' && [styles.recurrenceTypeButtonActive, { backgroundColor: colors.primary }],
+                formData.recurrencePattern?.type === 'custom' && [styles.recurrenceTypeButtonActive, { backgroundColor: colors.primary }],
                 { borderColor: colors.border }
               ]}
-              onPress={() => setFormData({ 
-                ...formData, 
-                recurrenceType: 'custom', 
-                recurrenceValue: 1,
-                recurrenceUnit: 'days'
+              onPress={() => setFormData({
+                ...formData,
+                recurrencePattern: {
+                  type: 'custom',
+                  value: 1,
+                  unit: 'days',
+                }
               })}
             >
               <Text
                 style={[
                   styles.recurrenceTypeText,
-                  formData.recurrenceType === 'custom' && styles.recurrenceTypeTextActive,
-                  { color: formData.recurrenceType === 'custom' ? 'white' : colors.text }
+                  formData.recurrencePattern?.type === 'custom' && styles.recurrenceTypeTextActive,
+                  { color: formData.recurrencePattern?.type === 'custom' ? 'white' : colors.text }
                 ]}
               >
                 {t.task.custom}
@@ -386,7 +413,7 @@ export default function TaskFormInline({ task, onSave, onCancel }: TaskFormInlin
             </TouchableOpacity>
           </View>
           
-          {formData.recurrenceType === 'custom' && (
+          {formData.recurrencePattern?.type === 'custom' && (
             <View style={styles.customRecurrenceContainer}>
               <Text style={[styles.reminderLabel, { color: colors.text }]}>{t.task.every}</Text>
               <TextInput
@@ -398,10 +425,16 @@ export default function TaskFormInline({ task, onSave, onCancel }: TaskFormInlin
                     borderColor: errors.recurrenceValue ? colors.error : colors.border
                   }
                 ]}
-                value={formData.recurrenceValue.toString()}
+                value={formData.recurrencePattern.value.toString()}
                 onChangeText={(text) => {
                   const value = parseInt(text) || 1;
-                  setFormData({ ...formData, recurrenceValue: value });
+                  setFormData({
+                    ...formData,
+                    recurrencePattern: {
+                      ...formData.recurrencePattern!,
+                      value,
+                    }
+                  });
                 }}
                 keyboardType="numeric"
                 placeholder="1"
@@ -411,16 +444,22 @@ export default function TaskFormInline({ task, onSave, onCancel }: TaskFormInlin
                 <TouchableOpacity
                   style={[
                     styles.reminderUnitButton,
-                    formData.recurrenceUnit === 'days' && [styles.reminderUnitButtonActive, { backgroundColor: colors.primary }],
+                    formData.recurrencePattern.unit === 'days' && [styles.reminderUnitButtonActive, { backgroundColor: colors.primary }],
                     { borderColor: colors.border }
                   ]}
-                  onPress={() => setFormData({ ...formData, recurrenceUnit: 'days' })}
+                  onPress={() => setFormData({
+                    ...formData,
+                    recurrencePattern: {
+                      ...formData.recurrencePattern!,
+                      unit: 'days',
+                    }
+                  })}
                 >
                   <Text
                     style={[
                       styles.reminderUnitText,
-                      formData.recurrenceUnit === 'days' && styles.reminderUnitTextActive,
-                      { color: formData.recurrenceUnit === 'days' ? 'white' : colors.text }
+                      formData.recurrencePattern.unit === 'days' && styles.reminderUnitTextActive,
+                      { color: formData.recurrencePattern.unit === 'days' ? 'white' : colors.text }
                     ]}
                   >
                     {t.task.days}
@@ -429,16 +468,22 @@ export default function TaskFormInline({ task, onSave, onCancel }: TaskFormInlin
                 <TouchableOpacity
                   style={[
                     styles.reminderUnitButton,
-                    formData.recurrenceUnit === 'weeks' && [styles.reminderUnitButtonActive, { backgroundColor: colors.primary }],
+                    formData.recurrencePattern.unit === 'weeks' && [styles.reminderUnitButtonActive, { backgroundColor: colors.primary }],
                     { borderColor: colors.border }
                   ]}
-                  onPress={() => setFormData({ ...formData, recurrenceUnit: 'weeks' })}
+                  onPress={() => setFormData({
+                    ...formData,
+                    recurrencePattern: {
+                      ...formData.recurrencePattern!,
+                      unit: 'weeks',
+                    }
+                  })}
                 >
                   <Text
                     style={[
                       styles.reminderUnitText,
-                      formData.recurrenceUnit === 'weeks' && styles.reminderUnitTextActive,
-                      { color: formData.recurrenceUnit === 'weeks' ? 'white' : colors.text }
+                      formData.recurrencePattern.unit === 'weeks' && styles.reminderUnitTextActive,
+                      { color: formData.recurrencePattern.unit === 'weeks' ? 'white' : colors.text }
                     ]}
                   >
                     {t.task.weeks}
@@ -447,16 +492,22 @@ export default function TaskFormInline({ task, onSave, onCancel }: TaskFormInlin
                 <TouchableOpacity
                   style={[
                     styles.reminderUnitButton,
-                    formData.recurrenceUnit === 'months' && [styles.reminderUnitButtonActive, { backgroundColor: colors.primary }],
+                    formData.recurrencePattern.unit === 'months' && [styles.reminderUnitButtonActive, { backgroundColor: colors.primary }],
                     { borderColor: colors.border }
                   ]}
-                  onPress={() => setFormData({ ...formData, recurrenceUnit: 'months' })}
+                  onPress={() => setFormData({
+                    ...formData,
+                    recurrencePattern: {
+                      ...formData.recurrencePattern!,
+                      unit: 'months',
+                    }
+                  })}
                 >
                   <Text
                     style={[
                       styles.reminderUnitText,
-                      formData.recurrenceUnit === 'months' && styles.reminderUnitTextActive,
-                      { color: formData.recurrenceUnit === 'months' ? 'white' : colors.text }
+                      formData.recurrencePattern.unit === 'months' && styles.reminderUnitTextActive,
+                      { color: formData.recurrencePattern.unit === 'months' ? 'white' : colors.text }
                     ]}
                   >
                     {t.task.months}
@@ -469,14 +520,31 @@ export default function TaskFormInline({ task, onSave, onCancel }: TaskFormInlin
 
         {/* Start Date */}
         <View style={styles.formGroup}>
-          <Text
-            style={[
-              styles.label,
-              { color: colors.text },
-            ]}
-          >
-            {t.task.startDate}
-          </Text>
+          <View style={styles.dateTypeContainer}>
+            <Text
+              style={[
+                styles.label,
+                { color: colors.text, flex: 1 },
+              ]}
+            >
+              {t.task.startDate}
+            </Text>
+            <View style={styles.dateTypeSwitch}>
+              <Text style={[styles.dateTypeText, { color: !useLunar ? colors.primary : colors.text }]}>Solar</Text>
+              <Switch
+                value={useLunar}
+                onValueChange={(value) => {
+                  setUseLunar(value);
+                  setFormData({
+                    ...formData,
+                    dateType: value ? 'lunar' : 'solar',
+                  });
+                }}
+                style={styles.switch}
+              />
+              <Text style={[styles.dateTypeText, { color: useLunar ? colors.primary : colors.text }]}>Lunar</Text>
+            </View>
+          </View>
           <TouchableOpacity
             style={[
               styles.input,
@@ -493,7 +561,7 @@ export default function TaskFormInline({ task, onSave, onCancel }: TaskFormInlin
                 { color: colors.text }
               ]}
             >
-              {format(new Date(formData.startDate), 'yyyy-MM-dd HH:mm')}
+              {formatDisplayDate(formData.startDate)}
             </Text>
           </TouchableOpacity>
           {showStartPicker && (
@@ -536,7 +604,7 @@ export default function TaskFormInline({ task, onSave, onCancel }: TaskFormInlin
                 { color: colors.text }
               ]}
             >
-              {format(new Date(formData.dueDate), 'yyyy-MM-dd HH:mm')}
+              {formatDisplayDate(formData.dueDate)}
             </Text>
           </TouchableOpacity>
           {showDuePicker && (
@@ -871,5 +939,21 @@ const styles = StyleSheet.create({
   },
   customRecurrenceContainer: {
     marginTop: 8,
+  },
+  dateTypeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  dateTypeSwitch: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  dateTypeText: {
+    fontSize: 14,
+    marginHorizontal: 8,
+  },
+  switch: {
+    marginHorizontal: 4,
   },
 }); 

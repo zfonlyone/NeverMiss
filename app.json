@@ -2,7 +2,7 @@
   "expo": {
     "name": "NeverMiss",
     "slug": "nevermiss",
-    "version": "1.1.0",
+    "version": "1.0.0",
     "orientation": "portrait",
     "scheme": "nevermiss",
     "userInterfaceStyle": "automatic",
@@ -11,17 +11,32 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.nevermiss.app"
+      "bundleIdentifier": "com.nevermiss.app",
+      "jsEngine": "hermes",
+      "newArchEnabled": true
     },
     "android": {
-      "package": "com.nevermiss.app"
+      "package": "com.nevermiss.app",
+      "jsEngine": "hermes",
+      "newArchEnabled": true
     },
     "web": {
       "bundler": "metro"
     },
     "plugins": [
       "expo-router",
-      "expo-font"
+      "expo-font",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "newArchEnabled": true
+          },
+          "ios": {
+            "newArchEnabled": true
+          }
+        }
+      ]
     ]
   }
 } 

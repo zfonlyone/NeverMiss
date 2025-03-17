@@ -2,15 +2,29 @@ import { v4 as uuidv4 } from 'uuid';
 
 export type RecurrenceType = 'daily' | 'weekly' | 'monthly' | 'custom';
 export type RecurrenceUnit = 'minutes' | 'hours' | 'days' | 'weeks' | 'months' | 'years';
-export type ReminderUnit = 'minutes' | 'hours' | 'days' | 'months';
+export type ReminderUnit = 'minutes' | 'hours' | 'days';
 export type TaskStatus = 'active' | 'inactive';
 export type CycleStatus = 'pending' | 'completed' | 'failed';
+export type DateType = 'solar' | 'lunar';
+export type WeekDay = 0 | 1 | 2 | 3 | 4 | 5 | 6; // 0 = Sunday, 6 = Saturday
+export type WeekType = 'big' | 'small'; // 大周/小周
+
+export interface RecurrencePattern {
+  type: RecurrenceType;
+  value: number;
+  unit?: RecurrenceUnit;
+  weekDay?: WeekDay;
+  weekType?: WeekType;
+  monthDay?: number; // 每月第几天
+  yearDay?: number; // 每年第几天
+}
 
 export interface TaskCycle {
   id: number;
   taskId: number;
   startDate: string;
   dueDate: string;
+  dateType: DateType;
   isCompleted: boolean;
   isOverdue: boolean;
   completedDate?: string;
@@ -26,12 +40,11 @@ export interface Task {
   id: number;
   title: string;
   description?: string;
-  recurrenceType: RecurrenceType;
-  recurrenceValue: number;
-  recurrenceUnit?: RecurrenceUnit;
+  recurrencePattern: RecurrencePattern;
   reminderOffset: number;
   reminderUnit: ReminderUnit;
   reminderTime: ReminderTime;
+  dateType: DateType;
   isActive: boolean;
   autoRestart: boolean;
   syncToCalendar: boolean;
@@ -49,12 +62,11 @@ export interface TaskWithCycles extends Task {
 export interface CreateTaskInput {
   title: string;
   description?: string;
-  recurrenceType: RecurrenceType;
-  recurrenceValue: number;
-  recurrenceUnit?: RecurrenceUnit;
+  recurrencePattern: RecurrencePattern;
   reminderOffset: number;
   reminderUnit: ReminderUnit;
   reminderTime: ReminderTime;
+  dateType: DateType;
   isActive?: boolean;
   autoRestart?: boolean;
   syncToCalendar?: boolean;
@@ -65,12 +77,11 @@ export interface CreateTaskInput {
 export interface UpdateTaskInput {
   title: string;
   description?: string;
-  recurrenceType: RecurrenceType;
-  recurrenceValue: number;
-  recurrenceUnit?: RecurrenceUnit;
+  recurrencePattern: RecurrencePattern;
   reminderOffset: number;
   reminderUnit: ReminderUnit;
   reminderTime: ReminderTime;
+  dateType: DateType;
   isActive?: boolean;
   autoRestart?: boolean;
   syncToCalendar?: boolean;
@@ -86,6 +97,7 @@ export function createTask(
   reminderUnit: ReminderUnit = 'minutes',
   reminderTime: ReminderTime = { hour: 9, minute: 0 },
   autoRestart: boolean = true,
+  dateType: DateType = 'solar',
   recurrenceUnit?: RecurrenceUnit
 ): Omit<Task, 'id'> {
   const now = new Date().toISOString();
@@ -93,12 +105,15 @@ export function createTask(
   return {
     title,
     description: '',
-    recurrenceType,
-    recurrenceValue,
-    recurrenceUnit: recurrenceType === 'custom' ? recurrenceUnit : undefined,
+    recurrencePattern: {
+      type: recurrenceType,
+      value: recurrenceValue,
+      unit: recurrenceType === 'custom' ? recurrenceUnit : undefined,
+    },
     reminderOffset,
     reminderUnit,
     reminderTime,
+    dateType,
     isActive: true,
     autoRestart,
     syncToCalendar: false,
@@ -114,11 +129,11 @@ export function validateTask(task: Partial<Task>): string[] {
     errors.push('任务标题不能为空');
   }
   
-  if (task.recurrenceValue === undefined || task.recurrenceValue <= 0) {
+  if (task.recurrencePattern.value === undefined || task.recurrencePattern.value <= 0) {
     errors.push('重复值必须大于0');
   }
   
-  if (task.recurrenceType === 'custom' && !task.recurrenceUnit) {
+  if (task.recurrencePattern.type === 'custom' && !task.recurrencePattern.unit) {
     errors.push('自定义重复类型必须指定重复单位');
   }
   

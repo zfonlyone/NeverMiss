@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -12,11 +12,26 @@ import { Ionicons } from '@expo/vector-icons';
 import { Link, useRouter } from 'expo-router';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useTheme } from '../contexts/ThemeContext';
+import { getAppInfo } from '../services/database';
+import { APP_INFO } from '../config/version';
 
 export default function IndexScreen() {
   const router = useRouter();
   const { t } = useLanguage();
   const { colors } = useTheme();
+  const [appInfo, setAppInfo] = useState<{ appVersion: string; author: string; databaseVersion: number; }>({ 
+    appVersion: APP_INFO.VERSION, 
+    author: APP_INFO.AUTHOR, 
+    databaseVersion: APP_INFO.DATABASE_VERSION 
+  });
+
+  useEffect(() => {
+    const loadAppInfo = async () => {
+      const info = await getAppInfo();
+      setAppInfo(info);
+    };
+    loadAppInfo();
+  }, []);
 
   const navigateTo = (screen: string) => {
     router.push(screen);
@@ -31,7 +46,7 @@ export default function IndexScreen() {
         <Text style={[
           styles.title,
           { color: colors.text }
-        ]}>NeverMiss</Text>
+        ]}>{APP_INFO.NAME}</Text>
         <Text style={[
           styles.subtitle,
           { color: colors.subText }
@@ -148,12 +163,20 @@ export default function IndexScreen() {
           ]}>
             {t.app.description}
           </Text>
-          <Text style={[
-            styles.versionText,
-            { color: colors.subText }
-          ]}>
-            {t.settings.version} 1.0.0
-          </Text>
+          <View style={[styles.versionContainer, { borderTopColor: colors.border }]}>
+            <Text style={[
+              styles.versionText,
+              { color: colors.subText }
+            ]}>
+              {t.settings.version} {appInfo.appVersion}
+            </Text>
+            <Text style={[
+              styles.versionText,
+              { color: colors.subText }
+            ]}>
+              By {appInfo.author}
+            </Text>
+          </View>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -230,8 +253,16 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     marginBottom: 10,
   },
+  versionContainer: {
+    padding: 20,
+    alignItems: 'center',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    marginTop: 20,
+    marginHorizontal: 16,
+  },
   versionText: {
     fontSize: 12,
-    textAlign: 'right',
+    marginBottom: 4,
+    textAlign: 'center',
   },
 });
