@@ -10,8 +10,8 @@ import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Slot } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
-import { initStorage } from './models/services/storageService';
-import { configureNotifications } from './models/services/notificationService';
+import { initStorage } from './services/storageService';
+import { configureNotifications } from './services/notificationService';
 
 // Keep splash screen visible while resources are loading
 SplashScreen.preventAutoHideAsync().catch(() => {

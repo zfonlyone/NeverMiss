@@ -7,14 +7,13 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert, ScrollView, ActivityIndicator, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Stack } from 'expo-router';
-import { exportDataToJSON, exportDataToCSV, shareFile, importDataFromJSON, importDataFromCSV } from '../models/services/exportService';
-import { checkPermissionsForFeature, requestPermissionsForFeature } from '../models/services/permissionService';
+import { exportDataToJSON, exportDataToCSV, shareFile, importDataFromJSON, importDataFromCSV } from '../services/exportService';
+import { checkPermissionsForFeature, requestPermissionsForFeature } from '../services/permissionService';
 import { useLanguage, Language } from '../contexts/LanguageContext';
 import { useTheme, ThemeMode } from '../contexts/ThemeContext';
-import { getDatabaseInfo as getDatabaseInfoService, resetDatabase } from '../models/services/database';
+import { getDatabaseInfo as getDatabaseInfoService, resetDatabase } from '../services/database';
 import { APP_INFO, getFullVersion } from '../config/version';
 import * as DocumentPicker from 'expo-document-picker';
-import { useRouter } from 'expo-router';
 
 interface DatabaseInfo {
   version: number;
@@ -35,7 +34,6 @@ export default function SettingsScreen() {
   const [notificationPermission, setNotificationPermission] = useState(false);
   const [calendarPermission, setCalendarPermission] = useState(false);
   const [dbInfo, setDbInfo] = useState<DatabaseInfo | null>(null);
-  const router = useRouter();
 
   useEffect(() => {
     checkPermissions();
@@ -585,47 +583,6 @@ export default function SettingsScreen() {
                 <Text style={[styles.settingTitle, { color: colors.text }]}>GitHub</Text>
                 <Text style={[styles.settingDescription, { color: colors.subText }]}>
                   {t.settings.projectInfo}
-                </Text>
-              </View>
-            </View>
-            <Ionicons name="chevron-forward" size={24} color={colors.subText} />
-          </TouchableOpacity>
-        </View>
-
-        {/* 开发者选项 */}
-        <View style={[styles.section, { backgroundColor: colors.card }]}>
-          <Text style={[styles.sectionTitle, { color: colors.text, borderBottomColor: colors.border }]}>
-            开发者选项
-          </Text>
-
-          {/* 测试选项 */}
-          <TouchableOpacity
-            style={styles.settingItem}
-            onPress={() => router.push('/test')}
-          >
-            <View style={styles.settingInfo}>
-              <Ionicons name="code-working" size={24} color={colors.text} style={styles.settingIcon} />
-              <View style={styles.settingContent}>
-                <Text style={[styles.settingTitle, { color: colors.text }]}>导入导出测试</Text>
-                <Text style={[styles.settingDescription, { color: colors.subText }]}>
-                  测试数据导入导出功能
-                </Text>
-              </View>
-            </View>
-            <Ionicons name="chevron-forward" size={24} color={colors.subText} />
-          </TouchableOpacity>
-
-          {/* 农历测试选项 */}
-          <TouchableOpacity
-            style={styles.settingItem}
-            onPress={() => router.push('/test-lunar')}
-          >
-            <View style={styles.settingInfo}>
-              <Ionicons name="calendar" size={24} color={colors.text} style={styles.settingIcon} />
-              <View style={styles.settingContent}>
-                <Text style={[styles.settingTitle, { color: colors.text }]}>农历功能测试</Text>
-                <Text style={[styles.settingDescription, { color: colors.subText }]}>
-                  测试农历日期转换和计算功能
                 </Text>
               </View>
             </View>

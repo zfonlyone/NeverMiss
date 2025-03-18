@@ -4,90 +4,109 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, ActivityIndicator, Alert, Text } from 'react-native';
+import { View, StyleSheet, ActivityIndicator, Alert } from 'react-native';
 import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
 import TaskFormInline from '../components/TaskFormInline';
-import { getTask } from '../models/services/taskService';
+import { getTask } from '../services/taskService';
 import { Task } from '../models/Task';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useTheme } from '../contexts/ThemeContext';
-import { StatusBar } from 'expo-status-bar';
 
 export default function EditTaskScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
-  const [task, setTask] = useState<Task | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const router = useRouter();
-  const { colors, isDarkMode } = useTheme();
+  const params = useLocalSearchParams();
+  const taskId = typeof params.taskId === 'string' ? parseInt(params.taskId) : undefined;
+  
   const { t } = useLanguage();
+  const { colors } = useTheme();
+  
+  const [task, setTask] = useState<Task | undefined>(undefined);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    async function loadTask() {
-      if (!id) {
-        setError(t.task.taskIdNotFound);
-        setIsLoading(false);
+    const loadTask = async () => {
+      if (!taskId) {
+        Alert.alert(t.common.error, t.task.taskIdNotFound);
+        router.back();
         return;
       }
 
       try {
-        const taskId = parseInt(id as string);
+        setIsLoading(true);
         const loadedTask = await getTask(taskId);
         
-        if (loadedTask) {
-          setTask(loadedTask);
-        } else {
-          setError(t.task.taskNotFound);
+        if (!loadedTask) {
+          Alert.alert(t.common.error, t.task.taskNotFound);
+          router.back();
+          return;
         }
+        
+        setTask(loadedTask);
       } catch (error) {
-        console.error('Error loading task:', error);
-        setError(t.task.loadTaskFailed);
+        console.error('加载任务失败:', error);
+        Alert.alert(t.common.error, t.task.loadTaskFailed);
+        router.back();
       } finally {
         setIsLoading(false);
       }
-    }
+    };
 
     loadTask();
-  }, [id, t]);
+  }, [taskId, t]);
 
-  const handleSave = () => {
-    router.back();
+  const handleSave = async () => {
+    // 保存成功后返回任务列表页面
+    try {
+      setIsLoading(true);
+      // 任务保存由TaskFormInline内部处理，这里只需要处理导航
+      router.replace('/');
+    } catch (error) {
+      console.error('保存任务失败:', error);
+      Alert.alert(t.common.error, t.task.saveTaskFailed);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleCancel = () => {
+    // 取消后返回
     router.back();
   };
 
+  if (isLoading) {
+    return (
+      <View style={[
+        styles.container,
+        styles.centered,
+        { backgroundColor: colors.background }
+      ]}>
+        <ActivityIndicator size="large" color={colors.primary} />
+      </View>
+    );
+  }
+
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <StatusBar style={isDarkMode ? 'light' : 'dark'} />
+    <View style={[
+      styles.container,
+      { backgroundColor: colors.background }
+    ]}>
       <Stack.Screen
         options={{
           title: t.task.editTask,
           headerShown: true,
+          headerStyle: {
+            backgroundColor: colors.card,
+          },
           headerTintColor: colors.text,
-          headerStyle: { backgroundColor: colors.card },
         }}
       />
-      
-      {isLoading ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={[styles.loadingText, { color: colors.text }]}>
-            {t.common.loading}
-          </Text>
-        </View>
-      ) : error ? (
-        <View style={styles.errorContainer}>
-          <Text style={[styles.errorText, { color: colors.error }]}>{error}</Text>
-        </View>
-      ) : task ? (
+      {task && (
         <TaskFormInline
           task={task}
           onSave={handleSave}
           onCancel={handleCancel}
         />
-      ) : null}
+      )}
     </View>
   );
 }
@@ -96,23 +115,8 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  loadingContainer: {
-    flex: 1,
+  centered: {
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  loadingText: {
-    marginTop: 16,
-    fontSize: 16,
-  },
-  errorContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  errorText: {
-    fontSize: 16,
-    textAlign: 'center',
   },
 }); 

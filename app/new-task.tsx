@@ -9,14 +9,13 @@ import { Stack, useRouter } from 'expo-router';
 import TaskFormInline from '../components/TaskFormInline';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useTheme } from '../contexts/ThemeContext';
-import { StatusBar } from 'expo-status-bar';
 
 export default function NewTaskScreen() {
   const router = useRouter();
-  const { colors, isDarkMode } = useTheme();
   const { t } = useLanguage();
+  const { colors } = useTheme();
 
-  const handleSave = () => {
+  const handleSave = async () => {
     // 保存成功后返回任务列表页面
     router.replace('/');
   };
@@ -31,7 +30,6 @@ export default function NewTaskScreen() {
       styles.container,
       { backgroundColor: colors.background }
     ]}>
-      <StatusBar style={isDarkMode ? 'light' : 'dark'} />
       <Stack.Screen
         options={{
           title: t.task.newTask,

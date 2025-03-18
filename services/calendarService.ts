@@ -7,8 +7,8 @@
 
 import * as Calendar from 'expo-calendar';
 import { Platform } from 'react-native';
-import { Task } from '../Task';
-import { TaskCycle } from '../TaskCycle';
+import { Task } from '../models/Task';
+import { TaskCycle } from '../models/TaskCycle';
 import { checkCalendarPermission, requestCalendarPermission } from './permissionService';
 
 // 获取或创建应用专属的日历

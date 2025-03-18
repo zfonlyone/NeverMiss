@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Task } from '../Task';
-import { TaskCycle } from '../TaskCycle';
-import { TaskHistory } from '../TaskHistory';
+import { Task } from '../models/Task';
+import { TaskCycle } from '../models/TaskCycle';
+import { TaskHistory } from '../models/TaskHistory';
 
 // 存储键
 const STORAGE_KEYS = {

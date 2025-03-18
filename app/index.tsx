@@ -12,7 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Link, useRouter } from 'expo-router';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useTheme } from '../contexts/ThemeContext';
-import { getAppInfo } from '../models/services/database';
+import { getAppInfo } from '../services/database';
 import { APP_INFO } from '../config/version';
 
 export default function IndexScreen() {
