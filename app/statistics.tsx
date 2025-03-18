@@ -10,10 +10,10 @@ import {
 } from 'react-native';
 import { Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { getTasks } from '../services/storageService';
+import { getTaskHistory } from '../models/services/storageService';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useTheme } from '../contexts/ThemeContext';
-import { getCompletedTasks, getOverdueTasks } from '../services/taskService';
+import { getCompletedTasks, getOverdueTasks } from '../models/services/taskService';
 import { Task } from '../models/Task';
 import { format } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
@@ -40,7 +40,7 @@ export default function StatisticsScreen() {
   const loadStatistics = async () => {
     try {
       setIsLoading(true);
-      const tasks = await getTasks();
+      const tasks = await getTaskHistory();
       const completed = await getCompletedTasks();
       const overdue = await getOverdueTasks();
       

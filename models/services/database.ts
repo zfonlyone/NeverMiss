@@ -1,6 +1,6 @@
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { APP_INFO, getFullVersion } from '../config/version';
+import { APP_INFO, getFullVersion } from '../../config/version';
 
 export interface Settings {
   appVersion: string;

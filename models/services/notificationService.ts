@@ -8,8 +8,8 @@
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 import * as Device from 'expo-device';
-import { Task } from '../models/Task';
-import { TaskCycle } from '../models/TaskCycle';
+import { Task } from '../Task';
+import { TaskCycle } from '../TaskCycle';
 import { registerBackgroundTask, unregisterBackgroundTask } from './backgroundTaskService';
 import { checkNotificationPermission, requestNotificationPermission } from './permissionService';
 

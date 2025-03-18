@@ -11,7 +11,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { getDatabaseInfo, resetDatabase } from '../services/database';
+import { getDatabaseInfo, resetDatabase } from '../models/services/database';
 import { useTheme } from '../contexts/ThemeContext';
 import { useLanguage } from '../contexts/LanguageContext';
 

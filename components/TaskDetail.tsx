@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -10,15 +10,18 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Task } from '../models/Task';
-import { completeTaskCycle, updateTask } from '../services/taskService';
+import { Task, TaskCycle } from '../models/Task';
+import { TaskHistory } from '../models/TaskHistory';
+import { completeTaskCycle, updateTask, skipTaskCycle } from '../models/services/taskService';
 import { format } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useTheme } from '../contexts/ThemeContext';
-import { scheduleTaskNotification } from '../services/notificationService';
-import { addTaskToCalendar } from '../services/calendarService';
-import lunarService from '../services/lunarService';
+import { scheduleTaskNotification } from '../models/services/notificationService';
+import { addTaskToCalendar } from '../models/services/calendarService';
+import lunarService from '../models/services/lunarService';
+import { getTaskCyclesByTaskId, getTaskHistoryByTaskId } from '../models/services/storageService';
+import TaskCycleWidget from './widgets/TaskCycleWidget';
 
 interface TaskDetailProps {
   task: Task;
@@ -78,6 +81,9 @@ export default function TaskDetail({
   const [alertVisible, setAlertVisible] = React.useState(false);
   const [alertTitle, setAlertTitle] = React.useState('');
   const [alertMessage, setAlertMessage] = React.useState('');
+  const [taskCycles, setTaskCycles] = useState<TaskCycle[]>([]);
+  const [taskHistory, setTaskHistory] = useState<TaskHistory[]>([]);
+  const [isLoadingCycles, setIsLoadingCycles] = useState(false);
 
   const showCustomAlert = (title: string, message: string) => {
     setAlertTitle(title);
@@ -157,16 +163,49 @@ export default function TaskDetail({
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
+    // 公历日期格式化
     const solarDate = format(date, 'yyyy-MM-dd HH:mm', { locale: language === 'zh' ? zhCN : undefined });
+    
     if (task.dateType === 'lunar') {
-      const lunarDate = lunarService.formatDate(dateString, 'lunar');
-      return `${solarDate} (${lunarDate})`;
+      // 获取农历日期和额外信息
+      const lunarInfo = lunarService.getFullLunarInfo(date);
+      
+      // 构建显示文本
+      let lunarText = lunarInfo.lunarDate;
+      
+      // 添加额外信息（节日、节气）
+      const extraInfo: string[] = [];
+      if (lunarInfo.lunarFestival) {
+        extraInfo.push(lunarInfo.lunarFestival);
+      }
+      if (lunarInfo.solarTerm) {
+        extraInfo.push(lunarInfo.solarTerm);
+      }
+      
+      // 只有在有额外信息时才添加括号
+      if (extraInfo.length > 0) {
+        lunarText += ` (${extraInfo.join(', ')})`;
+      }
+      
+      // 组合公历和农历信息
+      return (
+        <View>
+          <Text>{solarDate}</Text>
+          <View style={styles.lunarDateContainer}>
+            <View style={styles.lunarBadge}>
+              <Text style={styles.lunarBadgeText}>农历</Text>
+            </View>
+            <Text style={{ color: '#7C4DFF' }}>{lunarText}</Text>
+          </View>
+        </View>
+      );
     }
+    
     return solarDate;
   };
 
   const getRecurrenceText = (task: Task) => {
-    switch (task.recurrenceType) {
+    switch (task.recurrencePattern.type) {
       case 'daily':
         return t.task.daily;
       case 'weekly':
@@ -174,7 +213,7 @@ export default function TaskDetail({
       case 'monthly':
         return t.task.monthly;
       case 'custom':
-        return `${t.task.every} ${task.recurrenceValue} ${getRecurrenceUnitText(task.recurrenceUnit)}`;
+        return `${t.task.every} ${task.recurrencePattern.value} ${getRecurrenceUnitText(task.recurrencePattern.unit)}`;
       default:
         return t.task.unknown;
     }
@@ -282,6 +321,67 @@ export default function TaskDetail({
     }
   };
 
+  const loadTaskCyclesAndHistory = async () => {
+    if (!task) return;
+    
+    setIsLoadingCycles(true);
+    try {
+      // 获取任务周期
+      const cycles = await getTaskCyclesByTaskId(task.id);
+      setTaskCycles(cycles);
+      
+      // 获取任务历史
+      const history = await getTaskHistoryByTaskId(task.id);
+      setTaskHistory(history);
+    } catch (error) {
+      console.error('Error loading task cycles and history:', error);
+    } finally {
+      setIsLoadingCycles(false);
+    }
+  };
+
+  useEffect(() => {
+    if (task) {
+      loadTaskCyclesAndHistory();
+    }
+  }, [task]);
+
+  const handleCycleCompleted = async (cycle: TaskCycle) => {
+    if (!task) return;
+    
+    setIsProcessing(true);
+    try {
+      await completeTaskCycle(task.id, cycle.id);
+      // 重新加载任务信息
+      onClose();
+      // 重新加载任务周期和历史
+      loadTaskCyclesAndHistory();
+    } catch (error) {
+      console.error('Error completing task cycle:', error);
+      Alert.alert('Error', 'Failed to complete task cycle');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleCycleSkipped = async (cycle: TaskCycle) => {
+    if (!task) return;
+    
+    setIsProcessing(true);
+    try {
+      await skipTaskCycle(task.id, cycle.id);
+      // 重新加载任务信息
+      onClose();
+      // 重新加载任务周期和历史
+      loadTaskCyclesAndHistory();
+    } catch (error) {
+      console.error('Error skipping task cycle:', error);
+      Alert.alert('Error', 'Failed to skip task cycle');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   return (
     <Modal
       animationType="slide"
@@ -378,14 +478,21 @@ export default function TaskDetail({
                 >
                   {t.task.dateType}:
                 </Text>
-                <Text
-                  style={[
-                    styles.infoValue,
-                    { color: colors.text },
-                  ]}
-                >
-                  {task.dateType === 'lunar' ? t.task.lunarCalendar : t.task.solarCalendar}
-                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <Text
+                    style={[
+                      styles.infoValue,
+                      { color: colors.text },
+                    ]}
+                  >
+                    {task.dateType === 'lunar' ? t.task.lunarCalendar : t.task.solarCalendar}
+                  </Text>
+                  {task.dateType === 'lunar' && (
+                    <View style={[styles.lunarBadge, { marginLeft: 8 }]}>
+                      <Text style={styles.lunarBadgeText}>农历</Text>
+                    </View>
+                  )}
+                </View>
               </View>
             </View>
 
@@ -597,6 +704,18 @@ export default function TaskDetail({
                 </View>
               )}
             </View>
+
+            {task && (
+              <TaskCycleWidget
+                task={task}
+                cycles={taskCycles}
+                history={taskHistory}
+                loading={isLoadingCycles}
+                onCycleCompleted={handleCycleCompleted}
+                onCycleSkipped={handleCycleSkipped}
+                showHistory={true}
+              />
+            )}
           </ScrollView>
 
           <View style={[styles.buttonContainer, { backgroundColor: colors.card, borderTopWidth: 1, borderTopColor: 'rgba(0, 0, 0, 0.1)' }]}>
@@ -866,5 +985,22 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  lunarDateContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  lunarBadge: {
+    backgroundColor: '#7C4DFF',
+    borderRadius: 4,
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+    marginRight: 6,
+  },
+  lunarBadgeText: {
+    color: 'white',
+    fontSize: 10,
+    fontWeight: '500',
   },
 }); 

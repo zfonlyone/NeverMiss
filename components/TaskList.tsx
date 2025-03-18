@@ -13,6 +13,7 @@ import { Task } from '../models/Task';
 import { format } from 'date-fns';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useTheme } from '../contexts/ThemeContext';
+import lunarService from '../models/services/lunarService';
 
 interface TaskListProps {
   tasks: Task[];
@@ -34,6 +35,33 @@ export default function TaskList({ tasks, onTaskPress, onRefresh, onAddTask, isL
     await onRefresh();
     setRefreshing(false);
   }, [onRefresh]);
+
+  // 格式化日期显示
+  const formatDate = (dateString: string, dateType: 'solar' | 'lunar' = 'solar') => {
+    const date = new Date(dateString);
+    
+    if (dateType === 'lunar') {
+      return lunarService.formatDate(dateString, 'lunar');
+    }
+    
+    return format(date, 'yyyy-MM-dd');
+  };
+  
+  // 获取农历节日等额外信息
+  const getDateExtraInfo = (dateString: string, dateType: 'solar' | 'lunar' = 'solar'): string => {
+    if (dateType !== 'lunar') return '';
+    
+    const date = new Date(dateString);
+    const info = lunarService.getFullLunarInfo(date);
+    
+    if (info.lunarFestival) {
+      return ` (${info.lunarFestival})`;
+    } else if (info.solarTerm) {
+      return ` (${info.solarTerm})`;
+    }
+    
+    return '';
+  };
 
   const getStatusColor = (task: Task) => {
     if (!task.currentCycle) return '#999999';
@@ -131,8 +159,14 @@ export default function TaskList({ tasks, onTaskPress, onRefresh, onAddTask, isL
                   { color: colors.subText }
                 ]}
               >
-                {t.task.dueDate}: {format(new Date(item.currentCycle.dueDate), 'yyyy-MM-dd')}
+                {t.task.dueDate}: {formatDate(item.currentCycle.dueDate, item.dateType)}
+                {getDateExtraInfo(item.currentCycle.dueDate, item.dateType)}
               </Text>
+              {item.dateType === 'lunar' && (
+                <View style={styles.lunarBadge}>
+                  <Text style={styles.lunarBadgeText}>农历</Text>
+                </View>
+              )}
             </View>
           )}
           
@@ -148,7 +182,11 @@ export default function TaskList({ tasks, onTaskPress, onRefresh, onAddTask, isL
                 { color: colors.subText }
               ]}
             >
-              {`${item.reminderTime.hour.toString().padStart(2, '0')}:${item.reminderTime.minute.toString().padStart(2, '0')}`}
+              {`${item.reminderTime.hour}:${item.reminderTime.minute.toString().padStart(2, '0')}`} 
+              ({t.task.reminderOffset}: {item.reminderOffset} {
+                item.reminderUnit === 'minutes' ? t.task.minutes : 
+                item.reminderUnit === 'hours' ? t.task.hours : t.task.days
+              })
             </Text>
           </View>
           
@@ -181,33 +219,40 @@ export default function TaskList({ tasks, onTaskPress, onRefresh, onAddTask, isL
   };
 
   return (
-    <View style={styles.container}>
-      {isLoading && tasks.length === 0 ? (
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      {isLoading ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={[styles.emptyText, { color: colors.text }]}>
-            {t.common.loading}
-          </Text>
         </View>
       ) : tasks.length === 0 ? (
         <View style={styles.emptyContainer}>
-          <Ionicons 
-            name="calendar-outline" 
-            size={64} 
-            color={colors.border} 
-          />
-          <Text style={[styles.emptyText, { color: colors.text }]}>
+          <Ionicons name="calendar-outline" size={64} color={colors.border} />
+          <Text
+            style={[
+              styles.emptyText,
+              { color: colors.text },
+            ]}
+          >
             {t.task.noTasks}
           </Text>
-          <Text style={[styles.emptySubText, { color: colors.subText }]}>
-            {t.task.addTaskHint}
-          </Text>
+          {onAddTask && (
+            <TouchableOpacity
+              style={[
+                styles.addButton,
+                { backgroundColor: colors.primary },
+              ]}
+              onPress={onAddTask}
+            >
+              <Text style={styles.addButtonText}>{t.task.addTaskHint}</Text>
+            </TouchableOpacity>
+          )}
         </View>
       ) : (
         <FlatList
           data={tasks}
-          keyExtractor={(item) => item.id.toString()}
           renderItem={renderItem}
+          keyExtractor={(item) => item.id.toString()}
+          contentContainerStyle={styles.listContent}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -216,17 +261,7 @@ export default function TaskList({ tasks, onTaskPress, onRefresh, onAddTask, isL
               tintColor={colors.primary}
             />
           }
-          contentContainerStyle={styles.listContent}
         />
-      )}
-      
-      {onAddTask && (
-        <TouchableOpacity
-          style={[styles.fab, { backgroundColor: colors.primary }]}
-          onPress={onAddTask}
-        >
-          <Ionicons name="add" size={24} color="#ffffff" />
-        </TouchableOpacity>
       )}
     </View>
   );
@@ -235,42 +270,15 @@ export default function TaskList({ tasks, onTaskPress, onRefresh, onAddTask, isL
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    position: 'relative',
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  emptyText: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginTop: 16,
-  },
-  emptySubText: {
-    fontSize: 14,
-    marginTop: 8,
-    textAlign: 'center',
   },
   listContent: {
-    padding: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
   },
   taskItem: {
-    borderRadius: 12,
     padding: 16,
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
+    borderRadius: 8,
+    marginBottom: 8,
   },
   taskHeader: {
     flexDirection: 'row',
@@ -279,18 +287,20 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   taskTitle: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: 'bold',
     flex: 1,
+    marginRight: 8,
   },
   statusBadge: {
     paddingHorizontal: 8,
     paddingVertical: 4,
-    borderRadius: 12,
-    marginLeft: 8,
+    borderRadius: 4,
   },
-  completedBadge: {
-    backgroundColor: '#4CAF50',
+  statusText: {
+    fontSize: 12,
+    color: 'white',
+    fontWeight: '500',
   },
   pendingBadge: {
     backgroundColor: '#2196F3',
@@ -298,16 +308,14 @@ const styles = StyleSheet.create({
   warningBadge: {
     backgroundColor: '#FF9800',
   },
+  completedBadge: {
+    backgroundColor: '#4CAF50',
+  },
   overdueBadge: {
     backgroundColor: '#F44336',
   },
   disabledBadge: {
-    backgroundColor: '#999999',
-  },
-  statusText: {
-    color: '#ffffff',
-    fontSize: 12,
-    fontWeight: 'bold',
+    backgroundColor: '#9E9E9E',
   },
   taskDescription: {
     fontSize: 14,
@@ -327,20 +335,43 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginLeft: 4,
   },
-  fab: {
-    position: 'absolute',
-    right: 16,
-    bottom: 16,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: '#2196F3',
+  loadingContainer: {
+    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 16,
+  },
+  emptyText: {
+    fontSize: 18,
+    textAlign: 'center',
+    marginTop: 16,
+    marginBottom: 24,
+  },
+  addButton: {
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 25,
+  },
+  addButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  lunarBadge: {
+    backgroundColor: '#7C4DFF',
+    borderRadius: 4,
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+    marginLeft: 6,
+  },
+  lunarBadgeText: {
+    color: 'white',
+    fontSize: 10,
+    fontWeight: '500',
   },
 }); 

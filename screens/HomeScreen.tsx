@@ -3,7 +3,7 @@ import { View, StyleSheet, Alert } from 'react-native';
 import TaskList from '../components/TaskList';
 import TaskDetail from '../components/TaskDetail';
 import { Task } from '../models/Task';
-import { getAllTasks, deleteTask } from '../services/taskService';
+import { getAllTasks, deleteTask } from '../models/services/taskService';
 import { useRouter } from 'expo-router';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useTheme } from '../contexts/ThemeContext';
