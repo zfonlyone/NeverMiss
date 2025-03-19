@@ -9,10 +9,12 @@ import {
   Switch,
   KeyboardAvoidingView,
   Platform,
-  Alert
+  Alert,
+  ActivityIndicator
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams, Stack } from 'expo-router';
 import { useLanguage } from '../../hooks/useLanguage';
+import { useTheme } from '../../hooks/useTheme';
 import RecurrenceSelector from '../components/RecurrenceSelector';
 import TagSelector from '../components/TagSelector';
 import ColorSelector from '../components/ColorSelector';
@@ -28,7 +30,9 @@ import {
   ReminderUnit,
   validateTask
 } from '../../models/Task';
-import { createTask as createTaskService, updateTask as updateTaskService, getTaskById } from '../../services/taskService';
+import * as TaskController from '../../controllers/TaskController';
+import { createTask as createTaskService, updateTask as updateTaskService, getTask as getTaskById } from '../../services/taskService';
+import RNPickerSelect from 'react-native-picker-select';
 
 interface TaskFormScreenProps {
   taskId?: number;
@@ -68,7 +72,7 @@ export default function TaskFormScreen({ taskId }: TaskFormScreenProps) {
     
     try {
       setIsLoading(true);
-      const task = await getTaskById(taskId);
+      const task = await getTaskById(Number(taskId));
       
       if (task) {
         setTitle(task.title);
@@ -160,12 +164,60 @@ export default function TaskFormScreen({ taskId }: TaskFormScreenProps) {
     router.back();
   };
 
+  const validateAndSetReminderTime = (text: string) => {
+    const value = parseInt(text);
+    if (!isNaN(value) && value >= 0) {
+      setReminderTime({
+        hour: Math.floor(value / 60),
+        minute: value % 60
+      });
+    } else if (text === '') {
+      setReminderTime({ hour: 9, minute: 0 });
+    }
+  };
+
+  const pickerSelectStyles = StyleSheet.create({
+    inputIOS: {
+      fontSize: 16,
+      paddingVertical: 12,
+      paddingHorizontal: 10,
+      borderWidth: 1,
+      borderColor: '#e0e0e0',
+      borderRadius: 8,
+      color: '#333',
+      paddingRight: 30,
+    },
+    inputAndroid: {
+      fontSize: 16,
+      paddingVertical: 8,
+      paddingHorizontal: 10,
+      borderWidth: 1,
+      borderColor: '#e0e0e0',
+      borderRadius: 8,
+      color: '#333',
+      paddingRight: 30,
+    },
+    placeholder: {
+      color: '#999',
+    },
+    iconContainer: {
+      top: 10,
+      right: 10,
+    },
+  });
+
   return (
     <KeyboardAvoidingView
       style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 0}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={100}
     >
+      {isLoading && (
+        <View style={styles.loadingOverlay}>
+          <ActivityIndicator size="large" color="#007AFF" />
+        </View>
+      )}
+      
       <StatusBar style="dark" />
       <View style={styles.header}>
         <TouchableOpacity onPress={handleCancel} style={styles.backButton}>
@@ -209,94 +261,47 @@ export default function TaskFormScreen({ taskId }: TaskFormScreenProps) {
           <ColorSelector selectedColor={backgroundColor} onColorChange={setBackgroundColor} />
         </View>
 
-        <View style={styles.formSection}>
-          <Text style={styles.sectionTitle}>{t.task.recurrenceSettings}</Text>
-          <RecurrenceSelector
-            recurrencePattern={recurrencePattern}
-            dateType={dateType}
-            onRecurrenceChange={setRecurrencePattern}
-            onDateTypeChange={setDateType}
-          />
-        </View>
-
-        <View style={styles.formSection}>
-          <Text style={styles.sectionTitle}>{t.task.reminderSettings}</Text>
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>{t.reminder.reminderSettings}</Text>
           
-          <View style={styles.setting}>
-            <Text style={styles.settingLabel}>{t.task.reminderTime}</Text>
-            <TouchableOpacity onPress={() => setShowTimePicker(true)} style={styles.timeButton}>
-              <Text style={styles.timeButtonText}>
-                {formatTime(reminderTime.hour, reminderTime.minute)}
-              </Text>
-              <Ionicons name="time-outline" size={20} color="#007AFF" />
-            </TouchableOpacity>
-          </View>
-
-          {showTimePicker && (
-            <DateTimePicker
-              value={new Date().setHours(reminderTime.hour, reminderTime.minute)}
-              mode="time"
-              is24Hour={true}
-              display="default"
-              onChange={handleTimeChange}
-            />
-          )}
-
-          <View style={styles.setting}>
-            <Text style={styles.settingLabel}>{t.task.reminderOffset}</Text>
-            <View style={styles.reminderOffsetContainer}>
+          <View style={styles.reminderContainer}>
+            <View style={styles.reminderGroup}>
+              <Text style={styles.label}>{t.reminder.reminderTime}</Text>
               <TextInput
-                style={styles.reminderOffsetInput}
-                value={reminderOffset.toString()}
-                onChangeText={(text) => {
-                  const value = parseInt(text);
-                  if (!isNaN(value) && value >= 0) {
-                    setReminderOffset(value);
-                  } else if (text === '') {
-                    setReminderOffset(0);
-                  }
-                }}
-                keyboardType="number-pad"
+                style={[styles.input, { width: 80 }]}
+                value={reminderTime.toString()}
+                onChangeText={validateAndSetReminderTime}
+                keyboardType="numeric"
+                placeholder="0"
               />
-              <View style={styles.reminderUnitContainer}>
-                <TouchableOpacity
-                  style={[
-                    styles.unitButton,
-                    reminderUnit === 'minutes' && styles.unitButtonActive
-                  ]}
-                  onPress={() => setReminderUnit('minutes')}
-                >
-                  <Text style={[
-                    styles.unitButtonText,
-                    reminderUnit === 'minutes' && styles.unitButtonTextActive
-                  ]}>{t.task.minutes}</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[
-                    styles.unitButton,
-                    reminderUnit === 'hours' && styles.unitButtonActive
-                  ]}
-                  onPress={() => setReminderUnit('hours')}
-                >
-                  <Text style={[
-                    styles.unitButtonText,
-                    reminderUnit === 'hours' && styles.unitButtonTextActive
-                  ]}>{t.task.hours}</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[
-                    styles.unitButton,
-                    reminderUnit === 'days' && styles.unitButtonActive
-                  ]}
-                  onPress={() => setReminderUnit('days')}
-                >
-                  <Text style={[
-                    styles.unitButtonText,
-                    reminderUnit === 'days' && styles.unitButtonTextActive
-                  ]}>{t.task.days}</Text>
-                </TouchableOpacity>
-              </View>
             </View>
+            
+            <View style={styles.reminderGroup}>
+              <Text style={styles.label}>{t.reminder.reminderUnit}</Text>
+              <RNPickerSelect
+                value={reminderUnit}
+                onValueChange={(value) => setReminderUnit(value || 'minutes')}
+                items={[
+                  { label: 'Minutes', value: 'minutes' },
+                  { label: 'Hours', value: 'hours' },
+                  { label: 'Days', value: 'days' },
+                ]}
+                style={pickerSelectStyles}
+              />
+            </View>
+          </View>
+        </View>
+        
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>{t.reminder.recurrenceSettings}</Text>
+          
+          <View style={styles.recurrenceContainer}>
+            <RecurrenceSelector
+              recurrencePattern={recurrencePattern}
+              dateType={dateType}
+              onRecurrenceChange={setRecurrencePattern}
+              onDateTypeChange={setDateType}
+            />
           </View>
         </View>
 
@@ -346,6 +351,16 @@ export default function TaskFormScreen({ taskId }: TaskFormScreenProps) {
           </View>
         </View>
       </ScrollView>
+      
+      <View style={styles.saveButtonContainer}>
+        <TouchableOpacity 
+          style={styles.saveButton}
+          onPress={handleSave}
+          disabled={isLoading}
+        >
+          <Text style={styles.saveButtonText}>{t.common.save}</Text>
+        </TouchableOpacity>
+      </View>
     </KeyboardAvoidingView>
   );
 }
@@ -523,5 +538,76 @@ const styles = StyleSheet.create({
   switchDescription: {
     fontSize: 14,
     color: '#666',
+  },
+  loadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  saveButtonContainer: {
+    padding: 16,
+    backgroundColor: 'white',
+    borderTopWidth: 1,
+    borderTopColor: '#e0e0e0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -3 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 5,
+  },
+  saveButton: {
+    backgroundColor: '#007AFF',
+    borderRadius: 8,
+    padding: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  saveButtonText: {
+    color: 'white',
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  section: {
+    backgroundColor: 'white',
+    marginTop: 16,
+    padding: 16,
+    borderRadius: 8,
+    marginHorizontal: 16,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.05,
+    shadowRadius: 3.84,
+    elevation: 2,
+  },
+  reminderContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  reminderGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  label: {
+    fontSize: 16,
+    color: '#333',
+    marginRight: 8,
+  },
+  input: {
+    height: 48,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    fontSize: 16,
+    backgroundColor: '#f9f9f9',
   },
 }); 

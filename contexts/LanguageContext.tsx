@@ -31,11 +31,12 @@ const getDeviceLanguage = (): Language => {
     let deviceLanguage = 'en';
     
     if (Platform.OS === 'ios') {
-      deviceLanguage = NativeModules.SettingsManager.settings.AppleLocale ||
-        NativeModules.SettingsManager.settings.AppleLanguages[0] || 'en';
+      const iosLocale = NativeModules.SettingsManager?.settings?.AppleLocale;
+      const iosLanguages = NativeModules.SettingsManager?.settings?.AppleLanguages;
+      deviceLanguage = iosLocale || (Array.isArray(iosLanguages) && iosLanguages.length > 0 ? iosLanguages[0] : 'en');
     } else {
       // Android
-      deviceLanguage = NativeModules.I18nManager.localeIdentifier || 'en';
+      deviceLanguage = NativeModules.I18nManager?.localeIdentifier || 'en';
     }
 
     // 检查是否为中文

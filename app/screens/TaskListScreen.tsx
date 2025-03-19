@@ -6,7 +6,8 @@ import {
   FlatList,
   TouchableOpacity,
   ActivityIndicator,
-  Alert
+  Alert,
+  RefreshControl
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useLanguage } from '../../hooks/useLanguage';
@@ -23,6 +24,7 @@ export default function TaskListScreen() {
   const router = useRouter();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [filterOptions, setFilterOptions] = useState<FilterOptions>({
     searchText: '',
     sortBy: 'dueDate',
@@ -57,7 +59,13 @@ export default function TaskListScreen() {
       Alert.alert('Error', 'Failed to load tasks');
     } finally {
       setIsLoading(false);
+      setRefreshing(false);
     }
+  };
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadTasks();
   };
 
   const handleCreateTask = () => {
@@ -152,10 +160,6 @@ export default function TaskListScreen() {
     <View style={styles.container}>
       <StatusBar style="dark" />
       
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>{t.menu.taskManagement}</Text>
-      </View>
-      
       {/* 搜索、排序和筛选组件 */}
       <TaskListFilter 
         filterOptions={filterOptions}
@@ -163,7 +167,7 @@ export default function TaskListScreen() {
         availableTags={availableTags}
       />
       
-      {isLoading ? (
+      {isLoading && !refreshing ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#007AFF" />
         </View>
@@ -174,6 +178,14 @@ export default function TaskListScreen() {
           renderItem={renderTaskItem}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={["#007AFF"]}
+              tintColor="#007AFF"
+            />
+          }
         />
       ) : (
         <View style={styles.emptyContainer}>
@@ -203,19 +215,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f8f9fa',
-  },
-  header: {
-    backgroundColor: 'white',
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
-    marginTop: 40,
-  },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#333',
   },
   loadingContainer: {
     flex: 1,

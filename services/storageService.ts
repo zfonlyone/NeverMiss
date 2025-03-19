@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Task } from '../models/Task';
 import { TaskCycle } from '../models/TaskCycle';
 import { TaskHistory } from '../models/TaskHistory';
+import APP_INFO, { getFullVersion } from '../config/version';
 
 // 存储键
 const STORAGE_KEYS = {
@@ -12,7 +13,7 @@ const STORAGE_KEYS = {
 };
 
 // 数据库版本
-const DATABASE_VERSION = 1;
+const DATABASE_VERSION = APP_INFO.DATABASE_VERSION;
 
 // 初始化存储
 export const initStorage = async (): Promise<void> => {
@@ -25,11 +26,21 @@ export const initStorage = async (): Promise<void> => {
       await AsyncStorage.setItem(STORAGE_KEYS.TASKS, JSON.stringify([]));
       await AsyncStorage.setItem(STORAGE_KEYS.TASK_CYCLES, JSON.stringify([]));
       await AsyncStorage.setItem(STORAGE_KEYS.TASK_HISTORY, JSON.stringify([]));
-      await AsyncStorage.setItem(STORAGE_KEYS.DATABASE_VERSION, DATABASE_VERSION.toString());
-      console.log('存储初始化成功');
+      await AsyncStorage.setItem(STORAGE_KEYS.DATABASE_VERSION, APP_INFO.DATABASE_VERSION.toString());
+      console.log(`存储初始化成功，版本: ${APP_INFO.DATABASE_VERSION}`);
     } else {
       console.log(`存储已初始化，版本: ${version}`);
-      // 这里可以添加版本迁移逻辑
+      
+      // 版本迁移逻辑
+      const currentVersion = parseInt(version);
+      if (currentVersion < APP_INFO.DATABASE_VERSION) {
+        console.log(`执行从版本 ${currentVersion} 到 ${APP_INFO.DATABASE_VERSION} 的数据迁移`);
+        // 这里实现版本迁移逻辑
+        
+        // 迁移完成后更新版本号
+        await AsyncStorage.setItem(STORAGE_KEYS.DATABASE_VERSION, APP_INFO.DATABASE_VERSION.toString());
+        console.log(`数据库版本已更新至 ${APP_INFO.DATABASE_VERSION}`);
+      }
     }
   } catch (error) {
     console.error('初始化存储时出错:', error);
@@ -307,6 +318,8 @@ export const getTaskHistoryByAction = async (action: string): Promise<TaskHistor
 // 数据库信息和管理
 export const getDatabaseInfo = async (): Promise<{
   version: number;
+  appVersion: string;
+  appFullVersion: string;
   tasksCount: number;
   cyclesCount: number;
   historyCount: number;
@@ -318,7 +331,9 @@ export const getDatabaseInfo = async (): Promise<{
     const history = await getTaskHistory();
     
     return {
-      version: version ? parseInt(version) : 0,
+      version: version ? parseInt(version) : APP_INFO.DATABASE_VERSION,
+      appVersion: APP_INFO.VERSION,
+      appFullVersion: getFullVersion(),
       tasksCount: tasks.length,
       cyclesCount: cycles.length,
       historyCount: history.length
@@ -348,22 +363,13 @@ export const exportData = async (): Promise<string> => {
     const cycles = await getTaskCycles();
     const history = await getTaskHistory();
     
-    // 从app.json获取应用版本号
-    let appVersion = "1.0.0"; // 默认版本号
-    try {
-      // 尝试导入app.json获取版本号
-      const appConfig = require('../app.json');
-      if (appConfig && appConfig.expo && appConfig.expo.version) {
-        appVersion = appConfig.expo.version;
-      }
-    } catch (error) {
-      console.warn('无法获取应用版本号:', error);
-    }
-    
+    // 使用版本配置文件中的版本信息
     const data = {
-      appVersion: appVersion,
-      dbVersion: DATABASE_VERSION,
-      version: DATABASE_VERSION, // 保留旧版本字段以兼容
+      appVersion: APP_INFO.VERSION,
+      appFullVersion: getFullVersion(), 
+      dbVersion: APP_INFO.DATABASE_VERSION,
+      version: APP_INFO.DATABASE_VERSION, // 保留旧版本字段以兼容
+      buildNumber: APP_INFO.BUILD_NUMBER,
       tasks,
       cycles,
       history,
@@ -386,9 +392,16 @@ export const importData = async (jsonData: string): Promise<boolean> => {
       throw new Error('无效的数据格式');
     }
     
+    // 检查数据库版本兼容性
+    const importedDbVersion = data.dbVersion || data.version || 0;
+    if (importedDbVersion < APP_INFO.MIN_DATABASE_VERSION) {
+      throw new Error(`导入的数据库版本 (${importedDbVersion}) 低于最低支持版本 (${APP_INFO.MIN_DATABASE_VERSION})`);
+    }
+    
     await AsyncStorage.setItem(STORAGE_KEYS.TASKS, JSON.stringify(data.tasks));
     await AsyncStorage.setItem(STORAGE_KEYS.TASK_CYCLES, JSON.stringify(data.cycles));
     await AsyncStorage.setItem(STORAGE_KEYS.TASK_HISTORY, JSON.stringify(data.history));
+    await AsyncStorage.setItem(STORAGE_KEYS.DATABASE_VERSION, APP_INFO.DATABASE_VERSION.toString());
     
     console.log('数据导入成功');
     return true;
