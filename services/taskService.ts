@@ -10,7 +10,9 @@ import {
   RecurrencePattern,
   WeekDay,
   WeekType,
+  WeekOfMonth,
 } from '../models/Task';
+import { TaskHistory } from '../models/TaskHistory';
 import { scheduleTaskNotification } from './notificationService';
 import { addTaskToCalendar, removeTaskFromCalendar, updateTaskInCalendar } from './calendarService';
 import { 
@@ -21,7 +23,9 @@ import {
   saveTaskCycle,
   getTaskCyclesByTaskId,
   getTaskCycles,
-  saveTaskHistory
+  saveTaskHistory,
+  getTaskHistory,
+  getTaskHistoryByAction as getHistoryByAction
 } from './storageService';
 import { format, addDays, addWeeks, addMonths, addYears } from 'date-fns';
 import lunarService from './lunarService';
@@ -97,7 +101,7 @@ export const createTask = async (input: CreateTaskInput): Promise<Task> => {
 /**
  * Calculate the due date based on the start date and recurrence pattern
  */
-const calculateDueDate = (startDate: string, recurrencePattern: RecurrencePattern, dateType: DateType = 'solar'): string => {
+export const calculateDueDate = (startDate: string, recurrencePattern: RecurrencePattern, dateType: DateType = 'solar'): string => {
   let start: Date;
   if (dateType === 'lunar') {
     const lunarDate = lunarService.parseLunarDate(startDate);
@@ -138,6 +142,55 @@ const calculateDueDate = (startDate: string, recurrencePattern: RecurrencePatter
         return dueDate.toISOString();
       }
       
+    case 'yearly':
+      if (dateType === 'lunar') {
+        return calculateLunarYearlyDueDate(startDate, recurrencePattern);
+      } else {
+        if (recurrencePattern.yearDay !== undefined) {
+          // 指定年中的第几天
+          const startYear = start.getFullYear();
+          const startOfYear = new Date(startYear, 0, 1);
+          startOfYear.setDate(recurrencePattern.yearDay);
+          if (startOfYear <= start) {
+            // If the specified day has already passed this year, move to next year
+            startOfYear.setFullYear(startYear + 1);
+          }
+          return startOfYear.toISOString();
+        } else if (recurrencePattern.month !== undefined && recurrencePattern.monthDay !== undefined) {
+          // 指定年中的第几月第几天（例如：每年3月15日）
+          const dueDate = new Date(start);
+          let yearOffset = 0;
+          if (dueDate.getMonth() + 1 > recurrencePattern.month || 
+              (dueDate.getMonth() + 1 === recurrencePattern.month && dueDate.getDate() >= recurrencePattern.monthDay)) {
+            // If the specified month/day has already passed this year, move to next year
+            yearOffset = 1;
+          }
+          dueDate.setFullYear(dueDate.getFullYear() + yearOffset);
+          dueDate.setMonth(recurrencePattern.month - 1);
+          dueDate.setDate(recurrencePattern.monthDay);
+          return dueDate.toISOString();
+        } else {
+          // 默认为每隔几年
+          const dueDate = new Date(start);
+          dueDate.setFullYear(dueDate.getFullYear() + recurrencePattern.value);
+          return dueDate.toISOString();
+        }
+      }
+      
+    case 'weekOfMonth':
+      if (dateType === 'lunar') {
+        return calculateLunarWeekOfMonthDueDate(startDate, recurrencePattern);
+      } else {
+        // 某月第几周的星期几（例如：每月第三个星期二）
+        if (recurrencePattern.month !== undefined 
+            && recurrencePattern.weekOfMonth !== undefined 
+            && recurrencePattern.weekDay !== undefined) {
+          return calculateWeekOfMonthDueDate(start, recurrencePattern);
+        } else {
+          throw new Error('weekOfMonth 类型必须指定 month、weekOfMonth 和 weekDay');
+        }
+      }
+      
     case 'custom':
       switch (recurrencePattern.unit) {
         case 'days':
@@ -148,6 +201,14 @@ const calculateDueDate = (startDate: string, recurrencePattern: RecurrencePatter
           const dueDate = new Date(start);
           dueDate.setMonth(dueDate.getMonth() + recurrencePattern.value);
           return dueDate.toISOString();
+        case 'years':
+          if (dateType === 'lunar') {
+            return calculateLunarYearlyCustomDueDate(startDate, recurrencePattern.value);
+          } else {
+            const dueDate = new Date(start);
+            dueDate.setFullYear(dueDate.getFullYear() + recurrencePattern.value);
+            return dueDate.toISOString();
+          }
         default:
           throw new Error(`不支持的重复单位: ${recurrencePattern.unit}`);
       }
@@ -158,42 +219,248 @@ const calculateDueDate = (startDate: string, recurrencePattern: RecurrencePatter
 };
 
 /**
- * Create a task cycle
+ * 计算某月第几周的星期几
  */
-export const createTaskCycle = async (
-  taskId: number,
-  startDate: string,
-  pattern: RecurrencePattern,
-  dateType: DateType = 'solar'
-): Promise<TaskCycle> => {
-  if (!taskId) {
-    throw new Error('Task ID is required');
+const calculateWeekOfMonthDueDate = (start: Date, recurrencePattern: RecurrencePattern): string => {
+  const { month, weekOfMonth, weekDay } = recurrencePattern;
+  if (month === undefined || weekOfMonth === undefined || weekDay === undefined) {
+    throw new Error('月份、第几周和星期几都必须指定');
   }
   
-  try {
-    const now = new Date().toISOString();
-    const dueDate = calculateDueDate(startDate, pattern, dateType);
+  let targetYear = start.getFullYear();
+  let targetMonth = month - 1;  // JavaScript months are 0-indexed
+  
+  // If the date has already passed this month, move to next occurrence
+  if (start.getMonth() === targetMonth) {
+    // Calculate the target date this month
+    const currentMonthTarget = getDateOfWeekDayInMonth(targetYear, targetMonth, weekOfMonth, weekDay);
+    // If already passed, move to next month or year
+    if (currentMonthTarget < start) {
+      targetMonth++;
+      if (targetMonth > 11) {
+        targetMonth = 0;
+        targetYear += 1;
+      }
+    }
+  } else if (start.getMonth() > targetMonth) {
+    // Move to next year
+    targetYear += 1;
+  }
+  
+  // Get the date
+  const dueDate = getDateOfWeekDayInMonth(targetYear, targetMonth, weekOfMonth, weekDay);
+  return dueDate.toISOString();
+};
+
+/**
+ * 获取某月第几周的星期几的具体日期
+ */
+const getDateOfWeekDayInMonth = (year: number, month: number, weekOfMonth: WeekOfMonth, weekDay: WeekDay): Date => {
+  // 获取该月第一天
+  const firstDayOfMonth = new Date(year, month, 1);
+  
+  // 计算该月第一个指定的星期几
+  let dayOffset = weekDay - firstDayOfMonth.getDay();
+  if (dayOffset < 0) dayOffset += 7;
+  
+  // 计算第几周
+  const targetDate = new Date(year, month, 1 + dayOffset + (weekOfMonth - 1) * 7);
+  
+  // 处理"最后一周"的情况
+  if (weekOfMonth === 5) {
+    // 获取下个月第一天
+    const firstDayOfNextMonth = new Date(year, month + 1, 1);
+    // 倒推找到最后一个指定的星期几
+    let lastWeekdayOfMonth = new Date(firstDayOfNextMonth);
+    lastWeekdayOfMonth.setDate(lastWeekdayOfMonth.getDate() - 1);
+    while (lastWeekdayOfMonth.getDay() !== weekDay) {
+      lastWeekdayOfMonth.setDate(lastWeekdayOfMonth.getDate() - 1);
+    }
+    return lastWeekdayOfMonth;
+  }
+  
+  return targetDate;
+};
+
+/**
+ * 计算农历的年度重复日期
+ */
+const calculateLunarYearlyDueDate = (startDate: string, recurrencePattern: RecurrencePattern): string => {
+  // 解析农历日期
+  const lunarStart = lunarService.parseLunarDate(startDate);
+  
+  // 获取当前农历年
+  const currentLunarDate = lunarService.getTodayLunar();
+  
+  // 计算下一个农历日期
+  let targetYear = currentLunarDate.year;
+  let targetMonth = lunarStart.month;
+  let targetDay = lunarStart.day;
+  let isLeapMonth = recurrencePattern.isLeapMonth || false;
+  
+  // 如果当前日期已经过了今年的对应日期，则推到明年
+  if (currentLunarDate.month > targetMonth || 
+      (currentLunarDate.month === targetMonth && currentLunarDate.day >= targetDay)) {
+    targetYear++;
+  }
+  
+  // 处理闰月情况
+  if (isLeapMonth) {
+    // 检查目标年份是否有该闰月
+    const lunar = require('lunar-javascript').Lunar;
+    const lunarYear = lunar.fromDate(new Date(targetYear, 0, 1));
+    const leapMonth = lunarYear.getLeapMonth();
     
-    // 创建新的周期
+    if (leapMonth !== targetMonth) {
+      // 如果没有指定的闰月，则使用普通月份
+      isLeapMonth = false;
+    }
+  }
+  
+  // 转换回公历日期
+  try {
+    const targetSolarDate = lunarService.lunarToSolar(targetYear, targetMonth, targetDay, isLeapMonth);
+    return targetSolarDate.toISOString();
+  } catch (error) {
+    console.error('农历转公历出错:', error);
+    // 如果有错误（例如不存在的日期），则尝试最接近的有效日期
+    return new Date().toISOString();
+  }
+};
+
+/**
+ * 计算农历的每月第几周星期几
+ */
+const calculateLunarWeekOfMonthDueDate = (startDate: string, recurrencePattern: RecurrencePattern): string => {
+  if (!recurrencePattern.weekOfMonth || !recurrencePattern.weekDay) {
+    throw new Error('weekOfMonth 和 weekDay 必须指定');
+  }
+  
+  // 解析农历日期
+  const lunarStart = lunarService.parseLunarDate(startDate);
+  
+  // 获取当前农历年月
+  const currentLunarDate = lunarService.getTodayLunar();
+  
+  // 目标农历月
+  let targetYear = currentLunarDate.year;
+  let targetMonth = recurrencePattern.month || lunarStart.month;
+  const isLeapMonth = recurrencePattern.isLeapMonth || false;
+  
+  // 如果当前月份已经过了，则推到下一年
+  if (currentLunarDate.month > targetMonth) {
+    targetYear++;
+  }
+  
+  // 获取该农历月的第一天
+  const firstDayOfLunarMonth = lunarService.lunarToSolar(targetYear, targetMonth, 1, isLeapMonth);
+  
+  // 转换为公历的计算
+  const solarRecurrencePattern = {
+    ...recurrencePattern,
+    month: firstDayOfLunarMonth.getMonth() + 1 // 公历月份是0-indexed
+  };
+  
+  return calculateWeekOfMonthDueDate(firstDayOfLunarMonth, solarRecurrencePattern);
+};
+
+/**
+ * 计算农历的自定义年度重复
+ */
+const calculateLunarYearlyCustomDueDate = (startDate: string, yearOffset: number): string => {
+  // 解析农历日期
+  const lunarStart = lunarService.parseLunarDate(startDate);
+  
+  // 计算目标农历年
+  const targetYear = lunarStart.year + yearOffset;
+  
+  // 转换回公历日期
+  try {
+    const targetSolarDate = lunarService.lunarToSolar(targetYear, lunarStart.month, lunarStart.day, lunarStart.isLeap);
+    return targetSolarDate.toISOString();
+  } catch (error) {
+    console.error('农历转公历出错:', error);
+    // 如果有错误（例如不存在的日期），则尝试最接近的有效日期
+    return new Date().toISOString();
+  }
+};
+
+/**
+ * 获取任务的最后一个周期
+ */
+export const getLastTaskCycle = async (taskId: number): Promise<TaskCycle | null> => {
+  try {
+    const cycles = await getTaskCyclesByTaskId(taskId);
+    if (!cycles || cycles.length === 0) {
+      return null;
+    }
+    
+    // 按创建时间降序排序，获取最新的周期
+    return cycles.sort((a, b) => 
+      new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    )[0];
+  } catch (error) {
+    console.error('Error getting last task cycle:', error);
+    return null;
+  }
+};
+
+/**
+ * Create a task cycle
+ */
+export async function createTaskCycle(task: Task): Promise<TaskCycle> {
+  try {
+    if (task.recurrencePattern.type === 'weekOfMonth' && 
+        (task.recurrencePattern.month === undefined || 
+         task.recurrencePattern.weekOfMonth === undefined || 
+         task.recurrencePattern.weekDay === undefined)) {
+      throw new Error('weekOfMonth 类型必须指定 month、weekOfMonth 和 weekDay');
+    }
+    
+    const lastCycle = await getLastTaskCycle(task.id);
+    
+    // 初始开始日期和到期日期
+    let startDate = new Date().toISOString();
+    let dueDate = startDate;
+    
+    if (lastCycle) {
+      // 基于上一个周期的到期日期计算新的开始日期
+      startDate = lastCycle.dueDate;
+      
+      // 计算新的到期日期
+      dueDate = calculateDueDate(startDate, task.recurrencePattern, task.dateType);
+    } else {
+      // 首个周期，使用当前时间作为开始日期
+      startDate = new Date().toISOString();
+      
+      // 计算首个周期的到期日期
+      dueDate = calculateDueDate(startDate, task.recurrencePattern, task.dateType);
+    }
+    
+    // 创建新的任务周期
     const cycle: TaskCycle = {
-      id: 0, // 将由 saveTaskCycle 分配
-      taskId: taskId,
+      id: Date.now(),
+      taskId: task.id,
       startDate: startDate,
       dueDate: dueDate,
-      dateType,
+      dateType: task.dateType,
       isCompleted: false,
       isOverdue: false,
-      createdAt: now,
+      createdAt: new Date().toISOString()
     };
     
-    // 保存周期
-    const savedCycle = await saveTaskCycle(cycle);
-    return savedCycle;
+    // 保存新的任务周期
+    await saveTaskCycle(cycle);
+    
+    // 安排提醒
+    await scheduleTaskNotification(task, cycle);
+    
+    return cycle;
   } catch (error) {
     console.error('Error creating task cycle:', error);
     throw error;
   }
-};
+}
 
 /**
  * Update an existing task
@@ -465,62 +732,47 @@ const getNextCycleDates = (task: Task, currentCycle: TaskCycle): { startDate: st
 /**
  * Complete a task cycle
  */
-export const completeTaskCycle = async (taskId: number, cycleId: number): Promise<TaskCycle> => {
+export async function completeTaskCycle(
+  task: Task,
+  cycle: TaskCycle,
+  skipNextCycle: boolean = false
+): Promise<{ task: Task; cycle: TaskCycle; newCycle?: TaskCycle }> {
   try {
-    // Get the task and cycle
-    const task = await getTaskById(taskId);
-    const cycles = await getTaskCyclesByTaskId(taskId);
-    const currentCycle = cycles.find(c => c.id === cycleId);
-    
-    if (!task || !currentCycle) {
-      throw new Error('Task or cycle not found');
+    if (task.recurrencePattern.type === 'weekOfMonth' && 
+        (task.recurrencePattern.month === undefined || 
+         task.recurrencePattern.weekOfMonth === undefined || 
+         task.recurrencePattern.weekDay === undefined)) {
+      throw new Error('weekOfMonth 类型必须指定 month、weekOfMonth 和 weekDay');
     }
     
-    // Mark the current cycle as completed
-    currentCycle.isCompleted = true;
-    currentCycle.completedDate = new Date().toISOString();
-    await saveTaskCycle(currentCycle);
+    // 更新周期为已完成
+    const now = new Date().toISOString();
+    cycle.isCompleted = true;
+    cycle.completedDate = now;
+    cycle.isOverdue = false;
     
-    // Save task history
-    await saveTaskHistory({
-      id: 0,
-      taskId,
-      cycleId,
-      action: 'complete',
-      timestamp: new Date().toISOString()
-    });
+    // 更新任务最后完成日期
+    task.lastCompletedDate = now;
     
-    // If auto restart is enabled, create next cycle
-    if (task.autoRestart) {
-      const nextCycle = await createTaskCycle(
-        taskId,
-        currentCycle.completedDate || currentCycle.dueDate,
-        task.recurrencePattern,
-        currentCycle.dateType
-      );
-      
-      // Update task's current cycle
-      task.currentCycle = nextCycle;
+    // 保存更改
+    await saveTaskCycle(cycle);
+    await saveTask(task);
+    
+    let newCycle: TaskCycle | undefined;
+    
+    // 如果任务仍然活跃且启用了自动重启，则创建下一个周期
+    if (task.isActive && task.autoRestart && !skipNextCycle) {
+      newCycle = await createTaskCycle(task);
+      task.currentCycle = newCycle;
       await saveTask(task);
-      
-      // If sync to calendar is enabled, create calendar event for next cycle
-      if (task.syncToCalendar) {
-        try {
-          const eventId = await addTaskToCalendar(task, nextCycle);
-          task.calendarEventId = eventId;
-          await saveTask(task);
-        } catch (error) {
-          console.error('Error syncing task to calendar:', error);
-        }
-      }
     }
     
-    return currentCycle;
+    return { task, cycle, newCycle };
   } catch (error) {
     console.error('Error completing task cycle:', error);
     throw error;
   }
-};
+}
 
 /**
  * Skip a task cycle
@@ -546,12 +798,7 @@ export const skipTaskCycle = async (taskId: number, cycleId: number): Promise<Ta
     });
     
     // Create next cycle
-    const nextCycle = await createTaskCycle(
-      taskId,
-      currentCycle.dueDate,
-      task.recurrencePattern,
-      currentCycle.dateType
-    );
+    const nextCycle = await createTaskCycle(task);
     
     // Update task's current cycle
     task.currentCycle = nextCycle;
@@ -616,11 +863,35 @@ export const checkAndUpdateOverdueTasks = async (): Promise<{ checkedCount: numb
         
         // 添加任务逾期历史记录
         await saveTaskHistory({
+          id: 0,
           taskId: task.id,
           cycleId: task.currentCycle.id,
           action: 'overdue',
           timestamp: new Date().toISOString()
         });
+        
+        // 如果任务设置了自动重启，则创建新的周期
+        if (task.autoRestart) {
+          // 对于未完成的逾期任务，使用截止日期作为新周期的开始日期
+          const nextStartDate = task.currentCycle.dueDate;
+          
+          const nextCycle = await createTaskCycle(task);
+          
+          // 更新任务的当前周期
+          task.currentCycle = nextCycle;
+          await saveTask(task);
+          
+          // 如果启用了日历同步，为新周期创建日历事件
+          if (task.syncToCalendar) {
+            try {
+              const eventId = await addTaskToCalendar(task, nextCycle);
+              task.calendarEventId = eventId;
+              await saveTask(task);
+            } catch (error) {
+              console.error('Error syncing task to calendar:', error);
+            }
+          }
+        }
         
         // 只有活动任务才计入逾期统计
         if (task.isActive) {
@@ -702,6 +973,63 @@ export const getOverdueTasks = async (): Promise<Task[]> => {
     );
   } catch (error) {
     console.error('获取逾期任务时出错:', error);
+    throw error;
+  }
+};
+
+/**
+ * Get task history by action type
+ * @param action The action type to filter by
+ * @returns Array of task history with the specified action
+ */
+export const getTaskHistoryByAction = async (action: string): Promise<Array<{ task: Task; history: TaskHistory }>> => {
+  try {
+    // 使用存储服务中的函数获取指定动作类型的历史记录
+    const filteredHistory = await getHistoryByAction(action);
+    
+    // 获取所有任务
+    const allTasks = await getTasks();
+    
+    // 将历史记录与对应的任务关联起来
+    const result: Array<{ task: Task; history: TaskHistory }> = [];
+    for (const history of filteredHistory) {
+      const task = allTasks.find(t => t.id === history.taskId);
+      if (task) {
+        result.push({ task, history });
+      }
+    }
+    
+    return result;
+  } catch (error) {
+    console.error(`获取${action}类型的任务历史时出错:`, error);
+    throw error;
+  }
+};
+
+/**
+ * Get completed task history
+ * @returns Array of task history with 'complete' action
+ */
+export const getCompletedTaskHistory = async (): Promise<Array<{ task: Task; history: TaskHistory }>> => {
+  try {
+    const history = await getTaskHistoryByAction('complete');
+    return history;
+  } catch (error) {
+    console.error('获取已完成任务历史时出错:', error);
+    throw error;
+  }
+};
+
+/**
+ * Get overdue task history
+ * @returns Array of task history with 'overdue' action
+ */
+export const getOverdueTaskHistory = async (): Promise<Array<{ task: Task; history: TaskHistory }>> => {
+  try {
+    const history = await getTaskHistoryByAction('overdue');
+    return history;
+  } catch (error) {
+    console.error('获取逾期任务历史时出错:', error);
     throw error;
   }
 }; 

@@ -94,9 +94,6 @@ export async function scheduleTaskNotification(
       case 'days':
         notificationDate.setDate(notificationDate.getDate() - task.reminderOffset);
         break;
-      case 'months':
-        notificationDate.setMonth(notificationDate.getMonth() - task.reminderOffset);
-        break;
     }
     
     // Don't schedule if the notification time is in the past
@@ -104,6 +101,12 @@ export async function scheduleTaskNotification(
       console.log(`Notification time for task "${task.title}" is in the past, skipping`);
       return null;
     }
+    
+    // Calculate seconds from now
+    const secondsFromNow = Math.max(
+      1,
+      Math.floor((notificationDate.getTime() - Date.now()) / 1000)
+    );
     
     // Schedule notification
     const notificationId = await Notifications.scheduleNotificationAsync({
@@ -122,7 +125,7 @@ export async function scheduleTaskNotification(
           lightColor: '#FF0000',
         }),
       },
-      trigger: notificationDate,
+      trigger: { type: 'timeInterval', seconds: secondsFromNow },
     });
     
     console.log(`已为任务 "${task.title}" 安排通知，ID: ${notificationId}, 时间: ${notificationDate.toLocaleString()}`);
@@ -188,43 +191,18 @@ export function removeNotificationListener(subscription: Notifications.Subscript
 // Clean up notifications
 export async function cleanupNotifications(): Promise<void> {
   try {
-    // Cancel all notifications
-    await cancelAllNotifications();
+    const allNotifications = await getAllScheduledNotifications();
     
-    // Unregister background tasks
-    await unregisterBackgroundTask();
+    // 删除过期的通知
+    for (const notification of allNotifications) {
+      const trigger = notification.trigger as any;
+      if (trigger && trigger.date && new Date(trigger.date) < new Date()) {
+        await cancelNotification(notification.identifier);
+      }
+    }
     
     console.log('Notifications cleaned up');
   } catch (error) {
     console.error('Error cleaning up notifications:', error);
-  }
-}
-
-export interface TestNotificationInput {
-  id: number;
-  title: string;
-  body: string;
-  date: Date;
-}
-
-// Schedule a test notification
-export async function scheduleTestNotification(
-  input: TestNotificationInput
-): Promise<string | null> {
-  try {
-    const notificationId = await Notifications.scheduleNotificationAsync({
-      content: {
-        title: `测试通知 #${input.id}: ${input.title}`,
-        body: input.body,
-        data: { testId: input.id },
-      },
-      trigger: input.date,
-    });
-    
-    console.log(`已安排测试通知，ID: ${notificationId}`);
-    return notificationId;
-  } catch (error) {
-    console.error('安排测试通知时出错:', error);
-    return null;
   }
 } 

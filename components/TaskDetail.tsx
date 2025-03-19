@@ -8,6 +8,8 @@ import {
   ScrollView,
   Alert,
   ActivityIndicator,
+  SafeAreaView,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Task } from '../models/Task';
@@ -25,7 +27,6 @@ interface TaskDetailProps {
   onClose: () => void;
   onEdit: () => void;
   onDelete: (taskId: number) => void;
-  testID?: string;
   isLoading?: boolean;
 }
 
@@ -166,15 +167,56 @@ export default function TaskDetail({
   };
 
   const getRecurrenceText = (task: Task) => {
-    switch (task.recurrenceType) {
+    if (!task.recurrencePattern) {
+      return t.task.unknown;
+    }
+
+    switch (task.recurrencePattern.type) {
       case 'daily':
-        return t.task.daily;
+        return `${t.task.every} ${task.recurrencePattern.value} ${t.task.days}`;
       case 'weekly':
-        return t.task.weekly;
+        if (task.recurrencePattern.weekDay !== undefined) {
+          const weekdays = [t.task.sunday, t.task.monday, t.task.tuesday, t.task.wednesday, 
+                           t.task.thursday, t.task.friday, t.task.saturday];
+          return `${t.task.every} ${weekdays[task.recurrencePattern.weekDay]}`;
+        } else {
+          return `${t.task.every} ${task.recurrencePattern.value} ${t.task.weeks}`;
+        }
       case 'monthly':
-        return t.task.monthly;
+        if (task.recurrencePattern.monthDay !== undefined) {
+          return `${t.task.every} ${task.recurrencePattern.monthDay} ${t.task.dayOfMonth}`;
+        } else {
+          return `${t.task.every} ${task.recurrencePattern.value} ${t.task.months}`;
+        }
+      case 'yearly':
+        if (task.recurrencePattern.yearDay !== undefined) {
+          return `${t.task.every} ${task.recurrencePattern.yearDay} ${t.task.dayOfYear}`;
+        } else if (task.recurrencePattern.month !== undefined && task.recurrencePattern.monthDay !== undefined) {
+          const months = [t.task.january, t.task.february, t.task.march, t.task.april, 
+                         t.task.may, t.task.june, t.task.july, t.task.august, 
+                         t.task.september, t.task.october, t.task.november, t.task.december];
+          return `${t.task.every} ${months[task.recurrencePattern.month - 1]} ${task.recurrencePattern.monthDay}`;
+        } else {
+          return `${t.task.every} ${task.recurrencePattern.value} ${t.task.years}`;
+        }
+      case 'weekOfMonth':
+        if (task.recurrencePattern.month !== undefined && 
+            task.recurrencePattern.weekOfMonth !== undefined && 
+            task.recurrencePattern.weekDay !== undefined) {
+          const weekdays = [t.task.sunday, t.task.monday, t.task.tuesday, t.task.wednesday, 
+                           t.task.thursday, t.task.friday, t.task.saturday];
+          const weeks = [t.task.first, t.task.second, t.task.third, t.task.fourth, t.task.last];
+          const months = [t.task.january, t.task.february, t.task.march, t.task.april, 
+                         t.task.may, t.task.june, t.task.july, t.task.august, 
+                         t.task.september, t.task.october, t.task.november, t.task.december];
+          
+          const weekOfMonth = task.recurrencePattern.weekOfMonth === 5 ? 4 : task.recurrencePattern.weekOfMonth;
+          return `${t.task.every} ${weeks[weekOfMonth]} ${weekdays[task.recurrencePattern.weekDay]} ${t.task.of} ${months[task.recurrencePattern.month - 1]}`;
+        } else {
+          return t.task.unknown;
+        }
       case 'custom':
-        return `${t.task.every} ${task.recurrenceValue} ${getRecurrenceUnitText(task.recurrenceUnit)}`;
+        return `${t.task.every} ${task.recurrencePattern.value} ${getRecurrenceUnitText(task.recurrencePattern.unit)}`;
       default:
         return t.task.unknown;
     }
@@ -201,87 +243,6 @@ export default function TaskDetail({
     return `${t.task.reminderBefore} ${task.reminderOffset} ${getRecurrenceUnitText(task.reminderUnit)}`;
   };
 
-  const handleTestNotification = async (task: Task) => {
-    try {
-      setIsProcessing(true);
-      // 创建一个测试通知，设置为30秒后触发
-      const testDate = new Date();
-      testDate.setSeconds(testDate.getSeconds() + 30); // 增加到30秒，避免过快过期
-      
-      // 创建一个模拟的任务周期用于测试
-      const testCycle = {
-        id: 0,
-        taskId: task.id,
-        startDate: new Date().toISOString(),
-        dueDate: testDate.toISOString(), // 使用testDate作为截止时间
-        isCompleted: false,
-        isOverdue: false,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      };
-      
-      await scheduleTaskNotification(
-        {
-          ...task,
-          title: `${t.task.testNotificationTitle}: ${task.title}`,
-          description: task.description || t.task.testNotificationBody
-        },
-        testCycle
-      );
-      
-      showCustomAlert(
-        t.task.testNotificationSuccess,
-        t.task.testNotificationMessage
-      );
-    } catch (error) {
-      console.error('Error testing notification:', error);
-      Alert.alert(t.common.error, t.task.testNotificationFailed);
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  const handleTestCalendar = async (task: Task) => {
-    try {
-      setIsProcessing(true);
-      // 创建一个测试日历事件，设置为今天
-      const testStartDate = new Date();
-      const testEndDate = new Date();
-      testEndDate.setHours(testEndDate.getHours() + 1);
-      
-      // 创建一个模拟的任务周期用于测试
-      const testCycle = {
-        id: 0,
-        taskId: task.id,
-        startDate: testStartDate.toISOString(),
-        dueDate: testEndDate.toISOString(),
-        isCompleted: false,
-        isOverdue: false,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      };
-      
-      await addTaskToCalendar(
-        {
-          ...task,
-          title: `${t.task.testCalendarTitle}: ${task.title}`,
-          description: task.description || t.task.testCalendarNotes
-        },
-        testCycle
-      );
-      
-      showCustomAlert(
-        t.task.testCalendarSuccess,
-        t.task.testCalendarMessage
-      );
-    } catch (error) {
-      console.error('Error testing calendar:', error);
-      Alert.alert(t.common.error, t.task.testCalendarFailed);
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
   return (
     <Modal
       animationType="slide"
@@ -289,424 +250,360 @@ export default function TaskDetail({
       visible={true}
       onRequestClose={onClose}
     >
-      <View style={styles.centeredView}>
-        {(isProcessing || isLoading) && (
-          <View style={styles.loadingOverlay}>
-            <ActivityIndicator size="large" color={colors.primary} />
-          </View>
-        )}
-        
-        <View
-          style={[
-            styles.modalView,
-            { backgroundColor: colors.card },
-          ]}
-        >
-          <View style={styles.modalHeader}>
-            <Text
+      <SafeAreaView style={styles.container}>
+        <KeyboardAvoidingView style={styles.keyboardAvoidingView}>
+          <View style={styles.centeredView}>
+            {(isProcessing || isLoading) && (
+              <View style={styles.loadingOverlay}>
+                <ActivityIndicator size="large" color={colors.primary} />
+              </View>
+            )}
+            
+            <View
               style={[
-                styles.modalTitle,
-                { color: colors.text },
+                styles.modalView,
+                { backgroundColor: colors.card },
               ]}
             >
-              {t.task.details}
-            </Text>
-            <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-              <Ionicons
-                name="close"
-                size={24}
-                color={colors.text}
-              />
-            </TouchableOpacity>
-          </View>
-
-          <ScrollView style={styles.contentContainer}>
-            <View style={styles.section}>
-              <Text
-                style={[
-                  styles.taskTitle,
-                  { color: colors.text },
-                ]}
-              >
-                {task.title}
-              </Text>
-              {task.description ? (
+              <View style={styles.modalHeader}>
                 <Text
                   style={[
-                    styles.taskDescription,
+                    styles.modalTitle,
                     { color: colors.text },
                   ]}
                 >
-                  {task.description}
+                  {t.task.details}
                 </Text>
-              ) : null}
-            </View>
-
-            <View style={[styles.section, { backgroundColor: colors.background, borderRadius: 8 }]}>
-              <Text
-                style={[
-                  styles.sectionTitle,
-                  { color: colors.text },
-                ]}
-              >
-                {t.task.recurrenceSettings}
-              </Text>
-              <View style={styles.infoRow}>
-                <Text
-                  style={[
-                    styles.infoLabel,
-                    { color: colors.subText },
-                  ]}
-                >
-                  {t.task.recurrenceType}:
-                </Text>
-                <Text
-                  style={[
-                    styles.infoValue,
-                    { color: colors.text },
-                  ]}
-                >
-                  {getRecurrenceText(task)}
-                </Text>
+                <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+                  <Ionicons
+                    name="close"
+                    size={24}
+                    color={colors.text}
+                  />
+                </TouchableOpacity>
               </View>
-              <View style={styles.infoRow}>
-                <Text
-                  style={[
-                    styles.infoLabel,
-                    { color: colors.subText },
-                  ]}
-                >
-                  {t.task.dateType}:
-                </Text>
-                <Text
-                  style={[
-                    styles.infoValue,
-                    { color: colors.text },
-                  ]}
-                >
-                  {task.dateType === 'lunar' ? t.task.lunarCalendar : t.task.solarCalendar}
-                </Text>
-              </View>
-            </View>
 
-            {task.currentCycle && (
-              <View style={[styles.section, { backgroundColor: colors.background, borderRadius: 8 }]}>
-                <Text
-                  style={[
-                    styles.sectionTitle,
-                    { color: colors.text },
-                  ]}
-                >
-                  {t.task.currentCycle}
-                </Text>
-                <View style={styles.infoRow}>
+              <ScrollView style={styles.contentContainer}>
+                <View style={styles.section}>
                   <Text
                     style={[
-                      styles.infoLabel,
-                      { color: colors.subText },
-                    ]}
-                  >
-                    {t.task.startDate}:
-                  </Text>
-                  <Text
-                    style={[
-                      styles.infoValue,
+                      styles.taskTitle,
                       { color: colors.text },
                     ]}
                   >
-                    {formatDate(task.currentCycle.startDate)}
+                    {task.title}
                   </Text>
+                  {task.description ? (
+                    <Text
+                      style={[
+                        styles.taskDescription,
+                        { color: colors.text },
+                      ]}
+                    >
+                      {task.description}
+                    </Text>
+                  ) : null}
                 </View>
-                <View style={styles.infoRow}>
+
+                <View style={[styles.section, { backgroundColor: colors.background, borderRadius: 8 }]}>
                   <Text
                     style={[
-                      styles.infoLabel,
-                      { color: colors.subText },
-                    ]}
-                  >
-                    {t.task.dueDate}:
-                  </Text>
-                  <Text
-                    style={[
-                      styles.infoValue,
+                      styles.sectionTitle,
                       { color: colors.text },
                     ]}
                   >
-                    {formatDate(task.currentCycle.dueDate)}
+                    {t.task.recurrenceSettings}
                   </Text>
-                </View>
-                <View style={styles.infoRow}>
-                  <Text
-                    style={[
-                      styles.infoLabel,
-                      { color: colors.subText },
-                    ]}
-                  >
-                    {t.task.status}:
-                  </Text>
-                  <View style={[
-                    styles.statusBadge,
-                    { 
-                      backgroundColor: task.currentCycle.isCompleted 
-                        ? '#4CAF50' 
-                        : task.currentCycle.isOverdue 
-                          ? '#F44336' 
-                          : '#2196F3'
-                    }
-                  ]}>
-                    <Text style={styles.statusText}>
-                      {task.currentCycle.isCompleted 
-                        ? t.task.statusCompleted 
-                        : task.currentCycle.isOverdue 
-                          ? t.task.statusOverdue 
-                          : t.task.statusInProgress}
+                  <View style={styles.infoRow}>
+                    <Text
+                      style={[
+                        styles.infoLabel,
+                        { color: colors.subText },
+                      ]}
+                    >
+                      {t.task.recurrenceType}:
+                    </Text>
+                    <Text
+                      style={[
+                        styles.infoValue,
+                        { color: colors.text },
+                      ]}
+                    >
+                      {getRecurrenceText(task)}
+                    </Text>
+                  </View>
+                  <View style={styles.infoRow}>
+                    <Text
+                      style={[
+                        styles.infoLabel,
+                        { color: colors.subText },
+                      ]}
+                    >
+                      {t.task.dateType}:
+                    </Text>
+                    <Text
+                      style={[
+                        styles.infoValue,
+                        { color: colors.text },
+                      ]}
+                    >
+                      {task.dateType === 'lunar' ? t.task.lunarCalendar : t.task.solarCalendar}
                     </Text>
                   </View>
                 </View>
-              </View>
-            )}
 
-            <View style={[styles.section, { backgroundColor: colors.background, borderRadius: 8 }]}>
-              <Text
-                style={[
-                  styles.sectionTitle,
-                  { color: colors.text },
-                ]}
-              >
-                {t.task.reminderSettings}
-              </Text>
-              <View style={styles.infoRow}>
-                <Text
-                  style={[
-                    styles.infoLabel,
-                    { color: colors.subText },
-                  ]}
-                >
-                  {t.task.reminderTime}:
-                </Text>
-                <Text
-                  style={[
-                    styles.infoValue,
-                    { color: colors.text },
-                  ]}
-                >
-                  {`${task.reminderTime.hour.toString().padStart(2, '0')}:${task.reminderTime.minute.toString().padStart(2, '0')}`}
-                </Text>
-              </View>
-              <View style={styles.infoRow}>
-                <Text
-                  style={[
-                    styles.infoLabel,
-                    { color: colors.subText },
-                  ]}
-                >
-                  {t.task.reminderOffset}:
-                </Text>
-                <Text
-                  style={[
-                    styles.infoValue,
-                    { color: colors.text },
-                  ]}
-                >
-                  {`${task.reminderOffset} ${getRecurrenceUnitText(task.reminderUnit)}`}
-                </Text>
-              </View>
-            </View>
+                {task.currentCycle && (
+                  <View style={[styles.section, { backgroundColor: colors.background, borderRadius: 8 }]}>
+                    <Text
+                      style={[
+                        styles.sectionTitle,
+                        { color: colors.text },
+                      ]}
+                    >
+                      {t.task.currentCycle}
+                    </Text>
+                    <View style={styles.infoRow}>
+                      <Text
+                        style={[
+                          styles.infoLabel,
+                          { color: colors.subText },
+                        ]}
+                      >
+                        {t.task.startDate}:
+                      </Text>
+                      <Text
+                        style={[
+                          styles.infoValue,
+                          { color: colors.text },
+                        ]}
+                      >
+                        {formatDate(task.currentCycle.startDate)}
+                      </Text>
+                    </View>
+                    <View style={styles.infoRow}>
+                      <Text
+                        style={[
+                          styles.infoLabel,
+                          { color: colors.subText },
+                        ]}
+                      >
+                        {t.task.dueDate}:
+                      </Text>
+                      <Text
+                        style={[
+                          styles.infoValue,
+                          { color: colors.text },
+                        ]}
+                      >
+                        {formatDate(task.currentCycle.dueDate)}
+                      </Text>
+                    </View>
+                    <View style={styles.infoRow}>
+                      <Text
+                        style={[
+                          styles.infoLabel,
+                          { color: colors.subText },
+                        ]}
+                      >
+                        {t.task.status}:
+                      </Text>
+                      <View style={[
+                        styles.statusBadge,
+                        { 
+                          backgroundColor: task.currentCycle.isCompleted 
+                            ? '#4CAF50' 
+                            : task.currentCycle.isOverdue 
+                              ? '#F44336' 
+                              : '#2196F3'
+                        }
+                      ]}>
+                        <Text style={styles.statusText}>
+                          {task.currentCycle.isCompleted 
+                            ? t.task.statusCompleted 
+                            : task.currentCycle.isOverdue 
+                              ? t.task.statusOverdue 
+                              : t.task.statusInProgress}
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+                )}
 
-            <View style={[styles.section, { backgroundColor: colors.background, borderRadius: 8 }]}>
-              <Text
-                style={[
-                  styles.sectionTitle,
-                  { color: colors.text },
-                ]}
-              >
-                {t.task.otherSettings}
-              </Text>
-              <View style={styles.infoRow}>
-                <Text
-                  style={[
-                    styles.infoLabel,
-                    { color: colors.subText },
-                  ]}
-                >
-                  {t.task.syncToCalendar}:
-                </Text>
-                <Text
-                  style={[
-                    styles.infoValue,
-                    { color: colors.text },
-                  ]}
-                >
-                  {task.syncToCalendar ? t.common.yes : t.common.no}
-                </Text>
-              </View>
-              <View style={styles.infoRow}>
-                <Text
-                  style={[
-                    styles.infoLabel,
-                    { color: colors.subText },
-                  ]}
-                >
-                  {t.task.enableTask}:
-                </Text>
-                <Text
-                  style={[
-                    styles.infoValue,
-                    { color: colors.text },
-                  ]}
-                >
-                  {task.isActive ? t.common.yes : t.common.no}
-                </Text>
-              </View>
-              <View style={styles.infoRow}>
-                <Text
-                  style={[
-                    styles.infoLabel,
-                    { color: colors.subText },
-                  ]}
-                >
-                  {t.task.autoRestart}:
-                </Text>
-                <Text
-                  style={[
-                    styles.infoValue,
-                    { color: colors.text },
-                  ]}
-                >
-                  {task.autoRestart ? t.common.yes : t.common.no}
-                </Text>
-              </View>
-              {task.lastCompletedDate && (
-                <View style={styles.infoRow}>
+                <View style={[styles.section, { backgroundColor: colors.background, borderRadius: 8 }]}>
                   <Text
                     style={[
-                      styles.infoLabel,
-                      { color: colors.subText },
-                    ]}
-                  >
-                    {t.task.lastCompleted}:
-                  </Text>
-                  <Text
-                    style={[
-                      styles.infoValue,
+                      styles.sectionTitle,
                       { color: colors.text },
                     ]}
                   >
-                    {formatDate(task.lastCompletedDate)}
+                    {t.task.reminderSettings}
                   </Text>
+                  <View style={styles.infoRow}>
+                    <Text
+                      style={[
+                        styles.infoLabel,
+                        { color: colors.subText },
+                      ]}
+                    >
+                      {t.task.reminderTime}:
+                    </Text>
+                    <Text
+                      style={[
+                        styles.infoValue,
+                        { color: colors.text },
+                      ]}
+                    >
+                      {`${task.reminderTime.hour.toString().padStart(2, '0')}:${task.reminderTime.minute.toString().padStart(2, '0')}`}
+                    </Text>
+                  </View>
+                  <View style={styles.infoRow}>
+                    <Text
+                      style={[
+                        styles.infoLabel,
+                        { color: colors.subText },
+                      ]}
+                    >
+                      {t.task.reminderOffset}:
+                    </Text>
+                    <Text
+                      style={[
+                        styles.infoValue,
+                        { color: colors.text },
+                      ]}
+                    >
+                      {`${task.reminderOffset} ${getRecurrenceUnitText(task.reminderUnit)}`}
+                    </Text>
+                  </View>
                 </View>
-              )}
-            </View>
-          </ScrollView>
 
-          <View style={[styles.buttonContainer, { backgroundColor: colors.card, borderTopWidth: 1, borderTopColor: 'rgba(0, 0, 0, 0.1)' }]}>
-            {task.currentCycle && !task.currentCycle.isCompleted && (
-              <TouchableOpacity
-                style={[
-                  styles.button,
-                  { backgroundColor: colors.primary }
-                ]}
-                onPress={handleComplete}
-              >
-                <Ionicons name="checkmark-circle" size={20} color="white" />
-                <Text style={styles.buttonText}>{t.task.complete}</Text>
-              </TouchableOpacity>
-            )}
-            
-            <TouchableOpacity
-              style={[
-                styles.button,
-                { backgroundColor: colors.primary }
-              ]}
-              onPress={onEdit}
-            >
-              <Ionicons name="create" size={20} color="white" />
-              <Text style={styles.buttonText}>{t.common.edit}</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity
-              style={[
-                styles.button,
-                { backgroundColor: task.isActive ? '#FF9800' : '#4CAF50' }
-              ]}
-              onPress={handleToggleActive}
-            >
-              <Ionicons name={task.isActive ? "eye-off" : "eye"} size={20} color="white" />
-              <Text style={styles.buttonText}>{task.isActive ? t.task.disableTask : t.task.enableTask}</Text>
-            </TouchableOpacity>
-            
-            <View style={{ flexDirection: 'row', marginBottom: 12 }}>
-              <TouchableOpacity
-                style={[
-                  styles.button,
-                  { 
-                    backgroundColor: colors.primary, 
-                    flex: 1, 
-                    marginBottom: 0,
-                    marginRight: task.syncToCalendar ? 6 : 0,
-                    paddingVertical: 12
-                  }
-                ]}
-                onPress={() => handleTestNotification(task)}
-              >
-                <Ionicons name="notifications" size={20} color="white" />
-                <Text style={[styles.buttonText, { fontSize: 14 }]}>
-                  {t.task.testNotification}
-                </Text>
-              </TouchableOpacity>
-              
-              {task.syncToCalendar && (
-                <TouchableOpacity
-                  style={[
-                    styles.button,
-                    { 
-                      backgroundColor: colors.primary, 
-                      flex: 1, 
-                      marginBottom: 0,
-                      marginLeft: 6,
-                      paddingVertical: 12
-                    }
-                  ]}
-                  onPress={() => handleTestCalendar(task)}
+                <View style={[styles.section, { backgroundColor: colors.background, borderRadius: 8 }]}>
+                  <Text
+                    style={[
+                      styles.sectionTitle,
+                      { color: colors.text },
+                    ]}
+                  >
+                    {t.task.otherSettings}
+                  </Text>
+                  <View style={styles.settingRow}>
+                    <View style={styles.settingLabelContainer}>
+                      <Text style={[styles.settingLabel, { color: colors.text }]}>
+                        {t.task.syncToCalendar}
+                      </Text>
+                      <Text style={styles.settingDescription}>
+                        {t.task.syncToCalendarDesc}
+                      </Text>
+                    </View>
+                    <Text style={styles.settingValue}>
+                      {task.syncToCalendar ? t.common.yes : t.common.no}
+                    </Text>
+                  </View>
+                  <View style={styles.infoRow}>
+                    <Text
+                      style={[
+                        styles.infoLabel,
+                        { color: colors.subText },
+                      ]}
+                    >
+                      {t.task.enableTask}:
+                    </Text>
+                    <Text
+                      style={[
+                        styles.infoValue,
+                        { color: colors.text },
+                      ]}
+                    >
+                      {task.isActive ? t.common.yes : t.common.no}
+                    </Text>
+                  </View>
+                  <View style={styles.infoRow}>
+                    <Text
+                      style={[
+                        styles.infoLabel,
+                        { color: colors.subText },
+                      ]}
+                    >
+                      {t.task.autoRestart}:
+                    </Text>
+                    <Text
+                      style={[
+                        styles.infoValue,
+                        { color: colors.text },
+                      ]}
+                    >
+                      {task.autoRestart ? t.common.yes : t.common.no}
+                    </Text>
+                  </View>
+                  {task.lastCompletedDate && (
+                    <View style={styles.infoRow}>
+                      <Text
+                        style={[
+                          styles.infoLabel,
+                          { color: colors.subText },
+                        ]}
+                      >
+                        {t.task.lastCompleted}:
+                      </Text>
+                      <Text
+                        style={[
+                          styles.infoValue,
+                          { color: colors.text },
+                        ]}
+                      >
+                        {formatDate(task.lastCompletedDate)}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              </ScrollView>
+
+              <View style={styles.actionButtonsContainer}>
+                <TouchableOpacity 
+                  style={[styles.actionButton, styles.primaryButton]}
+                  onPress={onEdit}
+                  disabled={isLoading}
                 >
-                  <Ionicons name="calendar" size={20} color="white" />
-                  <Text style={[styles.buttonText, { fontSize: 14 }]}>
-                    {t.task.testCalendar}
+                  <Text style={styles.actionButtonText}>{t.common.edit}</Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity 
+                  style={[styles.actionButton, styles.secondaryButton]}
+                  onPress={onClose}
+                >
+                  <Text style={[styles.actionButtonText, { color: colors.text }]}>
+                    {t.common.cancel}
                   </Text>
                 </TouchableOpacity>
+              </View>
+
+              {alertVisible && (
+                <CustomAlert 
+                  visible={alertVisible}
+                  title={alertTitle}
+                  message={alertMessage}
+                  onClose={() => setAlertVisible(false)}
+                />
               )}
             </View>
-            
-            <TouchableOpacity
-              style={[
-                styles.button,
-                { backgroundColor: colors.error }
-              ]}
-              onPress={handleDelete}
-            >
-              <Ionicons name="trash" size={20} color="white" />
-              <Text style={styles.buttonText}>{t.common.delete}</Text>
-            </TouchableOpacity>
           </View>
-        </View>
-        
-        <CustomAlert
-          visible={alertVisible}
-          title={alertTitle}
-          message={alertMessage}
-          onClose={() => setAlertVisible(false)}
-        />
-      </View>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  keyboardAvoidingView: {
+    flex: 1,
+  },
   centeredView: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
     padding: 0,
   },
   loadingOverlay: {
@@ -800,13 +697,34 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     fontSize: 14,
   },
-  buttonContainer: {
+  settingRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  settingLabelContainer: {
+    flexDirection: 'column',
+  },
+  settingLabel: {
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  settingDescription: {
+    fontSize: 14,
+    color: 'gray',
+  },
+  settingValue: {
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  actionButtonsContainer: {
     marginTop: 0,
     paddingHorizontal: 20,
     paddingTop: 15,
     paddingBottom: 20,
   },
-  button: {
+  actionButton: {
     borderRadius: 10,
     padding: 15,
     alignItems: 'center',
@@ -819,7 +737,13 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 1.5,
   },
-  buttonText: {
+  primaryButton: {
+    backgroundColor: colors.primary,
+  },
+  secondaryButton: {
+    backgroundColor: colors.secondary,
+  },
+  actionButtonText: {
     color: 'white',
     fontSize: 16,
     fontWeight: 'bold',

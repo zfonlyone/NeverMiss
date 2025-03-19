@@ -33,10 +33,6 @@ export default function IndexScreen() {
     loadAppInfo();
   }, []);
 
-  const navigateTo = (screen: string) => {
-    router.push(screen);
-  };
-
   return (
     <SafeAreaView style={[
       styles.container,
@@ -61,7 +57,7 @@ export default function IndexScreen() {
               styles.menuItem,
               { backgroundColor: colors.card }
             ]}
-            onPress={() => navigateTo('/tasks')}
+            onPress={() => router.push('/tasks')}
           >
             <View style={[styles.iconContainer, { backgroundColor: '#4caf50' }]}>
               <Ionicons name="list" size={24} color="#ffffff" />
@@ -79,37 +75,13 @@ export default function IndexScreen() {
             <Ionicons name="chevron-forward" size={20} color={colors.subText} />
           </TouchableOpacity>
 
-          {/* 新建任务 */}
-          <TouchableOpacity
-            style={[
-              styles.menuItem,
-              { backgroundColor: colors.card }
-            ]}
-            onPress={() => navigateTo('/new-task')}
-          >
-            <View style={[styles.iconContainer, { backgroundColor: '#2196f3' }]}>
-              <Ionicons name="add-circle" size={24} color="#ffffff" />
-            </View>
-            <View style={styles.menuTextContainer}>
-              <Text style={[
-                styles.menuTitle,
-                { color: colors.text }
-              ]}>{t.menu.newTask}</Text>
-              <Text style={[
-                styles.menuDescription,
-                { color: colors.subText }
-              ]}>{t.menu.newTaskDesc}</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color={colors.subText} />
-          </TouchableOpacity>
-
           {/* 统计分析 */}
           <TouchableOpacity
             style={[
               styles.menuItem,
               { backgroundColor: colors.card }
             ]}
-            onPress={() => navigateTo('/statistics')}
+            onPress={() => router.push('/statistics')}
           >
             <View style={[styles.iconContainer, { backgroundColor: '#ff9800' }]}>
               <Ionicons name="bar-chart" size={24} color="#ffffff" />
@@ -133,7 +105,7 @@ export default function IndexScreen() {
               styles.menuItem,
               { backgroundColor: colors.card }
             ]}
-            onPress={() => navigateTo('/settings')}
+            onPress={() => router.push('/settings')}
           >
             <View style={[styles.iconContainer, { backgroundColor: '#9c27b0' }]}>
               <Ionicons name="settings" size={24} color="#ffffff" />

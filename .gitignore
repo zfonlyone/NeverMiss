@@ -138,3 +138,11 @@ yarn-error.*
 *.tsbuildinfo
 
 # @end expo-cli
+
+.rar
+.zip
+.7z
+.tar
+.tar.gz
+.tar.bz2
+.tar.xz

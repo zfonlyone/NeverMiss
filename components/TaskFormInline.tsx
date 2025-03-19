@@ -31,11 +31,11 @@ import { createTask, updateTask } from '../services/taskService';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { format, addDays } from 'date-fns';
-import { scheduleTestNotification } from '../services/notificationService';
 import { checkPermissionsForFeature, requestPermissionsForFeature } from '../services/permissionService';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useTheme } from '../contexts/ThemeContext';
 import lunarService from '../services/lunarService';
+import RecurrenceSettings from './RecurrenceSettings';
 
 interface TaskFormInlineProps {
   task?: Task;
@@ -109,14 +109,32 @@ export default function TaskFormInline({ task, onSave, onCancel }: TaskFormInlin
   };
 
   const handleSave = async () => {
-    // Validate form
-    const isValid = validateForm();
-    if (!isValid) {
-      return;
-    }
-
-    setIsLoading(true);
     try {
+      setIsLoading(true);
+      // 验证输入
+      if (!formData.title?.trim()) {
+        Alert.alert(t.validation.titleRequired);
+        setIsLoading(false);
+        return;
+      }
+
+      // 准备任务数据
+      const taskData: Partial<Task> = {
+        title: formData.title,
+        description: formData.description,
+        recurrencePattern: formData.recurrencePattern,
+        dateType: formData.dateType,
+        reminderOffset: parseInt(formData.reminderOffset.toString()),
+        reminderUnit: formData.reminderUnit,
+        reminderTime: {
+          hour: formData.reminderTime.hour,
+          minute: formData.reminderTime.minute
+        },
+        isActive: true,
+        autoRestart: true,
+        syncToCalendar: false
+      };
+
       // Check calendar permissions if needed
       if (formData.syncToCalendar) {
         const hasPermission = await checkPermissionsForFeature('calendar');
@@ -128,8 +146,7 @@ export default function TaskFormInline({ task, onSave, onCancel }: TaskFormInlin
               t.permissions.calendarPermissionMessage,
               [{ text: t.common.cancel }]
             );
-            setFormData({ ...formData, syncToCalendar: false });
-            return;
+            taskData.syncToCalendar = false;
           }
         }
       }
@@ -151,30 +168,16 @@ export default function TaskFormInline({ task, onSave, onCancel }: TaskFormInlin
       // Create or update task
       if (task) {
         // Update existing task
-        await updateTask(task.id, formData);
+        await updateTask(task.id, taskData);
       } else {
         // Create new task
-        await createTask(formData);
+        await createTask(taskData);
       }
-
-      // Test notification
-      const testDate = new Date();
-      testDate.setSeconds(testDate.getSeconds() + 30);
-      await scheduleTestNotification({
-        id: Date.now(),
-        title: t.task.testNotificationTitle,
-        body: t.task.testNotificationBody,
-        date: testDate
-      });
 
       onSave();
     } catch (error) {
-      console.error('Error saving task:', error);
-      Alert.alert(
-        t.common.error,
-        t.task.saveTaskFailed,
-        [{ text: t.common.cancel }]
-      );
+      console.error('保存任务时出错:', error);
+      Alert.alert(t.common.error, t.task.saveTaskFailed);
     } finally {
       setIsLoading(false);
     }
@@ -233,6 +236,21 @@ export default function TaskFormInline({ task, onSave, onCancel }: TaskFormInlin
       });
     }
     setShowReminderTimePicker(false);
+  };
+
+  const handleRecurrenceChange = (newPattern: RecurrencePattern) => {
+    setFormData({
+      ...formData,
+      recurrencePattern: newPattern
+    });
+  };
+
+  const handleDateTypeChange = (newDateType: DateType) => {
+    setUseLunar(newDateType === 'lunar');
+    setFormData({
+      ...formData,
+      dateType: newDateType
+    });
   };
 
   return (
@@ -303,219 +321,16 @@ export default function TaskFormInline({ task, onSave, onCancel }: TaskFormInlin
           />
         </View>
 
-        {/* Recurrence Type */}
-        <View style={styles.formGroup}>
-          <Text
-            style={[
-              styles.label,
-              { color: colors.text },
-            ]}
-          >
-            {t.task.recurrenceType}
-          </Text>
-          <View style={styles.recurrenceTypeContainer}>
-            <TouchableOpacity
-              style={[
-                styles.recurrenceTypeButton,
-                formData.recurrencePattern?.type === 'daily' && [styles.recurrenceTypeButtonActive, { backgroundColor: colors.primary }],
-                { borderColor: colors.border }
-              ]}
-              onPress={() => setFormData({
-                ...formData,
-                recurrencePattern: {
-                  type: 'daily',
-                  value: 1,
-                }
-              })}
-            >
-              <Text
-                style={[
-                  styles.recurrenceTypeText,
-                  formData.recurrencePattern?.type === 'daily' && styles.recurrenceTypeTextActive,
-                  { color: formData.recurrencePattern?.type === 'daily' ? 'white' : colors.text }
-                ]}
-              >
-                {t.task.daily}
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[
-                styles.recurrenceTypeButton,
-                formData.recurrencePattern?.type === 'weekly' && [styles.recurrenceTypeButtonActive, { backgroundColor: colors.primary }],
-                { borderColor: colors.border }
-              ]}
-              onPress={() => setFormData({
-                ...formData,
-                recurrencePattern: {
-                  type: 'weekly',
-                  value: 1,
-                }
-              })}
-            >
-              <Text
-                style={[
-                  styles.recurrenceTypeText,
-                  formData.recurrencePattern?.type === 'weekly' && styles.recurrenceTypeTextActive,
-                  { color: formData.recurrencePattern?.type === 'weekly' ? 'white' : colors.text }
-                ]}
-              >
-                {t.task.weekly}
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[
-                styles.recurrenceTypeButton,
-                formData.recurrencePattern?.type === 'monthly' && [styles.recurrenceTypeButtonActive, { backgroundColor: colors.primary }],
-                { borderColor: colors.border }
-              ]}
-              onPress={() => setFormData({
-                ...formData,
-                recurrencePattern: {
-                  type: 'monthly',
-                  value: 1,
-                }
-              })}
-            >
-              <Text
-                style={[
-                  styles.recurrenceTypeText,
-                  formData.recurrencePattern?.type === 'monthly' && styles.recurrenceTypeTextActive,
-                  { color: formData.recurrencePattern?.type === 'monthly' ? 'white' : colors.text }
-                ]}
-              >
-                {t.task.monthly}
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[
-                styles.recurrenceTypeButton,
-                formData.recurrencePattern?.type === 'custom' && [styles.recurrenceTypeButtonActive, { backgroundColor: colors.primary }],
-                { borderColor: colors.border }
-              ]}
-              onPress={() => setFormData({
-                ...formData,
-                recurrencePattern: {
-                  type: 'custom',
-                  value: 1,
-                  unit: 'days',
-                }
-              })}
-            >
-              <Text
-                style={[
-                  styles.recurrenceTypeText,
-                  formData.recurrencePattern?.type === 'custom' && styles.recurrenceTypeTextActive,
-                  { color: formData.recurrencePattern?.type === 'custom' ? 'white' : colors.text }
-                ]}
-              >
-                {t.task.custom}
-              </Text>
-            </TouchableOpacity>
-          </View>
+        {/* Recurrence Settings */}
+        <View style={styles.formSection}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>{t.task.recurrenceSettings}</Text>
           
-          {formData.recurrencePattern?.type === 'custom' && (
-            <View style={styles.customRecurrenceContainer}>
-              <Text style={[styles.reminderLabel, { color: colors.text }]}>{t.task.every}</Text>
-              <TextInput
-                style={[
-                  styles.input,
-                  styles.reminderOffsetInput,
-                  { 
-                    color: colors.text, 
-                    borderColor: errors.recurrenceValue ? colors.error : colors.border
-                  }
-                ]}
-                value={formData.recurrencePattern.value.toString()}
-                onChangeText={(text) => {
-                  const value = parseInt(text) || 1;
-                  setFormData({
-                    ...formData,
-                    recurrencePattern: {
-                      ...formData.recurrencePattern!,
-                      value,
-                    }
-                  });
-                }}
-                keyboardType="numeric"
-                placeholder="1"
-                placeholderTextColor={colors.subText}
-              />
-              <View style={styles.reminderUnitContainer}>
-                <TouchableOpacity
-                  style={[
-                    styles.reminderUnitButton,
-                    formData.recurrencePattern.unit === 'days' && [styles.reminderUnitButtonActive, { backgroundColor: colors.primary }],
-                    { borderColor: colors.border }
-                  ]}
-                  onPress={() => setFormData({
-                    ...formData,
-                    recurrencePattern: {
-                      ...formData.recurrencePattern!,
-                      unit: 'days',
-                    }
-                  })}
-                >
-                  <Text
-                    style={[
-                      styles.reminderUnitText,
-                      formData.recurrencePattern.unit === 'days' && styles.reminderUnitTextActive,
-                      { color: formData.recurrencePattern.unit === 'days' ? 'white' : colors.text }
-                    ]}
-                  >
-                    {t.task.days}
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[
-                    styles.reminderUnitButton,
-                    formData.recurrencePattern.unit === 'weeks' && [styles.reminderUnitButtonActive, { backgroundColor: colors.primary }],
-                    { borderColor: colors.border }
-                  ]}
-                  onPress={() => setFormData({
-                    ...formData,
-                    recurrencePattern: {
-                      ...formData.recurrencePattern!,
-                      unit: 'weeks',
-                    }
-                  })}
-                >
-                  <Text
-                    style={[
-                      styles.reminderUnitText,
-                      formData.recurrencePattern.unit === 'weeks' && styles.reminderUnitTextActive,
-                      { color: formData.recurrencePattern.unit === 'weeks' ? 'white' : colors.text }
-                    ]}
-                  >
-                    {t.task.weeks}
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[
-                    styles.reminderUnitButton,
-                    formData.recurrencePattern.unit === 'months' && [styles.reminderUnitButtonActive, { backgroundColor: colors.primary }],
-                    { borderColor: colors.border }
-                  ]}
-                  onPress={() => setFormData({
-                    ...formData,
-                    recurrencePattern: {
-                      ...formData.recurrencePattern!,
-                      unit: 'months',
-                    }
-                  })}
-                >
-                  <Text
-                    style={[
-                      styles.reminderUnitText,
-                      formData.recurrencePattern.unit === 'months' && styles.reminderUnitTextActive,
-                      { color: formData.recurrencePattern.unit === 'months' ? 'white' : colors.text }
-                    ]}
-                  >
-                    {t.task.months}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          )}
+          <RecurrenceSettings 
+            recurrencePattern={formData.recurrencePattern}
+            dateType={formData.dateType}
+            onRecurrenceChange={handleRecurrenceChange}
+            onDateTypeChange={handleDateTypeChange}
+          />
         </View>
 
         {/* Start Date */}
@@ -955,5 +770,13 @@ const styles = StyleSheet.create({
   },
   switch: {
     marginHorizontal: 4,
+  },
+  formSection: {
+    marginBottom: 16,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    marginBottom: 8,
+    fontWeight: '500',
   },
 }); 

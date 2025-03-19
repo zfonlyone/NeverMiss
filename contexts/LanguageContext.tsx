@@ -26,15 +26,24 @@ const LanguageContext = createContext<LanguageContextType>({
 
 // 获取设备默认语言
 const getDeviceLanguage = (): Language => {
-  // 获取设备语言
-  const deviceLanguage =
-    Platform.OS === 'ios'
-      ? NativeModules.SettingsManager.settings.AppleLocale ||
-        NativeModules.SettingsManager.settings.AppleLanguages[0]
-      : NativeModules.I18nManager.localeIdentifier;
+  try {
+    // 获取设备语言
+    let deviceLanguage = 'en';
+    
+    if (Platform.OS === 'ios') {
+      deviceLanguage = NativeModules.SettingsManager.settings.AppleLocale ||
+        NativeModules.SettingsManager.settings.AppleLanguages[0] || 'en';
+    } else {
+      // Android
+      deviceLanguage = NativeModules.I18nManager.localeIdentifier || 'en';
+    }
 
-  // 检查是否为中文
-  return deviceLanguage.startsWith('zh') ? 'zh' : 'en';
+    // 检查是否为中文
+    return deviceLanguage && typeof deviceLanguage === 'string' && deviceLanguage.startsWith('zh') ? 'zh' : 'en';
+  } catch (error) {
+    console.warn('获取设备语言失败:', error);
+    return 'en'; // 出错时使用英语作为默认语言
+  }
 };
 
 // 语言提供者组件

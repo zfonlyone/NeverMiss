@@ -5,34 +5,21 @@
  * Main application entry point
  */
 
-import { useEffect } from 'react';
-import { StatusBar } from 'expo-status-bar';
+import 'react-native-gesture-handler';
+import React from 'react';
+import { NavigationContainer } from '@react-navigation/native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { Slot } from 'expo-router';
-import * as SplashScreen from 'expo-splash-screen';
-import { initStorage } from './services/storageService';
-import { configureNotifications } from './services/notificationService';
-
-// Keep splash screen visible while resources are loading
-SplashScreen.preventAutoHideAsync().catch(() => {
-  /* reloading the app might trigger some race conditions, ignore them */
-});
+import MainNavigator from './app/navigation/MainNavigator';
+import { LanguageProvider } from './hooks/useLanguage';
 
 export default function App() {
-  useEffect(() => {
-    // Initialize app
-    const initApp = async () => {
-      await initStorage();
-      await configureNotifications();
-    };
-    
-    initApp();
-  }, []);
-
   return (
     <SafeAreaProvider>
-      <Slot />
-      <StatusBar style="auto" />
+      <LanguageProvider>
+        <NavigationContainer>
+          <MainNavigator />
+        </NavigationContainer>
+      </LanguageProvider>
     </SafeAreaProvider>
   );
 } 

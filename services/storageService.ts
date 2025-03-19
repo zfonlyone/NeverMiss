@@ -289,6 +289,21 @@ export const deleteTaskHistoryByCycleId = async (cycleId: number): Promise<boole
   }
 };
 
+/**
+ * Get task history by action type
+ * @param action The action type to filter by
+ * @returns Array of task history with the specified action
+ */
+export const getTaskHistoryByAction = async (action: string): Promise<TaskHistory[]> => {
+  try {
+    const history = await getTaskHistory();
+    return history.filter(item => item.action === action);
+  } catch (error) {
+    console.error(`获取动作类型 ${action} 的任务历史时出错:`, error);
+    throw error;
+  }
+};
+
 // 数据库信息和管理
 export const getDatabaseInfo = async (): Promise<{
   version: number;

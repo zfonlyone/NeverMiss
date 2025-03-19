@@ -115,7 +115,7 @@ export const exportDataToCSV = async (): Promise<{ success: boolean; filePath?: 
     let csvContent = 'App Version,DB Version,Task ID,Title,Description,Recurrence Type,Recurrence Value,Reminder Offset,Is Active,Created At\n';
     
     tasks.forEach((task: Task) => {
-      csvContent += `${appVersion},${dbVersion},${task.id},"${task.title}","${task.description || ''}",${task.recurrenceType},${task.recurrenceValue},${task.reminderOffset},${task.isActive},${task.createdAt}\n`;
+      csvContent += `${appVersion},${dbVersion},${task.id},"${task.title}","${task.description || ''}",${task.recurrencePattern.type},${task.recurrencePattern.value},${task.reminderOffset},${task.isActive},${task.createdAt}\n`;
     });
 
     // 生成文件名
@@ -224,8 +224,10 @@ export const importDataFromCSV = async (uri: string): Promise<{ success: boolean
         id: parseInt(values[2]),
         title: values[3].replace(/^"|"$/g, ''),
         description: values[4].replace(/^"|"$/g, ''),
-        recurrenceType: values[5] as any,
-        recurrenceValue: parseInt(values[6]),
+        recurrencePattern: {
+          type: values[5] as any,
+          value: parseInt(values[6]),
+        },
         reminderOffset: parseInt(values[7]),
         reminderUnit: 'minutes',
         reminderTime: {
@@ -237,6 +239,7 @@ export const importDataFromCSV = async (uri: string): Promise<{ success: boolean
         syncToCalendar: false,
         createdAt: values[9],
         updatedAt: new Date().toISOString(),
+        dateType: 'solar',
       };
 
       tasks.push(task);
@@ -249,5 +252,24 @@ export const importDataFromCSV = async (uri: string): Promise<{ success: boolean
   } catch (error) {
     console.error('导入CSV失败:', error);
     return { success: false, error: '导入CSV时发生错误' };
+  }
+};
+
+// Utility function to verify export data structure
+export const verifyExportData = async (exportData: ExportData): Promise<boolean> => {
+  try {
+    if (!exportData.appVersion || !exportData.dbVersion || !exportData.exportTimestamp || !exportData.data) {
+      return false;
+    }
+    
+    // 验证数据结构
+    if (!Array.isArray(exportData.data.tasks) || !Array.isArray(exportData.data.cycles)) {
+      return false;
+    }
+    
+    return true;
+  } catch (error) {
+    console.error('验证导出数据时出错:', error);
+    return false;
   }
 }; 

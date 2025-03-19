@@ -1,0 +1,112 @@
+# NeverMiss 项目结构说明
+
+## 项目概述
+
+NeverMiss 是一款任务管理应用，旨在帮助用户追踪和完成重要的任务和日程，支持农历和公历日期设置，以及多种提醒方式。
+
+## 目录结构
+
+```
+/
+├── app/                  # Expo Router应用入口
+├── assets/               # 静态资源（图片、字体等）
+├── components/           # 共享UI组件
+│   ├── TaskList.tsx      # 任务列表组件
+│   ├── TaskDetail.tsx    # 任务详情组件
+│   └── ...               # 其他共享组件
+├── components_deprecated/ # 已弃用的组件（待清理）
+├── constants/            # 常量定义
+├── contexts/             # React Context定义
+│   ├── LanguageContext.tsx  # 语言/国际化上下文
+│   ├── ThemeContext.tsx     # 主题上下文
+│   └── ...               # 其他上下文
+├── controllers/          # 控制器层（MVC架构）
+│   ├── TaskController.ts   # 任务管理控制器
+│   ├── TagController.ts    # 标签管理控制器
+│   ├── CalendarController.ts # 日历控制器
+│   ├── NotificationController.ts # 通知控制器
+│   └── index.ts          # 控制器统一导出
+├── hooks/                # 自定义React Hooks
+├── i18n/                 # 国际化框架
+├── locales/              # 国际化资源
+│   ├── en.ts             # 英文翻译
+│   └── zh.ts             # 中文翻译
+├── models/               # 数据模型
+│   ├── Task.ts           # 任务模型
+│   └── ...               # 其他模型
+├── screens/              # 应用屏幕
+│   ├── HomeScreen.tsx    # 主页屏幕
+│   └── ...               # 其他屏幕
+├── screens_deprecated/   # 已弃用的屏幕（待清理）
+├── services/             # 服务层
+│   ├── taskService.ts    # 任务数据服务
+│   ├── notificationService.ts  # 通知服务
+│   └── ...               # 其他服务
+├── theme/                # 主题定义
+├── types/                # 类型定义
+│   └── ...               # 共享类型定义
+└── utils/                # 工具函数
+    ├── dateUtils.ts      # 日期处理工具
+    └── ...               # 其他工具函数
+```
+
+## 架构说明
+
+本项目采用修改版的MVC架构：
+
+1. **模型层 (Models)**：`models/` 目录包含所有数据模型和类型定义，描述应用中的实体结构。
+
+2. **视图层 (Views)**：`components/`、`screens/` 和 `app/` 目录包含所有UI组件和页面，负责数据的展示和用户交互。
+
+3. **控制器层 (Controllers)**：`controllers/` 目录中的控制器负责处理业务逻辑，连接视图层和服务层。
+
+4. **服务层 (Services)**：`services/` 目录包含与外部系统交互的服务，如数据存储、通知和API调用。
+
+## 技术栈
+
+- **Framework**: React Native + Expo
+- **Navigation**: Expo Router
+- **Styling**: StyleSheet
+- **State Management**: React Context API
+- **Internationalization**: Custom i18n solution
+- **Storage**: AsyncStorage
+
+## 开发规范
+
+1. **文件命名**：
+   - 组件文件使用 PascalCase (如 `TaskList.tsx`)
+   - 非组件文件使用 camelCase (如 `dateUtils.ts`)
+   - 每个文件只导出一个主要组件/函数
+
+2. **导入顺序**：
+   - 外部库
+   - 内部模型/控制器
+   - 内部组件/hooks
+   - 样式/资源
+
+3. **代码组织**：
+   - 共享逻辑放在 controllers 和 utils 中
+   - UI相关逻辑放在组件内部
+   - Context用于全局状态管理
+
+4. **路径导入**：
+   - 使用相对路径 (例如: `../components/TaskList`)
+   - 避免过深的路径嵌套 (不超过2级 `../../`)
+
+5. **废弃代码处理**：
+   - 不再使用的组件或屏幕放入 `*_deprecated` 目录
+   - 定期清理废弃代码
+
+## 重要概念
+
+1. **Task (任务)**：核心数据结构，包含标题、描述、日期等基本信息。
+
+2. **TaskCycle (任务周期)**：任务的单个实例，包含开始日期、结束日期和完成状态。
+
+3. **ExtendedTask**：增强版任务，包含当前周期和其他计算属性。
+
+4. **Controllers**：处理业务逻辑，如任务创建、删除和状态更新。
+   - **TaskController**: 处理任务的创建、更新、删除和查询
+   - **TagController**: 处理任务标签管理
+   - **CalendarController**: 处理任务与日历的集成
+   - **NotificationController**: 处理任务提醒和通知 

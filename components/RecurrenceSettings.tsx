@@ -1,281 +1,512 @@
-import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, TextInput, ScrollView } from 'react-native';
 import { useTheme } from '@react-navigation/native';
 import { useLanguage } from '../hooks/useLanguage';
-import { RecurrenceType, RecurrenceUnit } from '../models/Task';
+import { 
+  RecurrenceType, 
+  RecurrenceUnit, 
+  RecurrencePattern, 
+  WeekDay, 
+  DateType,
+  WeekOfMonth
+} from '../models/Task';
+import { Picker } from '@react-native-picker/picker';
+import { Ionicons } from '@expo/vector-icons';
 
 interface RecurrenceSettingsProps {
-  recurrenceType: RecurrenceType;
-  recurrenceValue: number;
-  recurrenceUnit?: RecurrenceUnit;
-  onRecurrenceChange: (type: RecurrenceType, value: number, unit?: RecurrenceUnit) => void;
+  recurrencePattern: RecurrencePattern;
+  dateType: DateType;
+  onRecurrenceChange: (pattern: RecurrencePattern) => void;
+  onDateTypeChange?: (dateType: DateType) => void;
 }
 
 export default function RecurrenceSettings({
-  recurrenceType,
-  recurrenceValue,
-  recurrenceUnit,
+  recurrencePattern,
+  dateType,
   onRecurrenceChange,
+  onDateTypeChange,
 }: RecurrenceSettingsProps) {
   const { colors } = useTheme();
   const { t } = useLanguage();
+  const [customValue, setCustomValue] = useState(String(recurrencePattern.value || 1));
 
-  const [selectedType, setSelectedType] = React.useState<RecurrenceType>(recurrenceType);
-  const [selectedValue, setSelectedValue] = React.useState<number>(recurrenceValue);
-  const [selectedUnit, setSelectedUnit] = React.useState<RecurrenceUnit | undefined>(recurrenceUnit);
-
-  // 基本循环类型
+  // Basic recurrence types with their icons
   const basicTypes = [
-    { type: 'daily' as RecurrenceType, label: t.task.daily },
-    { type: 'weekly' as RecurrenceType, label: t.task.weekly },
-    { type: 'monthly' as RecurrenceType, label: t.task.monthly },
-    { type: 'custom' as RecurrenceType, label: t.task.custom },
+    { 
+      type: 'daily' as RecurrenceType, 
+      label: t.task.daily,
+      icon: (
+        <View style={[styles.calendarIcon, { backgroundColor: 'white' }]}>
+          <View style={styles.calendarHeader}>
+            <Text style={styles.calendarHeaderText}>{t.task.january.slice(0, 2)}</Text>
+          </View>
+          <Text style={styles.calendarContent}>17</Text>
+        </View>
+      )
+    },
+    { 
+      type: 'weekly' as RecurrenceType, 
+      label: t.task.weekly,
+      icon: (
+        <View style={[styles.calendarIcon, { backgroundColor: 'white' }]}>
+          <View style={styles.calendarHeader}>
+            <Text style={styles.calendarHeaderText}>{t.task.january.slice(0, 2)}</Text>
+          </View>
+          <Text style={styles.calendarContent}>W</Text>
+        </View>
+      )
+    },
+    { 
+      type: 'monthly' as RecurrenceType, 
+      label: t.task.monthly,
+      icon: (
+        <View style={[styles.calendarIcon, { backgroundColor: 'white' }]}>
+          <View style={styles.calendarHeader}>
+            <Text style={styles.calendarHeaderText}>{t.task.january.slice(0, 2)}</Text>
+          </View>
+          <Text style={styles.calendarContent}>31</Text>
+        </View>
+      )
+    },
+    { 
+      type: 'yearly' as RecurrenceType, 
+      label: t.task.yearly,
+      icon: (
+        <View style={[styles.calendarIcon, { backgroundColor: '#007AFF' }]}>
+          <View style={styles.calendarHeader}>
+            <Text style={styles.calendarHeaderText}>年</Text>
+          </View>
+          <Text style={[styles.calendarContent, { color: 'white' }]}>202</Text>
+        </View>
+      )
+    },
+    { 
+      type: 'weekOfMonth' as RecurrenceType, 
+      label: t.task.weekOfMonth,
+      icon: (
+        <Text style={styles.iconText}>|||</Text>
+      )
+    },
+    { 
+      type: 'custom' as RecurrenceType, 
+      label: t.task.custom,
+      icon: (
+        <Ionicons name="settings-outline" size={24} color="#666" />
+      )
+    },
   ];
 
-  // 自定义循环单位
-  const customUnits = [
-    { unit: 'days' as RecurrenceUnit, label: t.task.days },
-    { unit: 'weeks' as RecurrenceUnit, label: t.task.weeks },
-    { unit: 'months' as RecurrenceUnit, label: t.task.months },
+  // Date types
+  const dateTypes = [
+    { type: 'solar' as DateType, label: t.task.solarCalendar },
+    { type: 'lunar' as DateType, label: t.task.lunarCalendar },
   ];
 
-  // 每周几
-  const weekdays = [
-    { value: 0, label: '周日' },
-    { value: 1, label: '周一' },
-    { value: 2, label: '周二' },
-    { value: 3, label: '周三' },
-    { value: 4, label: '周四' },
-    { value: 5, label: '周五' },
-    { value: 6, label: '周六' },
-  ];
+  // Preset values for quick selection
+  const presetValues = [1, 2, 3, 7, 14, 30];
 
-  // 大小周选项
-  const alternateWeeks = [
-    { value: 1, label: '大周' },
-    { value: 2, label: '小周' },
-  ];
+  // Months
+  const months = Array.from({ length: 12 }, (_, i) => {
+    const monthKeys = ['january', 'february', 'march', 'april', 'may', 'june', 
+                      'july', 'august', 'september', 'october', 'november', 'december'];
+    return {
+      value: i + 1,
+      label: t.task[monthKeys[i]]
+    };
+  });
 
+  // Days
+  const days = Array.from({ length: 31 }, (_, i) => ({
+    value: i + 1,
+    label: `${i + 1} ${t.task.day}`
+  }));
+
+  // Handle type change
   const handleTypeChange = (type: RecurrenceType) => {
-    setSelectedType(type);
-    let value = selectedValue;
-    let unit = selectedUnit;
+    const newPattern: RecurrencePattern = {
+      ...recurrencePattern,
+      type,
+      value: 1,
+    };
 
-    // 重置值和单位
+    // Reset specific properties based on type
     if (type !== 'custom') {
-      value = 1;
-      unit = undefined;
+      newPattern.unit = undefined;
+    } else {
+      newPattern.unit = 'days';
     }
 
-    setSelectedValue(value);
-    setSelectedUnit(unit);
-    onRecurrenceChange(type, value, unit);
+    if (type !== 'weekly') {
+      newPattern.weekDay = undefined;
+    }
+
+    if (type !== 'monthly') {
+      newPattern.monthDay = undefined;
+    }
+
+    if (type !== 'yearly') {
+      newPattern.yearDay = undefined;
+      newPattern.month = undefined;
+    }
+
+    if (type !== 'weekOfMonth') {
+      newPattern.weekOfMonth = undefined;
+      newPattern.weekDay = undefined;
+      newPattern.month = undefined;
+    }
+
+    onRecurrenceChange(newPattern);
   };
 
+  // Handle value change
   const handleValueChange = (value: number) => {
-    setSelectedValue(value);
-    onRecurrenceChange(selectedType, value, selectedUnit);
+    onRecurrenceChange({
+      ...recurrencePattern,
+      value
+    });
+    setCustomValue(String(value));
   };
 
+  // Handle unit change
   const handleUnitChange = (unit: RecurrenceUnit) => {
-    setSelectedUnit(unit);
-    onRecurrenceChange(selectedType, selectedValue, unit);
+    onRecurrenceChange({
+      ...recurrencePattern,
+      unit
+    });
   };
 
-  return (
-    <View style={styles.container}>
-      <Text style={[styles.title, { color: colors.text }]}>{t.task.recurrenceType}</Text>
-      
-      {/* 基本循环类型选择 */}
-      <View style={styles.typeContainer}>
-        {basicTypes.map((item) => (
+  // Handle date type change
+  const handleDateTypeChange = (newDateType: DateType) => {
+    if (onDateTypeChange) {
+      onDateTypeChange(newDateType);
+    }
+  };
+
+  // Render date type selector (segmented control)
+  const renderDateTypeSelector = () => (
+    <View style={styles.section}>
+      <Text style={styles.sectionTitle}>{t.task.dateType}</Text>
+      <View style={styles.segmentedControl}>
+        {dateTypes.map((item, index) => (
           <TouchableOpacity
             key={item.type}
             style={[
-              styles.typeButton,
-              { 
-                backgroundColor: selectedType === item.type ? colors.primary : colors.card,
-                borderColor: colors.border,
-              },
+              styles.segmentButton,
+              dateType === item.type ? styles.segmentButtonActive : null,
+              index === 0 ? styles.segmentButtonLeft : null,
+              index === dateTypes.length - 1 ? styles.segmentButtonRight : null,
             ]}
-            onPress={() => handleTypeChange(item.type)}
+            onPress={() => handleDateTypeChange(item.type)}
           >
-            <Text
-              style={[
-                styles.typeText,
-                { color: selectedType === item.type ? '#fff' : colors.text },
-              ]}
-            >
+            <Text style={[
+              styles.segmentButtonText,
+              dateType === item.type ? styles.segmentButtonTextActive : null
+            ]}>
               {item.label}
             </Text>
           </TouchableOpacity>
         ))}
       </View>
+    </View>
+  );
 
-      {/* 自定义循环设置 */}
-      {selectedType === 'custom' && (
-        <View style={styles.customContainer}>
-          <Text style={[styles.subtitle, { color: colors.text }]}>{t.task.customRecurrence}</Text>
+  // Render recurrence type grid
+  const renderRecurrenceTypeSelector = () => (
+    <View style={styles.section}>
+      <Text style={styles.sectionTitle}>{t.task.recurrenceType}</Text>
+      <View style={styles.typeGrid}>
+        {basicTypes.map(item => {
+          const isActive = recurrencePattern.type === item.type;
+          const isYearly = item.type === 'yearly';
           
-          {/* 循环单位选择 */}
-          <View style={styles.unitContainer}>
-            {customUnits.map((item) => (
-              <TouchableOpacity
-                key={item.unit}
-                style={[
-                  styles.unitButton,
-                  { 
-                    backgroundColor: selectedUnit === item.unit ? colors.primary : colors.card,
-                    borderColor: colors.border,
-                  },
-                ]}
-                onPress={() => handleUnitChange(item.unit)}
-              >
-                <Text
-                  style={[
-                    styles.unitText,
-                    { color: selectedUnit === item.unit ? '#fff' : colors.text },
-                  ]}
-                >
+          return (
+            <TouchableOpacity
+              key={item.type}
+              style={[
+                styles.typeCard,
+                isActive && styles.typeCardActive,
+                isActive && isYearly && styles.yearlyCardActive
+              ]}
+              onPress={() => handleTypeChange(item.type)}
+            >
+              <View style={styles.typeCardContent}>
+                {item.icon}
+                <Text style={[
+                  styles.typeCardText,
+                  isActive && isYearly && styles.typeCardTextActive
+                ]}>
                   {item.label}
                 </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          {/* 每周几选择 */}
-          {selectedUnit === 'weeks' && (
-            <View style={styles.weekdayContainer}>
-              {weekdays.map((item) => (
-                <TouchableOpacity
-                  key={item.value}
-                  style={[
-                    styles.weekdayButton,
-                    { 
-                      backgroundColor: selectedValue === item.value ? colors.primary : colors.card,
-                      borderColor: colors.border,
-                    },
-                  ]}
-                  onPress={() => handleValueChange(item.value)}
-                >
-                  <Text
-                    style={[
-                      styles.weekdayText,
-                      { color: selectedValue === item.value ? '#fff' : colors.text },
-                    ]}
-                  >
-                    {item.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          )}
-
-          {/* 大小周选择 */}
-          {selectedUnit === 'weeks' && (
-            <View style={styles.alternateContainer}>
-              {alternateWeeks.map((item) => (
-                <TouchableOpacity
-                  key={item.value}
-                  style={[
-                    styles.alternateButton,
-                    { 
-                      backgroundColor: selectedValue === item.value ? colors.primary : colors.card,
-                      borderColor: colors.border,
-                    },
-                  ]}
-                  onPress={() => handleValueChange(item.value)}
-                >
-                  <Text
-                    style={[
-                      styles.alternateText,
-                      { color: selectedValue === item.value ? '#fff' : colors.text },
-                    ]}
-                  >
-                    {item.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          )}
-        </View>
-      )}
+              </View>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
     </View>
+  );
+
+  // Render value selector with preset buttons
+  const renderValueSelector = () => (
+    <View style={styles.section}>
+      <View style={styles.valueButtonsContainer}>
+        {presetValues.map(value => (
+          <TouchableOpacity
+            key={value}
+            style={[
+              styles.valueButton,
+              recurrencePattern.value === value && styles.valueButtonActive
+            ]}
+            onPress={() => handleValueChange(value)}
+          >
+            <Text style={[
+              styles.valueButtonText,
+              recurrencePattern.value === value && styles.valueButtonTextActive
+            ]}>
+              {value}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+      <View style={styles.valueInputContainer}>
+        <TextInput
+          style={styles.valueInput}
+          keyboardType="number-pad"
+          value={customValue}
+          onChangeText={(text) => {
+            setCustomValue(text);
+            const num = parseInt(text);
+            if (!isNaN(num) && num > 0) {
+              handleValueChange(num);
+            }
+          }}
+        />
+      </View>
+    </View>
+  );
+
+  // Render yearly date selector
+  const renderYearlyDateSelector = () => (
+    <View style={styles.section}>
+      <Text style={styles.sectionTitle}>{t.task.yearlyDate}</Text>
+      <View style={styles.pickerRow}>
+        <View style={[styles.pickerContainer, styles.halfPicker]}>
+          <Picker
+            selectedValue={recurrencePattern.month || 1}
+            style={styles.picker}
+            onValueChange={(value) => onRecurrenceChange({ ...recurrencePattern, month: value })}
+          >
+            {months.map(item => (
+              <Picker.Item key={item.value} label={item.label} value={item.value} />
+            ))}
+          </Picker>
+        </View>
+        <View style={[styles.pickerContainer, styles.halfPicker]}>
+          <Picker
+            selectedValue={recurrencePattern.monthDay || 1}
+            style={styles.picker}
+            onValueChange={(value) => onRecurrenceChange({ ...recurrencePattern, monthDay: value })}
+          >
+            {days.map(item => (
+              <Picker.Item key={item.value} label={item.label} value={item.value} />
+            ))}
+          </Picker>
+        </View>
+      </View>
+    </View>
+  );
+
+  return (
+    <ScrollView style={styles.container}>
+      <View style={styles.card}>
+        {onDateTypeChange && renderDateTypeSelector()}
+        {renderRecurrenceTypeSelector()}
+        {renderValueSelector()}
+        {recurrencePattern.type === 'yearly' && renderYearlyDateSelector()}
+      </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
+    flex: 1,
+    backgroundColor: '#f5f5f5',
+  },
+  card: {
+    margin: 16,
     padding: 16,
+    backgroundColor: 'white',
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
-  title: {
+  section: {
+    marginBottom: 20,
+  },
+  sectionTitle: {
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: '600',
     marginBottom: 12,
+    color: '#333',
   },
-  typeContainer: {
+  // Segmented control for date type
+  segmentedControl: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 16,
-  },
-  typeButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
     borderRadius: 8,
     borderWidth: 1,
+    borderColor: '#007AFF',
+    overflow: 'hidden',
   },
-  typeText: {
+  segmentButton: {
+    flex: 1,
+    paddingVertical: 10,
+    alignItems: 'center',
+    backgroundColor: 'white',
+  },
+  segmentButtonLeft: {
+    borderTopLeftRadius: 8,
+    borderBottomLeftRadius: 8,
+  },
+  segmentButtonRight: {
+    borderTopRightRadius: 8,
+    borderBottomRightRadius: 8,
+  },
+  segmentButtonActive: {
+    backgroundColor: '#007AFF',
+  },
+  segmentButtonText: {
+    color: '#007AFF',
     fontSize: 14,
+    fontWeight: '500',
   },
-  customContainer: {
-    marginTop: 16,
+  segmentButtonTextActive: {
+    color: 'white',
   },
-  subtitle: {
-    fontSize: 14,
-    marginBottom: 8,
-  },
-  unitContainer: {
+  // Type grid layout
+  typeGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 16,
+    justifyContent: 'space-between',
   },
-  unitButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
+  typeCard: {
+    width: '31%',
+    aspectRatio: 1,
+    marginBottom: 10,
+    borderRadius: 8,
     borderWidth: 1,
+    borderColor: '#E0E0E0',
+    backgroundColor: 'white',
+    overflow: 'hidden',
   },
-  unitText: {
-    fontSize: 14,
+  typeCardActive: {
+    borderColor: '#007AFF',
   },
-  weekdayContainer: {
+  yearlyCardActive: {
+    backgroundColor: '#007AFF',
+  },
+  typeCardContent: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 8,
+  },
+  typeCardText: {
+    fontSize: 12,
+    color: '#333',
+    marginTop: 4,
+    textAlign: 'center',
+  },
+  typeCardTextActive: {
+    color: 'white',
+  },
+  // Calendar icon
+  calendarIcon: {
+    width: 36,
+    height: 40,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+  calendarHeader: {
+    height: 14,
+    backgroundColor: 'red',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  calendarHeaderText: {
+    fontSize: 8,
+    color: 'white',
+    textAlign: 'center',
+  },
+  calendarContent: {
+    fontSize: 18,
+    textAlign: 'center',
+    flex: 1,
+    paddingTop: 4,
+  },
+  // Other icons
+  iconText: {
+    fontSize: 24,
+    color: '#666',
+  },
+  // Value buttons
+  valueButtonsContainer: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 16,
+    justifyContent: 'space-between',
+    marginBottom: 12,
   },
-  weekdayButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
+  valueButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     borderWidth: 1,
+    borderColor: '#007AFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'white',
   },
-  weekdayText: {
-    fontSize: 14,
+  valueButtonActive: {
+    backgroundColor: '#007AFF',
   },
-  alternateContainer: {
+  valueButtonText: {
+    fontSize: 16,
+    color: '#007AFF',
+    fontWeight: '500',
+  },
+  valueButtonTextActive: {
+    color: 'white',
+  },
+  valueInputContainer: {
+    width: 80,
+  },
+  valueInput: {
+    height: 40,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    fontSize: 16,
+  },
+  // Picker styles
+  pickerRow: {
     flexDirection: 'row',
-    gap: 8,
+    justifyContent: 'space-between',
   },
-  alternateButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
+  pickerContainer: {
     borderWidth: 1,
+    borderColor: '#E0E0E0',
+    borderRadius: 8,
+    backgroundColor: '#F8F8F8',
+    overflow: 'hidden',
   },
-  alternateText: {
-    fontSize: 14,
+  halfPicker: {
+    width: '48%',
+  },
+  picker: {
+    height: 150,
   },
 }); 

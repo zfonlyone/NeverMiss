@@ -1,6 +1,6 @@
 import { v4 as uuidv4 } from 'uuid';
 
-export type RecurrenceType = 'daily' | 'weekly' | 'monthly' | 'custom';
+export type RecurrenceType = 'daily' | 'weekly' | 'monthly' | 'yearly' | 'weekOfMonth' | 'custom';
 export type RecurrenceUnit = 'minutes' | 'hours' | 'days' | 'weeks' | 'months' | 'years';
 export type ReminderUnit = 'minutes' | 'hours' | 'days';
 export type TaskStatus = 'active' | 'inactive';
@@ -8,6 +8,7 @@ export type CycleStatus = 'pending' | 'completed' | 'failed';
 export type DateType = 'solar' | 'lunar';
 export type WeekDay = 0 | 1 | 2 | 3 | 4 | 5 | 6; // 0 = Sunday, 6 = Saturday
 export type WeekType = 'big' | 'small'; // 大周/小周
+export type WeekOfMonth = 1 | 2 | 3 | 4 | 5; // 1 = first week, 5 = last week
 
 export interface RecurrencePattern {
   type: RecurrenceType;
@@ -17,6 +18,9 @@ export interface RecurrencePattern {
   weekType?: WeekType;
   monthDay?: number; // 每月第几天
   yearDay?: number; // 每年第几天
+  month?: number; // 指定月份 (1-12)
+  weekOfMonth?: WeekOfMonth; // 第几周
+  isLeapMonth?: boolean; // 农历闰月
 }
 
 export interface TaskCycle {
@@ -53,6 +57,8 @@ export interface Task {
   updatedAt: string;
   currentCycle?: TaskCycle;
   lastCompletedDate?: string;
+  tags?: string[];
+  backgroundColor?: string;
 }
 
 export interface TaskWithCycles extends Task {
@@ -72,6 +78,8 @@ export interface CreateTaskInput {
   syncToCalendar?: boolean;
   startDate: string;
   dueDate: string;
+  tags?: string[];
+  backgroundColor?: string;
 }
 
 export interface UpdateTaskInput {
@@ -87,6 +95,8 @@ export interface UpdateTaskInput {
   syncToCalendar?: boolean;
   startDate?: string;
   dueDate?: string;
+  tags?: string[];
+  backgroundColor?: string;
 }
 
 export function createTask(
@@ -98,7 +108,9 @@ export function createTask(
   reminderTime: ReminderTime = { hour: 9, minute: 0 },
   autoRestart: boolean = true,
   dateType: DateType = 'solar',
-  recurrenceUnit?: RecurrenceUnit
+  recurrenceUnit?: RecurrenceUnit,
+  tags: string[] = [],
+  backgroundColor?: string
 ): Omit<Task, 'id'> {
   const now = new Date().toISOString();
   
@@ -119,6 +131,8 @@ export function createTask(
     syncToCalendar: false,
     createdAt: now,
     updatedAt: now,
+    tags,
+    backgroundColor,
   };
 }
 
@@ -127,6 +141,11 @@ export function validateTask(task: Partial<Task>): string[] {
   
   if (!task.title || task.title.trim() === '') {
     errors.push('任务标题不能为空');
+  }
+  
+  if (!task.recurrencePattern) {
+    errors.push('重复模式不能为空');
+    return errors;
   }
   
   if (task.recurrencePattern.value === undefined || task.recurrencePattern.value <= 0) {
