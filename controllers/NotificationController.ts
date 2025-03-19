@@ -7,16 +7,22 @@ import { saveNotificationPreference, getNotificationPreference } from '../servic
  */
 export const togglePersistentNotification = async (enabled: boolean) => {
   try {
+    let success = false;
+    
     if (enabled) {
-      await startForegroundNotificationService();
+      success = await startForegroundNotificationService();
     } else {
-      await stopForegroundNotificationService();
+      success = await stopForegroundNotificationService();
     }
     
-    // 保存用户偏好设置
-    await saveNotificationPreference('persistentNotification', enabled);
-    
-    return true;
+    if (success) {
+      // 保存用户偏好设置
+      await saveNotificationPreference('persistentNotification', enabled);
+      return true;
+    } else {
+      console.error('Failed to toggle persistent notification');
+      return false;
+    }
   } catch (error) {
     console.error('Error toggling persistent notification:', error);
     return false;

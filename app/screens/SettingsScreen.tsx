@@ -1,17 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Switch, TouchableOpacity, ScrollView, Platform, Alert, ActivityIndicator, Linking } from 'react-native';
+import { View, Text, StyleSheet, Switch, TouchableOpacity, ScrollView, Platform, Alert, ActivityIndicator, Linking, Modal } from 'react-native';
 import { togglePersistentNotification } from '../../controllers/NotificationController';
 import { getNotificationPreference } from '../../services/preferenceService';
 import { useLanguage, Language } from '../../contexts/LanguageContext';
 import { Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { exportDataToJSON, exportDataToCSV, shareFile, importDataFromJSON, importDataFromCSV } from '../../services/exportService';
-import { checkPermissionsForFeature, requestPermissionsForFeature } from '../../services/permissionService';
+import { checkPermissionsForFeature, requestPermissionsForFeature, checkNotificationPermission, checkCalendarPermission, requestNotificationPermission, requestCalendarPermission } from '../../services/permissionService';
 import { getDatabaseInfo as getDatabaseInfoService, resetDatabase } from '../../services/database';
 import { APP_INFO, getFullVersion } from '../../config/version';
 import * as DocumentPicker from 'expo-document-picker';
 import { List } from 'react-native-paper';
 import Constants from 'expo-constants';
+import { useTheme, ThemeMode } from '../../contexts/ThemeContext';
 
 interface DatabaseInfo {
   version: number;
@@ -23,17 +24,19 @@ interface DatabaseInfo {
 
 const SettingsScreen = () => {
   const { t, language, changeLanguage } = useLanguage();
+  const { themeMode, setThemeMode, colors, isDarkMode } = useTheme();
   const [isPersistentNotificationEnabled, setIsPersistentNotificationEnabled] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [dbInfo, setDbInfo] = useState<DatabaseInfo | null>(null);
-  const [isDarkMode, setIsDarkMode] = useState(false);
-  const [colors, setColors] = useState({ text: '#000', primary: '#007AFF' });
   const [isLanguageModalVisible, setIsLanguageModalVisible] = useState(false);
+  const [notificationPermission, setNotificationPermission] = useState<string>('undetermined');
+  const [calendarPermission, setCalendarPermission] = useState<string>('undetermined');
 
   useEffect(() => {
     // 加载设置
     loadSettings();
     loadDatabaseInfo();
+    checkPermissions();
   }, []);
   
   const loadSettings = async () => {
@@ -49,10 +52,28 @@ const SettingsScreen = () => {
       setDbInfo(info);
     } catch (error) {
       console.error('获取数据库信息失败:', error);
-      Alert.alert(t.common.error, t.settings.loadDatabaseFailed || '加载数据库信息失败');
+      Alert.alert(t.common.error, t.settings.loadDatabaseFailed);
     } finally {
       setIsLoading(false);
     }
+  };
+  
+  const checkPermissions = async () => {
+    const notifPermission = await checkNotificationPermission();
+    setNotificationPermission(notifPermission.status);
+    
+    const calPermission = await checkCalendarPermission();
+    setCalendarPermission(calPermission.status);
+  };
+  
+  const handleRequestNotificationPermission = async () => {
+    const result = await requestNotificationPermission();
+    setNotificationPermission(result.status);
+  };
+  
+  const handleRequestCalendarPermission = async () => {
+    const result = await requestCalendarPermission();
+    setCalendarPermission(result.status);
   };
   
   const handlePersistentNotificationToggle = async (value: boolean) => {
@@ -78,10 +99,14 @@ const SettingsScreen = () => {
 
   const handleChangeLanguage = async (lang: Language) => {
     try {
+      setIsLoading(true);
+      setIsLanguageModalVisible(false);
       await changeLanguage(lang);
+      setTimeout(() => setIsLoading(false), 500); // 给界面一点时间刷新
     } catch (error) {
       console.error('切换语言失败:', error);
       Alert.alert(t.common.error, t.settings.languageChangeFailed);
+      setIsLoading(false);
     }
   };
 
@@ -99,6 +124,26 @@ const SettingsScreen = () => {
       }
     } catch (error) {
       console.error('导出JSON失败:', error);
+      Alert.alert(t.common.error, t.settings.exportFailed);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  
+  const handleExportCSV = async () => {
+    setIsLoading(true);
+    try {
+      const result = await exportDataToCSV();
+      if (result.success && result.filePath) {
+        const shared = await shareFile(result.filePath);
+        if (!shared) {
+          Alert.alert(t.common.error, t.settings.cannotOpenUrl);
+        }
+      } else {
+        Alert.alert(t.common.error, result.error || t.settings.exportFailed);
+      }
+    } catch (error) {
+      console.error('导出CSV失败:', error);
       Alert.alert(t.common.error, t.settings.exportFailed);
     } finally {
       setIsLoading(false);
@@ -133,14 +178,42 @@ const SettingsScreen = () => {
     }
   };
 
+  const handleImportCSV = async () => {
+    setIsLoading(true);
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: 'text/csv',
+        copyToCacheDirectory: true
+      });
+
+      if (result.assets && result.assets.length > 0) {
+        const importResult = await importDataFromCSV(result.assets[0].uri);
+        if (importResult.success) {
+          Alert.alert(
+            t.common.success,
+            t.settings.importSuccess
+          );
+          await loadDatabaseInfo();
+        } else {
+          Alert.alert(t.common.error, importResult.error || t.settings.importFailed);
+        }
+      }
+    } catch (error) {
+      console.error('导入CSV失败:', error);
+      Alert.alert(t.common.error, t.settings.importFailed);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleResetDatabase = async () => {
     Alert.alert(
-      t.settings.resetData || '重置数据',
-      t.settings.resetDataConfirmation || '确定要重置数据库吗？此操作将删除所有数据且不可恢复。',
+      t.settings.resetData,
+      t.settings.resetDataConfirmation,
       [
-        { text: t.common.cancel || '取消', style: 'cancel' },
+        { text: t.common.cancel, style: 'cancel' },
         {
-          text: t.settings.reset || '重置',
+          text: t.settings.reset,
           style: 'destructive',
           onPress: async () => {
             try {
@@ -148,10 +221,10 @@ const SettingsScreen = () => {
               await resetDatabase();
               const info = await getDatabaseInfoService();
               setDbInfo(info);
-              Alert.alert(t.common.success, t.settings.resetDataSuccess || '数据库已重置');
+              Alert.alert(t.common.success, t.settings.resetDataSuccess);
             } catch (error) {
               console.error('重置数据库失败:', error);
-              Alert.alert(t.common.error, t.settings.resetDataFailed || '重置数据库失败');
+              Alert.alert(t.common.error, t.settings.resetDataFailed);
             } finally {
               setIsLoading(false);
             }
@@ -159,11 +232,6 @@ const SettingsScreen = () => {
         },
       ]
     );
-  };
-
-  const toggleDarkMode = () => {
-    setIsDarkMode(!isDarkMode);
-    setColors({ ...colors, primary: isDarkMode ? '#81b0ff' : '#007AFF' });
   };
 
   const setLanguageModalVisible = (visible: boolean) => {
@@ -186,157 +254,349 @@ const SettingsScreen = () => {
 
   // Section: Theme settings
   const renderThemeSettings = () => (
-    <View style={styles.section}>
+    <View style={[styles.section, { backgroundColor: colors.card }]}>
       <Text style={[styles.sectionTitle, { color: colors.text }]}>{t.settings.themeSettings}</Text>
       <List.Item
-        title={t.settings.darkMode}
-        description={isDarkMode ? t.common.enabled : t.common.disabled}
-        left={props => <List.Icon {...props} icon="theme-light-dark" />}
+        title={t.settings.themeAuto}
+        description={t.settings.themeAutoDesc}
+        left={props => <List.Icon {...props} icon="brightness-auto" color={colors.text} />}
         right={props => (
           <Switch
-            value={isDarkMode}
-            onValueChange={toggleDarkMode}
-            trackColor={{ false: '#767577', true: '#81b0ff' }}
-            thumbColor={isDarkMode ? '#007AFF' : '#f4f3f4'}
+            value={themeMode === 'auto'}
+            onValueChange={(value) => {
+              if (value) setThemeMode('auto');
+            }}
+            trackColor={{ false: colors.border, true: colors.primary }}
+            thumbColor={themeMode === 'auto' ? '#007AFF' : '#f4f3f4'}
           />
         )}
+        titleStyle={{ color: colors.text }}
+        descriptionStyle={{ color: colors.subText }}
+      />
+      <List.Item
+        title={t.settings.themeLight}
+        description={t.settings.themeLightDesc}
+        left={props => <List.Icon {...props} icon="white-balance-sunny" color={colors.text} />}
+        right={props => (
+          <Switch
+            value={themeMode === 'light'}
+            onValueChange={(value) => {
+              if (value) setThemeMode('light');
+            }}
+            trackColor={{ false: colors.border, true: colors.primary }}
+            thumbColor={themeMode === 'light' ? '#007AFF' : '#f4f3f4'}
+          />
+        )}
+        titleStyle={{ color: colors.text }}
+        descriptionStyle={{ color: colors.subText }}
+      />
+      <List.Item
+        title={t.settings.themeDark}
+        description={t.settings.themeDarkDesc}
+        left={props => <List.Icon {...props} icon="moon-waning-crescent" color={colors.text} />}
+        right={props => (
+          <Switch
+            value={themeMode === 'dark'}
+            onValueChange={(value) => {
+              if (value) setThemeMode('dark');
+            }}
+            trackColor={{ false: colors.border, true: colors.primary }}
+            thumbColor={themeMode === 'dark' ? '#007AFF' : '#f4f3f4'}
+          />
+        )}
+        titleStyle={{ color: colors.text }}
+        descriptionStyle={{ color: colors.subText }}
       />
     </View>
   );
 
   // Section: Language settings
   const renderLanguageSettings = () => (
-    <View style={styles.section}>
+    <View style={[styles.section, { backgroundColor: colors.card }]}>
       <Text style={[styles.sectionTitle, { color: colors.text }]}>{t.settings.languageSettings}</Text>
       <List.Item
         title={t.settings.language}
         description={language === 'en' ? t.settings.englishName : t.settings.chineseName}
-        left={props => <List.Icon {...props} icon="translate" />}
+        left={props => <List.Icon {...props} icon="translate" color={colors.text} />}
         onPress={() => setLanguageModalVisible(true)}
-        right={props => <List.Icon {...props} icon="chevron-right" />}
+        right={props => <List.Icon {...props} icon="chevron-right" color={colors.text} />}
+        titleStyle={{ color: colors.text }}
+        descriptionStyle={{ color: colors.subText }}
+      />
+    </View>
+  );
+
+  // Section: Permission settings
+  const renderPermissionSettings = () => (
+    <View style={[styles.section, { backgroundColor: colors.card }]}>
+      <Text style={[styles.sectionTitle, { color: colors.text }]}>{t.settings.permissionSettings}</Text>
+      <List.Item
+        title={t.permissions.notificationPermissionTitle}
+        description={t.settings.notificationPermissionDesc}
+        left={props => <List.Icon {...props} icon="bell" color={colors.text} />}
+        right={props => (
+          notificationPermission === 'granted' ? (
+            <View style={[styles.permissionGranted, { backgroundColor: colors.success }]}>
+              <Text style={styles.permissionText}>{t.settings.permissionGranted}</Text>
+            </View>
+          ) : (
+            <TouchableOpacity 
+              style={[styles.permissionRequest, { backgroundColor: colors.primary }]}
+              onPress={handleRequestNotificationPermission}
+            >
+              <Text style={styles.permissionText}>{t.settings.permissionRequest}</Text>
+            </TouchableOpacity>
+          )
+        )}
+        titleStyle={{ color: colors.text }}
+        descriptionStyle={{ color: colors.subText }}
+      />
+      <List.Item
+        title={t.permissions.calendarPermissionTitle}
+        description={t.settings.calendarPermissionDesc}
+        left={props => <List.Icon {...props} icon="calendar" color={colors.text} />}
+        right={props => (
+          calendarPermission === 'granted' ? (
+            <View style={[styles.permissionGranted, { backgroundColor: colors.success }]}>
+              <Text style={styles.permissionText}>{t.settings.permissionGranted}</Text>
+            </View>
+          ) : (
+            <TouchableOpacity 
+              style={[styles.permissionRequest, { backgroundColor: colors.primary }]}
+              onPress={handleRequestCalendarPermission}
+            >
+              <Text style={styles.permissionText}>{t.settings.permissionRequest}</Text>
+            </TouchableOpacity>
+          )
+        )}
+        titleStyle={{ color: colors.text }}
+        descriptionStyle={{ color: colors.subText }}
       />
     </View>
   );
 
   // Section: Notification settings 
   const renderNotificationSettings = () => (
-    <View style={styles.section}>
+    <View style={[styles.section, { backgroundColor: colors.card }]}>
       <Text style={[styles.sectionTitle, { color: colors.text }]}>{t.settings.notificationSettings}</Text>
       <List.Item
         title={t.settings.persistentNotification}
         description={t.settings.persistentNotificationDesc + 
           (Platform.OS === 'android' ? t.settings.persistentNotificationAndroidNote : '')}
-        left={props => <List.Icon {...props} icon="bell" />}
+        left={props => <List.Icon {...props} icon="bell" color={colors.text} />}
         right={props => (
           <Switch
             value={isPersistentNotificationEnabled}
             onValueChange={handlePersistentNotificationToggle}
-            trackColor={{ false: '#767577', true: '#81b0ff' }}
+            trackColor={{ false: colors.border, true: colors.primary }}
             thumbColor={isPersistentNotificationEnabled ? '#007AFF' : '#f4f3f4'}
           />
         )}
+        titleStyle={{ color: colors.text }}
+        descriptionStyle={{ color: colors.subText }}
       />
     </View>
   );
 
   // Section: Data management
   const renderDataManagement = () => (
-    <View style={styles.section}>
+    <View style={[styles.section, { backgroundColor: colors.card }]}>
       <Text style={[styles.sectionTitle, { color: colors.text }]}>{t.settings.dataManagement}</Text>
+      
+      {/* 数据库信息 */}
+      {dbInfo && (
+        <View style={styles.dbInfoContainer}>
+          <Text style={[styles.dbInfoTitle, { color: colors.text }]}>{t.settings.databaseInfo}</Text>
+          <Text style={[styles.dbInfoText, { color: colors.text }]}>DB v{dbInfo.version}</Text>
+          <View style={[styles.separator, { backgroundColor: colors.border }]} />
+        </View>
+      )}
+      
       <List.Item
         title={t.settings.exportJSON}
         description={t.settings.exportJSONDesc}
-        left={props => <List.Icon {...props} icon="export" />}
+        left={props => <List.Icon {...props} icon="export" color={colors.text} />}
         onPress={handleExportJSON}
+        titleStyle={{ color: colors.text }}
+        descriptionStyle={{ color: colors.subText }}
+      />
+      <List.Item
+        title={t.settings.exportCSV}
+        description={t.settings.exportCSVDesc}
+        left={props => <List.Icon {...props} icon="file-delimited" color={colors.text} />}
+        onPress={handleExportCSV}
+        titleStyle={{ color: colors.text }}
+        descriptionStyle={{ color: colors.subText }}
       />
       <List.Item
         title={t.settings.importJSON}
         description={t.settings.importJSONDesc}
-        left={props => <List.Icon {...props} icon="import" />}
+        left={props => <List.Icon {...props} icon="import" color={colors.text} />}
         onPress={handleImportJSON}
+        titleStyle={{ color: colors.text }}
+        descriptionStyle={{ color: colors.subText }}
+      />
+      <List.Item
+        title={t.settings.importCSV}
+        description={t.settings.importCSVDesc}
+        left={props => <List.Icon {...props} icon="file-delimited-outline" color={colors.text} />}
+        onPress={handleImportCSV}
+        titleStyle={{ color: colors.text }}
+        descriptionStyle={{ color: colors.subText }}
       />
       <List.Item
         title={t.settings.resetData}
         description={t.settings.resetDataDesc}
-        left={props => <List.Icon {...props} icon="delete" />}
+        left={props => <List.Icon {...props} icon="delete" color={colors.text} />}
         onPress={handleResetDatabase}
+        titleStyle={{ color: colors.text }}
+        descriptionStyle={{ color: colors.subText }}
       />
     </View>
   );
 
-  // Database information display
-  const renderDatabaseInfo = () => {
-    if (!dbInfo) return null;
-    return (
-      <View style={styles.databaseInfo}>
-        <Text style={[styles.dbInfoText, { color: colors.text }]}>DB v{dbInfo.version}</Text>
-        <Text style={[styles.dbInfoText, { color: colors.text }]}>{t.settings.tasksCount}: {dbInfo.tasksCount}</Text>
-        <Text style={[styles.dbInfoText, { color: colors.text }]}>{t.settings.cyclesCount}: {dbInfo.cyclesCount}</Text>
-        <Text style={[styles.dbInfoText, { color: colors.text }]}>{t.settings.historyCount}: {dbInfo.historyCount}</Text>
-      </View>
-    );
-  };
-
   // Section: About
   const renderAbout = () => (
-    <View style={styles.section}>
+    <View style={[styles.section, { backgroundColor: colors.card }]}>
       <Text style={[styles.sectionTitle, { color: colors.text }]}>{t.settings.about}</Text>
       <List.Item
         title={t.settings.appName}
         description={`${t.settings.version}: ${Constants.expoConfig?.version || '1.0.0'}`}
-        left={props => <List.Icon {...props} icon="information" />}
+        left={props => <List.Icon {...props} icon="information" color={colors.text} />}
+        titleStyle={{ color: colors.text }}
+        descriptionStyle={{ color: colors.subText }}
       />
       <List.Item
         title={t.settings.author}
         description={t.settings.authorName}
-        left={props => <List.Icon {...props} icon="account" />}
+        left={props => <List.Icon {...props} icon="account" color={colors.text} />}
+        titleStyle={{ color: colors.text }}
+        descriptionStyle={{ color: colors.subText }}
+      />
+      <List.Item
+        title={t.settings.github}
+        description={t.settings.githubLink}
+        left={props => <List.Icon {...props} icon="github" color={colors.text} />}
+        onPress={() => handleOpenURL('https://github.com/zfonlyone/NeverMiss')}
+        titleStyle={{ color: colors.text }}
+        descriptionStyle={{ color: colors.subText }}
       />
       <List.Item
         title={t.settings.feedback}
-        left={props => <List.Icon {...props} icon="email" />}
+        left={props => <List.Icon {...props} icon="email" color={colors.text} />}
         onPress={() => handleOpenURL('mailto:allenliu@aliyun.com')}
+        titleStyle={{ color: colors.text }}
       />
       <List.Item
         title={t.settings.review}
-        left={props => <List.Icon {...props} icon="star" />}
+        left={props => <List.Icon {...props} icon="star" color={colors.text} />}
         onPress={() => handleOpenURL('https://play.google.com/store/apps/details?id=com.allenliu.nevermiss')}
+        titleStyle={{ color: colors.text }}
       />
       <List.Item
         title={t.settings.privacyPolicy}
-        left={props => <List.Icon {...props} icon="shield" />}
+        left={props => <List.Icon {...props} icon="shield" color={colors.text} />}
         onPress={() => handleOpenURL('https://www.privacypolicies.com/live/f5578f9b-b599-4966-a30d-10baa8b4e4a3')}
+        titleStyle={{ color: colors.text }}
       />
       <List.Item
         title={t.settings.termsOfService}
-        left={props => <List.Icon {...props} icon="file-document" />}
+        left={props => <List.Icon {...props} icon="file-document" color={colors.text} />}
         onPress={() => handleOpenURL('https://www.privacypolicies.com/live/f5578f9b-b599-4966-a30d-10baa8b4e4a3')}
+        titleStyle={{ color: colors.text }}
       />
     </View>
   );
 
+  // 语言选择模态框
+  const renderLanguageModal = () => (
+    <Modal
+      visible={isLanguageModalVisible}
+      transparent={true}
+      animationType="fade"
+      onRequestClose={() => setIsLanguageModalVisible(false)}
+    >
+      <TouchableOpacity
+        style={styles.modalOverlay}
+        activeOpacity={1}
+        onPress={() => setIsLanguageModalVisible(false)}
+      >
+        <View style={[styles.modalContent, { backgroundColor: colors.card }]}>
+          <Text style={[styles.modalTitle, { color: colors.text }]}>{t.settings.language}</Text>
+          
+          <TouchableOpacity
+            style={[
+              styles.languageItem,
+              language === 'en' && styles.selectedLanguage,
+              { borderBottomColor: colors.border }
+            ]}
+            onPress={() => handleChangeLanguage('en')}
+          >
+            <View style={styles.languageContent}>
+              <Text style={[styles.languageTitle, { color: colors.text }]}>{t.settings.englishName}</Text>
+              <Text style={[styles.languageDesc, { color: colors.subText }]}>{t.settings.englishDesc}</Text>
+            </View>
+            {language === 'en' && <Ionicons name="checkmark" size={24} color={colors.primary} />}
+          </TouchableOpacity>
+          
+          <TouchableOpacity
+            style={[
+              styles.languageItem,
+              language === 'zh' && styles.selectedLanguage
+            ]}
+            onPress={() => handleChangeLanguage('zh')}
+          >
+            <View style={styles.languageContent}>
+              <Text style={[styles.languageTitle, { color: colors.text }]}>{t.settings.chineseName}</Text>
+              <Text style={[styles.languageDesc, { color: colors.subText }]}>{t.settings.chineseDesc}</Text>
+            </View>
+            {language === 'zh' && <Ionicons name="checkmark" size={24} color={colors.primary} />}
+          </TouchableOpacity>
+          
+          <TouchableOpacity
+            style={[styles.button, { backgroundColor: colors.primary }]}
+            onPress={() => setIsLanguageModalVisible(false)}
+          >
+            <Text style={styles.buttonText}>{t.common.close}</Text>
+          </TouchableOpacity>
+        </View>
+      </TouchableOpacity>
+    </Modal>
+  );
+
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       <Stack.Screen
         options={{
           title: t.settings.title,
           headerShown: true,
+          headerStyle: {
+            backgroundColor: colors.card,
+          },
+          headerTintColor: colors.text,
+          headerTitleStyle: {
+            color: colors.text,
+          },
+          headerShadowVisible: false,
         }}
       />
       
       {isLoading && (
         <View style={styles.loadingOverlay}>
-          <ActivityIndicator size="large" color="#007AFF" />
+          <ActivityIndicator size="large" color={colors.primary} />
         </View>
       )}
       
       <ScrollView style={styles.settingsContainer}>
         {renderThemeSettings()}
         {renderLanguageSettings()}
+        {renderPermissionSettings()}
         {renderNotificationSettings()}
         {renderDataManagement()}
-        {renderDatabaseInfo()}
         {renderAbout()}
       </ScrollView>
+      
+      {renderLanguageModal()}
     </View>
   );
 };
@@ -344,7 +604,6 @@ const SettingsScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
   },
   title: {
     fontSize: 24,
@@ -357,7 +616,6 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   section: {
-    backgroundColor: 'white',
     borderRadius: 8,
     padding: 16,
     margin: 16,
@@ -373,8 +631,6 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     marginBottom: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
     paddingBottom: 8,
   },
   settingItem: {
@@ -468,12 +724,64 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     zIndex: 1000,
   },
-  databaseInfo: {
-    padding: 16,
+  dbInfoContainer: {
+    marginBottom: 16,
+  },
+  dbInfoTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 8,
   },
   dbInfoText: {
-    fontSize: 16,
-    fontWeight: '500',
+    fontSize: 14,
+    marginBottom: 4,
+  },
+  separator: {
+    height: 1,
+    backgroundColor: '#e0e0e0',
+    marginTop: 8,
+    marginBottom: 8,
+  },
+  permissionGranted: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  permissionRequest: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  permissionText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    width: '80%',
+    borderRadius: 12,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 16,
+    textAlign: 'center',
   },
 });
 

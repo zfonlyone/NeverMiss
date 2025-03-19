@@ -208,41 +208,57 @@ export async function cleanupNotifications(): Promise<void> {
   }
 }
 
-const FOREGROUND_NOTIFICATION_TASK = 'FOREGROUND_NOTIFICATION_TASK';
+const FOREGROUND_NOTIFICATION_ID = 'foreground-notification-id';
 
 /**
  * 创建并启动前台通知服务
  */
 export const startForegroundNotificationService = async () => {
-  // 注册前台任务
-  TaskManager.defineTask(FOREGROUND_NOTIFICATION_TASK, () => {
-    // 保持任务运行
-    return TaskManager.TaskExecutionResult.SUCCESS;
-  });
+  try {
+    // 创建通知频道 (仅Android需要)
+    if (Platform.OS === 'android') {
+      await Notifications.setNotificationChannelAsync('foreground-service', {
+        name: 'Foreground Service',
+        importance: Notifications.AndroidImportance.LOW,
+        vibrationPattern: [0, 0, 0, 0],
+        lightColor: '#FF231F7C',
+      });
+    }
 
-  // 创建通知频道
-  await Notifications.setNotificationChannelAsync('foreground-service', {
-    name: 'Foreground Service',
-    importance: Notifications.AndroidImportance.LOW,
-    vibrationPattern: [0, 0, 0, 0],
-    lightColor: '#FF231F7C',
-  });
-
-  // 启动前台服务
-  await Notifications.startForegroundNotificationAsync(FOREGROUND_NOTIFICATION_TASK, {
-    content: {
-      title: 'NeverMiss 运行中',
-      body: '应用正在后台运行以确保不错过任何任务',
-      data: { },
-    },
-    trigger: null,
-  });
+    // 使用普通通知替代前台服务通知
+    const notificationId = await Notifications.scheduleNotificationAsync({
+      content: {
+        title: 'NeverMiss 运行中',
+        body: '应用正在后台运行以确保不错过任何任务',
+        data: {},
+        ...(Platform.OS === 'android' && { 
+          channelId: 'foreground-service',
+          autoCancel: false,
+          ongoing: true
+        }),
+      },
+      trigger: null
+    });
+    
+    console.log(`持久通知已启动，ID: ${notificationId}`);
+    return true;
+  } catch (error) {
+    console.error('启动持久通知失败:', error);
+    return false;
+  }
 };
 
 /**
  * 停止前台通知服务
  */
 export const stopForegroundNotificationService = async () => {
-  await Notifications.dismissAllNotificationsAsync();
-  await TaskManager.unregisterTaskAsync(FOREGROUND_NOTIFICATION_TASK);
+  try {
+    // 取消所有通知
+    await Notifications.dismissAllNotificationsAsync();
+    console.log('持久通知已停止');
+    return true;
+  } catch (error) {
+    console.error('停止持久通知失败:', error);
+    return false;
+  }
 }; 
