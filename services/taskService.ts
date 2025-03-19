@@ -29,6 +29,7 @@ import {
 } from './storageService';
 import { format, addDays, addWeeks, addMonths, addYears } from 'date-fns';
 import lunarService from './lunarService';
+import { setCheckOverdueTasksCallback } from './backgroundTaskService';
 
 interface TaskCycleWithTask extends TaskCycle {
   recurrencePattern: RecurrencePattern;
@@ -1025,11 +1026,8 @@ export const getCompletedTaskHistory = async (): Promise<Array<{ task: Task; his
  * @returns Array of task history with 'overdue' action
  */
 export const getOverdueTaskHistory = async (): Promise<Array<{ task: Task; history: TaskHistory }>> => {
-  try {
-    const history = await getTaskHistoryByAction('overdue');
-    return history;
-  } catch (error) {
-    console.error('获取逾期任务历史时出错:', error);
-    throw error;
-  }
-}; 
+  return getTaskHistoryByAction('overdue');
+};
+
+// 设置回调函数，解决循环依赖问题
+setCheckOverdueTasksCallback(checkAndUpdateOverdueTasks); 

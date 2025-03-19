@@ -276,6 +276,8 @@ export default {
     exportCSVDesc: '导出任务到CSV文件',
     importJSON: '导入数据 (JSON)',
     importJSONDesc: '从JSON文件导入任务和循环',
+    importCSV: '导入数据 (CSV)',
+    importCSVDesc: '从CSV文件导入任务',
     resetData: '重置数据',
     resetDataDesc: '删除所有任务和循环数据',
     resetDataConfirmation: '您确定要重置数据库吗？这将删除所有数据且无法恢复。',

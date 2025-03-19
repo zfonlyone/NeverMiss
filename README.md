@@ -27,9 +27,10 @@
 ## 📱 截图
 
 <div align="center">
-  <img src="assets/screenshots/home.png" alt="主页" width="200">
+  <img src="assets/screenshots/main.png" alt="主页" width="200">
   <img src="assets/screenshots/task.png" alt="任务详情" width="200">
   <img src="assets/screenshots/form.png" alt="创建任务" width="200">
+  <img src="assets/screenshots/setting.png" alt="设置界面" width="200">
 </div>
 
 ## 🚀 快速开始

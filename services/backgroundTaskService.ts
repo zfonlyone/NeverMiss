@@ -1,18 +1,39 @@
 import * as BackgroundFetch from 'expo-background-fetch';
 import * as TaskManager from 'expo-task-manager';
-import { checkAndUpdateOverdueTasks } from './taskService';
 import { Platform } from 'react-native';
 
 // Define the background task name
 export const BACKGROUND_TASK_NAME = 'CHECK_OVERDUE_TASKS';
+
+// 定义一个将由外部设置的全局回调函数
+let checkOverdueTasksCallback: (() => Promise<{
+  checkedCount: number;
+  overdueCount: number;
+}>) | null = null;
+
+// 设置回调函数的方法
+export const setCheckOverdueTasksCallback = (
+  callback: () => Promise<{
+    checkedCount: number;
+    overdueCount: number;
+  }>
+) => {
+  checkOverdueTasksCallback = callback;
+};
 
 // Register the task handler
 TaskManager.defineTask(BACKGROUND_TASK_NAME, async () => {
   try {
     console.log('[BackgroundTask] Running background task to check overdue tasks');
     
-    // Check for overdue tasks and update them
-    const result = await checkAndUpdateOverdueTasks();
+    // 检查回调函数是否已设置
+    if (!checkOverdueTasksCallback) {
+      console.log('[BackgroundTask] No callback function set, skipping');
+      return BackgroundFetch.BackgroundFetchResult.NoData;
+    }
+    
+    // 通过回调函数调用任务检查功能
+    const result = await checkOverdueTasksCallback();
     
     console.log(`[BackgroundTask] Checked ${result.checkedCount} tasks, found ${result.overdueCount} overdue`);
     
@@ -135,7 +156,11 @@ export const scheduleOneTimeCheck = async (): Promise<boolean> => {
       // Use setTimeout to trigger the task after 60 seconds
       setTimeout(async () => {
         console.log('Executing one-time check for overdue tasks');
-        await checkAndUpdateOverdueTasks();
+        if (checkOverdueTasksCallback) {
+          await checkOverdueTasksCallback();
+        } else {
+          console.log('No callback function set, skipping overdue task check');
+        }
       }, 60 * 1000);
       
       return true;
@@ -151,7 +176,11 @@ export const scheduleOneTimeCheck = async (): Promise<boolean> => {
       // Manually trigger the task after a delay
       setTimeout(async () => {
         console.log('Executing one-time check for overdue tasks');
-        await checkAndUpdateOverdueTasks();
+        if (checkOverdueTasksCallback) {
+          await checkOverdueTasksCallback();
+        } else {
+          console.log('No callback function set, skipping overdue task check');
+        }
       }, 60 * 1000);
       
       return true;

@@ -13,7 +13,6 @@ import { TaskCycle } from '../models/TaskCycle';
 import { registerBackgroundTask, unregisterBackgroundTask } from './backgroundTaskService';
 import { checkNotificationPermission, requestNotificationPermission } from './permissionService';
 import * as TaskManager from 'expo-task-manager';
-import * as TaskManager from 'expo-task-manager';
 
 // Configure notifications
 export async function configureNotifications(): Promise<boolean> {

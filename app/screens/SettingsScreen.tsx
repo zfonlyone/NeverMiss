@@ -415,31 +415,31 @@ const SettingsScreen = () => {
       <List.Item
         title={t.settings.exportJSON}
         description={t.settings.exportJSONDesc}
-        left={props => <List.Icon {...props} icon="export" color={colors.text} />}
+        left={props => <List.Icon {...props} icon="file-export" color={colors.text} />}
         onPress={handleExportJSON}
-        titleStyle={{ color: colors.text }}
-        descriptionStyle={{ color: colors.subText }}
-      />
-      <List.Item
-        title={t.settings.exportCSV}
-        description={t.settings.exportCSVDesc}
-        left={props => <List.Icon {...props} icon="file-delimited" color={colors.text} />}
-        onPress={handleExportCSV}
         titleStyle={{ color: colors.text }}
         descriptionStyle={{ color: colors.subText }}
       />
       <List.Item
         title={t.settings.importJSON}
         description={t.settings.importJSONDesc}
-        left={props => <List.Icon {...props} icon="import" color={colors.text} />}
+        left={props => <List.Icon {...props} icon="file-import" color={colors.text} />}
         onPress={handleImportJSON}
+        titleStyle={{ color: colors.text }}
+        descriptionStyle={{ color: colors.subText }}
+      />
+      <List.Item
+        title={t.settings.exportCSV}
+        description={t.settings.exportCSVDesc}
+        left={props => <List.Icon {...props} icon="file-upload" color={colors.text} />}
+        onPress={handleExportCSV}
         titleStyle={{ color: colors.text }}
         descriptionStyle={{ color: colors.subText }}
       />
       <List.Item
         title={t.settings.importCSV}
         description={t.settings.importCSVDesc}
-        left={props => <List.Icon {...props} icon="file-delimited-outline" color={colors.text} />}
+        left={props => <List.Icon {...props} icon="file-download" color={colors.text} />}
         onPress={handleImportCSV}
         titleStyle={{ color: colors.text }}
         descriptionStyle={{ color: colors.subText }}
@@ -484,7 +484,7 @@ const SettingsScreen = () => {
       <List.Item
         title={t.settings.feedback}
         left={props => <List.Icon {...props} icon="email" color={colors.text} />}
-        onPress={() => handleOpenURL('mailto:allenliu@aliyun.com')}
+        onPress={() => handleOpenURL('mailto:zfonlyone@outlook.com')}
         titleStyle={{ color: colors.text }}
       />
       <List.Item
