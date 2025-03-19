@@ -12,6 +12,7 @@ import { Task } from '../models/Task';
 import { TaskCycle } from '../models/TaskCycle';
 import { registerBackgroundTask, unregisterBackgroundTask } from './backgroundTaskService';
 import { checkNotificationPermission, requestNotificationPermission } from './permissionService';
+import * as TaskManager from 'expo-task-manager';
 
 // Configure notifications
 export async function configureNotifications(): Promise<boolean> {
@@ -205,4 +206,43 @@ export async function cleanupNotifications(): Promise<void> {
   } catch (error) {
     console.error('Error cleaning up notifications:', error);
   }
-} 
+}
+
+const FOREGROUND_NOTIFICATION_TASK = 'FOREGROUND_NOTIFICATION_TASK';
+
+/**
+ * 创建并启动前台通知服务
+ */
+export const startForegroundNotificationService = async () => {
+  // 注册前台任务
+  TaskManager.defineTask(FOREGROUND_NOTIFICATION_TASK, () => {
+    // 保持任务运行
+    return TaskManager.TaskExecutionResult.SUCCESS;
+  });
+
+  // 创建通知频道
+  await Notifications.setNotificationChannelAsync('foreground-service', {
+    name: 'Foreground Service',
+    importance: Notifications.AndroidImportance.LOW,
+    vibrationPattern: [0, 0, 0, 0],
+    lightColor: '#FF231F7C',
+  });
+
+  // 启动前台服务
+  await Notifications.startForegroundNotificationAsync(FOREGROUND_NOTIFICATION_TASK, {
+    content: {
+      title: 'NeverMiss 运行中',
+      body: '应用正在后台运行以确保不错过任何任务',
+      data: { },
+    },
+    trigger: null,
+  });
+};
+
+/**
+ * 停止前台通知服务
+ */
+export const stopForegroundNotificationService = async () => {
+  await Notifications.dismissAllNotificationsAsync();
+  await TaskManager.unregisterTaskAsync(FOREGROUND_NOTIFICATION_TASK);
+}; 

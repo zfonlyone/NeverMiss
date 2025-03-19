@@ -12,7 +12,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useLanguage } from '../../hooks/useLanguage';
 
-export type SortOption = 'title' | 'dueDate' | 'createdAt' | 'lastUpdated';
+export type SortOption = 'title' | 'dueDate' | 'startDate' | 'createdAt' | 'lastUpdated';
 export type SortDirection = 'asc' | 'desc';
 export type TaskStatusFilter = 'all' | 'active' | 'completed' | 'overdue';
 
@@ -27,7 +27,7 @@ export interface FilterOptions {
 
 interface TaskListFilterProps {
   filterOptions: FilterOptions;
-  onFilterChange: (newOptions: FilterOptions) => void;
+  onFilterChange: (options: FilterOptions) => void;
   availableTags: string[];
 }
 
@@ -101,16 +101,19 @@ export default function TaskListFilter({
     
     switch (filterOptions.sortBy) {
       case 'title':
-        sortText = t.task.sortByTitle;
+        sortText = t.task.sortByName;
         break;
       case 'dueDate':
         sortText = t.task.sortByDueDate;
         break;
+      case 'startDate':
+        sortText = t.task.sortByStartDate;
+        break;
       case 'createdAt':
-        sortText = t.task.sortByCreatedDate;
+        sortText = t.task.sortByCreatedDate || '创建日期';
         break;
       case 'lastUpdated':
-        sortText = t.task.sortByLastUpdated;
+        sortText = t.task.sortByLastUpdated || '最后更新';
         break;
     }
     
@@ -118,52 +121,64 @@ export default function TaskListFilter({
     return sortText;
   };
 
+  // 状态筛选项
+  const handleStatusFilter = (status: TaskStatusFilter) => {
+    const newOptions = { ...filterOptions, statusFilter: status };
+    setTempOptions(newOptions);
+    onFilterChange(newOptions);
+    setFilterModalVisible(false);
+  };
+
   return (
     <View style={styles.container}>
       {/* 搜索栏 */}
-      <View style={styles.searchBar}>
-        <Ionicons name="search" size={20} color="#666" style={styles.searchIcon} />
+      <View style={styles.searchContainer}>
+        <Ionicons name="search" size={20} color="#aaa" style={styles.searchIcon} />
         <TextInput
           style={styles.searchInput}
           placeholder={t.task.searchPlaceholder}
           value={filterOptions.searchText}
           onChangeText={handleSearchChange}
-          returnKeyType="search"
           clearButtonMode="while-editing"
         />
-        
-        {/* 显示筛选条件数量 */}
-        {(filterOptions.statusFilter !== 'all' || 
-         filterOptions.tagsFilter.length > 0 || 
-         !filterOptions.showDisabled) && (
-          <View style={styles.filterBadge}>
-            <Text style={styles.filterBadgeText}>
-              {(filterOptions.statusFilter !== 'all' ? 1 : 0) + 
-               (filterOptions.tagsFilter.length > 0 ? 1 : 0) + 
-               (!filterOptions.showDisabled ? 1 : 0)}
-            </Text>
-          </View>
-        )}
-        
-        {/* 筛选按钮 */}
-        <TouchableOpacity 
-          style={styles.iconButton} 
-          onPress={() => {
-            setTempOptions({ ...filterOptions });
-            setFilterModalVisible(true);
-          }}
-        >
-          <Ionicons name="filter" size={22} color="#666" />
-        </TouchableOpacity>
-        
-        {/* 排序按钮 */}
-        <TouchableOpacity 
-          style={styles.iconButton} 
-          onPress={() => setSortModalVisible(true)}
-        >
-          <Ionicons name="swap-vertical" size={22} color="#666" />
-        </TouchableOpacity>
+        {filterOptions.searchText ? (
+          <TouchableOpacity onPress={() => handleSearchChange('')}>
+            <Ionicons name="close-circle" size={20} color="#aaa" />
+          </TouchableOpacity>
+        ) : null}
       </View>
+
+      {/* 显示筛选条件数量 */}
+      {(filterOptions.statusFilter !== 'all' || 
+       filterOptions.tagsFilter.length > 0 || 
+       !filterOptions.showDisabled) && (
+        <View style={styles.filterBadge}>
+          <Text style={styles.filterBadgeText}>
+            {(filterOptions.statusFilter !== 'all' ? 1 : 0) + 
+             (filterOptions.tagsFilter.length > 0 ? 1 : 0) + 
+             (!filterOptions.showDisabled ? 1 : 0)}
+          </Text>
+        </View>
+      )}
+      
+      {/* 筛选按钮 */}
+      <TouchableOpacity 
+        style={styles.iconButton} 
+        onPress={() => {
+          setTempOptions({ ...filterOptions });
+          setFilterModalVisible(true);
+        }}
+      >
+        <Ionicons name="filter" size={22} color="#666" />
+      </TouchableOpacity>
+      
+      {/* 排序按钮 */}
+      <TouchableOpacity 
+        style={styles.iconButton} 
+        onPress={() => setSortModalVisible(true)}
+      >
+        <Ionicons name="swap-vertical" size={22} color="#666" />
+      </TouchableOpacity>
 
       {/* 筛选模态框 */}
       <Modal
@@ -183,74 +198,46 @@ export default function TaskListFilter({
 
             <ScrollView style={styles.modalScroll}>
               {/* 任务状态筛选 */}
-              <Text style={styles.sectionTitle}>{t.task.status}</Text>
+              <Text style={styles.sectionTitle}>{t.task.statusFilter}</Text>
               <View style={styles.statusOptions}>
                 <TouchableOpacity
                   style={[
-                    styles.statusOption,
-                    tempOptions.statusFilter === 'all' && styles.statusOptionSelected
+                    styles.statusOption, 
+                    filterOptions.statusFilter === 'all' && styles.selectedStatusOption
                   ]}
-                  onPress={() => handleStatusFilterChange('all')}
+                  onPress={() => handleStatusFilter('all')}
                 >
-                  <Text 
-                    style={[
-                      styles.statusOptionText,
-                      tempOptions.statusFilter === 'all' && styles.statusOptionTextSelected
-                    ]}
-                  >
-                    {t.task.statusAll}
-                  </Text>
+                  <Text style={styles.statusText}>{t.task.statusAll}</Text>
                 </TouchableOpacity>
                 
                 <TouchableOpacity
                   style={[
                     styles.statusOption,
-                    tempOptions.statusFilter === 'active' && styles.statusOptionSelected
+                    filterOptions.statusFilter === 'active' && styles.selectedStatusOption
                   ]}
-                  onPress={() => handleStatusFilterChange('active')}
+                  onPress={() => handleStatusFilter('active')}
                 >
-                  <Text 
-                    style={[
-                      styles.statusOptionText,
-                      tempOptions.statusFilter === 'active' && styles.statusOptionTextSelected
-                    ]}
-                  >
-                    {t.task.statusInProgress}
-                  </Text>
+                  <Text style={styles.statusText}>{t.task.statusActive}</Text>
                 </TouchableOpacity>
                 
                 <TouchableOpacity
                   style={[
                     styles.statusOption,
-                    tempOptions.statusFilter === 'completed' && styles.statusOptionSelected
+                    filterOptions.statusFilter === 'completed' && styles.selectedStatusOption
                   ]}
-                  onPress={() => handleStatusFilterChange('completed')}
+                  onPress={() => handleStatusFilter('completed')}
                 >
-                  <Text 
-                    style={[
-                      styles.statusOptionText,
-                      tempOptions.statusFilter === 'completed' && styles.statusOptionTextSelected
-                    ]}
-                  >
-                    {t.task.statusCompleted}
-                  </Text>
+                  <Text style={styles.statusText}>{t.task.statusCompleted}</Text>
                 </TouchableOpacity>
                 
                 <TouchableOpacity
                   style={[
                     styles.statusOption,
-                    tempOptions.statusFilter === 'overdue' && styles.statusOptionSelected
+                    filterOptions.statusFilter === 'overdue' && styles.selectedStatusOption
                   ]}
-                  onPress={() => handleStatusFilterChange('overdue')}
+                  onPress={() => handleStatusFilter('overdue')}
                 >
-                  <Text 
-                    style={[
-                      styles.statusOptionText,
-                      tempOptions.statusFilter === 'overdue' && styles.statusOptionTextSelected
-                    ]}
-                  >
-                    {t.task.statusOverdue}
-                  </Text>
+                  <Text style={styles.statusText}>{t.task.statusOverdue}</Text>
                 </TouchableOpacity>
               </View>
 
@@ -337,7 +324,7 @@ export default function TaskListFilter({
                 style={styles.sortOption}
                 onPress={() => handleSortChange('title', 'asc')}
               >
-                <Text style={styles.sortOptionText}>{t.task.sortByTitle} - {t.task.ascending}</Text>
+                <Text style={styles.sortOptionText}>{t.task.sortByName} - {t.task.ascending}</Text>
                 {filterOptions.sortBy === 'title' && filterOptions.sortDirection === 'asc' && (
                   <Ionicons name="checkmark" size={20} color="#007AFF" />
                 )}
@@ -347,7 +334,7 @@ export default function TaskListFilter({
                 style={styles.sortOption}
                 onPress={() => handleSortChange('title', 'desc')}
               >
-                <Text style={styles.sortOptionText}>{t.task.sortByTitle} - {t.task.descending}</Text>
+                <Text style={styles.sortOptionText}>{t.task.sortByName} - {t.task.descending}</Text>
                 {filterOptions.sortBy === 'title' && filterOptions.sortDirection === 'desc' && (
                   <Ionicons name="checkmark" size={20} color="#007AFF" />
                 )}
@@ -369,6 +356,26 @@ export default function TaskListFilter({
               >
                 <Text style={styles.sortOptionText}>{t.task.sortByDueDate} - {t.task.descending}</Text>
                 {filterOptions.sortBy === 'dueDate' && filterOptions.sortDirection === 'desc' && (
+                  <Ionicons name="checkmark" size={20} color="#007AFF" />
+                )}
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={styles.sortOption}
+                onPress={() => handleSortChange('startDate', 'asc')}
+              >
+                <Text style={styles.sortOptionText}>{t.task.sortByStartDate} - {t.task.ascending}</Text>
+                {filterOptions.sortBy === 'startDate' && filterOptions.sortDirection === 'asc' && (
+                  <Ionicons name="checkmark" size={20} color="#007AFF" />
+                )}
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={styles.sortOption}
+                onPress={() => handleSortChange('startDate', 'desc')}
+              >
+                <Text style={styles.sortOptionText}>{t.task.sortByStartDate} - {t.task.descending}</Text>
+                {filterOptions.sortBy === 'startDate' && filterOptions.sortDirection === 'desc' && (
                   <Ionicons name="checkmark" size={20} color="#007AFF" />
                 )}
               </TouchableOpacity>
@@ -446,7 +453,7 @@ export default function TaskListFilter({
               </Text>
               <TouchableOpacity 
                 onPress={() => {
-                  const newOptions = { ...filterOptions, statusFilter: 'all' };
+                  const newOptions = { ...filterOptions, statusFilter: 'all' as TaskStatusFilter };
                   onFilterChange(newOptions);
                 }}
                 style={styles.clearFilterButton}
@@ -511,22 +518,30 @@ export default function TaskListFilter({
 
 const styles = StyleSheet.create({
   container: {
-    marginBottom: 8,
-  },
-  searchBar: {
+    backgroundColor: 'white',
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'white',
-    borderRadius: 12,
-    paddingHorizontal: 12,
+    paddingHorizontal: 16,
     paddingVertical: 8,
-    marginHorizontal: 16,
-    marginVertical: 8,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
     shadowOpacity: 0.1,
-    shadowRadius: 2,
+    shadowRadius: 1.5,
     elevation: 2,
+    zIndex: 10,
+    marginBottom: 8,
+  },
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    backgroundColor: '#f6f6f6',
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    height: 40,
   },
   searchIcon: {
     marginRight: 8,
@@ -535,6 +550,7 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 40,
     fontSize: 16,
+    color: '#333',
   },
   iconButton: {
     padding: 8,
@@ -604,14 +620,11 @@ const styles = StyleSheet.create({
     marginRight: 8,
     marginBottom: 8,
   },
-  statusOptionSelected: {
+  selectedStatusOption: {
     backgroundColor: '#007AFF',
   },
-  statusOptionText: {
+  statusText: {
     fontSize: 14,
-    color: '#333',
-  },
-  statusOptionTextSelected: {
     color: 'white',
   },
   switchRow: {

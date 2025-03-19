@@ -345,7 +345,9 @@ export default function TaskFormInline({ task, onSave, onCancel }: TaskFormInlin
               {t.task.startDate}
             </Text>
             <View style={styles.dateTypeSwitch}>
-              <Text style={[styles.dateTypeText, { color: !useLunar ? colors.primary : colors.text }]}>Solar</Text>
+              <Text style={[styles.dateTypeText, { color: !useLunar ? colors.primary : colors.text }]}>
+                {t.task.solarCalendar}
+              </Text>
               <Switch
                 value={useLunar}
                 onValueChange={(value) => {
@@ -357,7 +359,9 @@ export default function TaskFormInline({ task, onSave, onCancel }: TaskFormInlin
                 }}
                 style={styles.switch}
               />
-              <Text style={[styles.dateTypeText, { color: useLunar ? colors.primary : colors.text }]}>Lunar</Text>
+              <Text style={[styles.dateTypeText, { color: useLunar ? colors.primary : colors.text }]}>
+                {t.task.lunarCalendar}
+              </Text>
             </View>
           </View>
           <TouchableOpacity

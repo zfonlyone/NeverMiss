@@ -23,23 +23,60 @@ export async function getAppInfo(): Promise<AppInfo> {
   };
 }
 
-// 获取数据库版本
-export async function getDatabaseVersion(): Promise<{
-  dbVersion: number;
-  appVersion: string;
-}> {
+// 存储键
+const STORAGE_KEYS = {
+  TASKS: '@NeverMiss:tasks',
+  TASK_CYCLES: '@NeverMiss:task_cycles',
+  TASK_HISTORY: '@NeverMiss:task_history',
+  DATABASE_VERSION: 'nevermiss_db_version'
+};
+
+/**
+ * 获取数据库版本
+ * @returns 数据库版本号
+ */
+export const getDatabaseVersion = async (): Promise<number> => {
   try {
-    const version = await AsyncStorage.getItem('nevermiss_db_version');
+    const version = await AsyncStorage.getItem(STORAGE_KEYS.DATABASE_VERSION);
+    return version ? parseInt(version) : APP_INFO.DATABASE_VERSION;
+  } catch (error) {
+    console.error('获取数据库版本出错:', error);
+    return APP_INFO.DATABASE_VERSION;
+  }
+};
+
+/**
+ * 获取数据库信息
+ * @returns 数据库信息对象
+ */
+export const getDatabaseInfo = async () => {
+  try {
+    const version = await getDatabaseVersion();
+    
+    // 获取任务数量
+    const tasksJSON = await AsyncStorage.getItem(STORAGE_KEYS.TASKS);
+    const tasks = tasksJSON ? JSON.parse(tasksJSON) : [];
+    
+    // 获取周期数量
+    const cyclesJSON = await AsyncStorage.getItem(STORAGE_KEYS.TASK_CYCLES);
+    const cycles = cyclesJSON ? JSON.parse(cyclesJSON) : [];
+    
+    // 获取历史记录数量
+    const historyJSON = await AsyncStorage.getItem(STORAGE_KEYS.TASK_HISTORY);
+    const history = historyJSON ? JSON.parse(historyJSON) : [];
     
     return {
-      dbVersion: version ? parseInt(version) : 0,
-      appVersion: getFullVersion()
+      version: version,
+      appVersion: APP_INFO.VERSION,
+      tasksCount: tasks.length,
+      cyclesCount: cycles.length,
+      historyCount: history.length
     };
   } catch (error) {
-    console.error('获取数据库版本时出错:', error);
+    console.error('获取数据库信息出错:', error);
     throw error;
   }
-}
+};
 
 // 初始化数据库函数
 export async function initDatabase() {
@@ -171,50 +208,22 @@ export const clearDatabase = async (): Promise<void> => {
   }
 };
 
-// 重置数据库
+/**
+ * 重置数据库
+ */
 export const resetDatabase = async (): Promise<void> => {
   try {
-    await clearDatabase();
-    await initDatabase();
-    console.log('数据库重置成功');
+    // 清空所有数据
+    await AsyncStorage.setItem(STORAGE_KEYS.TASKS, JSON.stringify([]));
+    await AsyncStorage.setItem(STORAGE_KEYS.TASK_CYCLES, JSON.stringify([]));
+    await AsyncStorage.setItem(STORAGE_KEYS.TASK_HISTORY, JSON.stringify([]));
+    
+    // 重置数据库版本为当前版本
+    await AsyncStorage.setItem(STORAGE_KEYS.DATABASE_VERSION, APP_INFO.DATABASE_VERSION.toString());
+    
+    console.log('数据库已重置');
   } catch (error) {
     console.error('重置数据库时出错:', error);
-    throw error;
-  }
-};
-
-// 获取数据库信息
-export const getDatabaseInfo = async (): Promise<{
-  version: number;
-  appVersion: string;
-  tasksCount: number;
-  cyclesCount: number;
-  historyCount: number;
-  settings: Settings;
-}> => {
-  try {
-    const { dbVersion, appVersion } = await getDatabaseVersion();
-    const settings = await getSettings();
-    
-    const tasksJson = await AsyncStorage.getItem('nevermiss_tasks') || '[]';
-    const tasks = JSON.parse(tasksJson);
-    
-    const cyclesJson = await AsyncStorage.getItem('nevermiss_task_cycles') || '[]';
-    const cycles = JSON.parse(cyclesJson);
-    
-    const historyJson = await AsyncStorage.getItem('nevermiss_task_history') || '[]';
-    const history = JSON.parse(historyJson);
-    
-    return {
-      version: dbVersion,
-      appVersion,
-      tasksCount: tasks.length,
-      cyclesCount: cycles.length,
-      historyCount: history.length,
-      settings
-    };
-  } catch (error) {
-    console.error('获取数据库信息时出错:', error);
     throw error;
   }
 };
