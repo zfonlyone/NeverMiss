@@ -237,7 +237,7 @@ export default function TaskFormScreen({ taskId }: TaskFormScreenProps) {
     if (selectedTime) {
       setReminderTime({
         hour: selectedTime.getHours(),
-        minute: selectedTime.getMinutes()
+        minute: selectedTime.getMinutes() 
       });
     }
   };
