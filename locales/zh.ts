@@ -13,6 +13,7 @@ export default {
     enabled: '已启用',
     disabled: '已禁用',
     close: '关闭',
+    clear: '清除',
   },
   app: {
     tagline: '永不错过重要任务',
@@ -231,6 +232,14 @@ export default {
     reset: '重置',
     apply: '应用',
     completedDate: '完成日期',
+    specialDates: '特殊日期',
+    selectSpecialDate: '选择特殊日期',
+    searchSpecialDates: '搜索特殊日期...',
+    holidays: '节假日',
+    solarTerms: '节气',
+    noSpecialDateSelected: '未选择特殊日期',
+    noMatchingDates: '没有匹配的日期',
+    select: '选择',
   },
   validation: {
     titleRequired: '请输入任务标题',

@@ -18,6 +18,7 @@ import { useTheme } from '../../contexts/ThemeContext';
 import RecurrenceSelector from '../components/RecurrenceSelector';
 import TagSelector from '../components/TagSelector';
 import ColorSelector from '../components/ColorSelector';
+import SpecialDateSelector from '../components/SpecialDateSelector';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
@@ -28,7 +29,8 @@ import {
   DateType,
   RecurrenceType,
   ReminderUnit,
-  validateTask
+  validateTask,
+  SpecialDate
 } from '../../models/Task';
 import { createTask as createTaskService, updateTask as updateTaskService, getTask as getTaskById } from '../../services/taskService';
 import RNPickerSelect from 'react-native-picker-select';
@@ -82,6 +84,9 @@ export default function TaskFormScreen({ taskId }: TaskFormScreenProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [tags, setTags] = useState<string[]>([]);
   const [backgroundColor, setBackgroundColor] = useState('#FFFFFF');
+  
+  // 特殊日期设置
+  const [specialDate, setSpecialDate] = useState<SpecialDate | null>(null);
 
   useEffect(() => {
     if (taskId) {
@@ -136,6 +141,7 @@ export default function TaskFormScreen({ taskId }: TaskFormScreenProps) {
         setSyncToCalendar(task.syncToCalendar);
         setTags(task.tags || []);
         setBackgroundColor(task.backgroundColor || '#FFFFFF');
+        setSpecialDate(task.specialDate || null);
         
         if (task.currentCycle) {
           setStartDate(new Date(task.currentCycle.startDate));
@@ -169,7 +175,8 @@ export default function TaskFormScreen({ taskId }: TaskFormScreenProps) {
         autoRestart,
         syncToCalendar,
         tags,
-        backgroundColor
+        backgroundColor,
+        specialDate: specialDate || undefined
       };
 
       const errors = validateTask(taskData);
@@ -560,6 +567,15 @@ export default function TaskFormScreen({ taskId }: TaskFormScreenProps) {
               onChange={handleDueTimeChange}
             />
           )}
+        </View>
+
+        {/* 特殊日期选择 - 放在日期设置部分下面 */}
+        <View style={[styles.formSection, { backgroundColor: colors.card }]}>
+          <SpecialDateSelector
+            selectedDate={specialDate}
+            onDateSelect={setSpecialDate}
+            isLunarCalendar={isLunar}
+          />
         </View>
 
         {/* 提醒设置部分 */}

@@ -9,6 +9,16 @@ export type DateType = 'solar' | 'lunar';
 export type WeekDay = 0 | 1 | 2 | 3 | 4 | 5 | 6; // 0 = Sunday, 6 = Saturday
 export type WeekType = 'big' | 'small'; // 大周/小周
 export type WeekOfMonth = 1 | 2 | 3 | 4 | 5; // 1 = first week, 5 = last week
+export type SpecialDateType = 'holiday' | 'solarTerm' | 'custom';
+
+export interface SpecialDate {
+  id: string;
+  name: string;
+  type: SpecialDateType;
+  month: number;
+  day: number;
+  isLunar?: boolean;
+}
 
 export interface RecurrencePattern {
   type: RecurrenceType;
@@ -21,6 +31,7 @@ export interface RecurrencePattern {
   month?: number; // 指定月份 (1-12)
   weekOfMonth?: WeekOfMonth; // 第几周
   isLeapMonth?: boolean; // 农历闰月
+  specialDate?: SpecialDate; // 特殊日期如节假日、节气
 }
 
 export interface TaskCycle {
@@ -64,6 +75,7 @@ export interface Task {
   lastCompletedDate?: string;
   tags?: string[];
   backgroundColor?: string;
+  specialDate?: SpecialDate; // 特殊日期
 }
 
 export interface TaskWithCycles extends Task {
@@ -90,6 +102,7 @@ export interface CreateTaskInput {
   dueDate: string;
   tags?: string[];
   backgroundColor?: string;
+  specialDate?: SpecialDate;
 }
 
 export interface UpdateTaskInput {
@@ -112,6 +125,7 @@ export interface UpdateTaskInput {
   dueDate?: string;
   tags?: string[];
   backgroundColor?: string;
+  specialDate?: SpecialDate;
 }
 
 export function createTask(
