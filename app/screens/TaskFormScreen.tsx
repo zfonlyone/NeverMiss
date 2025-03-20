@@ -129,7 +129,7 @@ export default function TaskFormScreen({ taskId }: TaskFormScreenProps) {
         setRecurrencePattern(task.recurrencePattern);
         setDateType(task.dateType);
         setIsLunar(task.isLunar || false);
-        setIsRecurring(task.isRecurring || false);
+        setIsRecurring(task.isRecurring === true);
         setReminderOffset(task.reminderOffset);
         setReminderUnit(task.reminderUnit);
         setReminderDays(task.reminderDays || 0);
@@ -158,25 +158,27 @@ export default function TaskFormScreen({ taskId }: TaskFormScreenProps) {
 
   const handleSave = async () => {
     try {
-      const taskData: Partial<Task> = {
+      const taskData: CreateTaskInput = {
         title,
         description,
         recurrencePattern,
-        dateType,
-        isLunar,
-        isRecurring,
         reminderOffset,
         reminderUnit,
+        reminderTime,
+        startDate: startDate.toISOString(),
+        dueDate: dueDate.toISOString(),
+        dateType,
+        isLunar: dateType === 'lunar',
+        isRecurring,
         reminderDays,
         reminderHours,
         reminderMinutes,
-        reminderTime,
         isActive,
         autoRestart,
         syncToCalendar,
         tags,
         backgroundColor,
-        specialDate: specialDate || undefined
+        specialDate: specialDate || undefined,
       };
 
       const errors = validateTask(taskData);
@@ -282,6 +284,12 @@ export default function TaskFormScreen({ taskId }: TaskFormScreenProps) {
 
   const handleRecurringToggle = () => {
     setIsRecurring(!isRecurring);
+    if (!isRecurring && (!recurrencePattern || !recurrencePattern.type)) {
+      setRecurrencePattern({
+        type: 'daily',
+        value: 1
+      });
+    }
   };
 
   const handleReminderDaysChange = (text: string) => {
@@ -452,7 +460,7 @@ export default function TaskFormScreen({ taskId }: TaskFormScreenProps) {
         {/* 循环设置选择 */}
         <View style={[styles.formSection, { backgroundColor: colors.card }]}>
           <View style={styles.settingRow}>
-            <Text style={[styles.settingLabel, { color: colors.text }]}>{t.task.recurrenceSettings}</Text>
+            <Text style={[styles.settingLabel, { color: colors.text }]}>{t.reminder.recurrenceSettings}</Text>
             <View style={styles.recurringToggle}>
               <Text style={[styles.recurringText, { color: colors.text }]}>
                 {isRecurring ? t.common.enabled : t.common.disabled}
@@ -468,11 +476,9 @@ export default function TaskFormScreen({ taskId }: TaskFormScreenProps) {
           </View>
         </View>
         
-        {/* 循环设置部分 - 移到日期设置前面 */}
+        {/* 循环设置部分 */}
         {isRecurring && (
           <View style={[styles.section, { backgroundColor: colors.card }]}>
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>{t.task.recurrenceSettings}</Text>
-            
             <View style={[styles.recurrenceContainer, { backgroundColor: colors.card }]}>
               <RecurrenceSelector
                 recurrencePattern={recurrencePattern}
@@ -669,22 +675,6 @@ export default function TaskFormScreen({ taskId }: TaskFormScreenProps) {
               ios_backgroundColor="#3e3e3e"
             />
           </View>
-
-          {isRecurring && (
-            <View style={[styles.switchSetting, { backgroundColor: colors.card }]}>
-              <View style={[styles.switchTextContainer, { backgroundColor: colors.card }]}>
-                <Text style={[styles.switchLabel, { color: colors.text }]}>{t.task.autoRestart}</Text>
-                <Text style={[styles.switchDescription, { color: colors.subText }]}>{t.task.autoRestartDesc}</Text>
-              </View>
-              <Switch
-                value={autoRestart}
-                onValueChange={setAutoRestart}
-                trackColor={{ false: '#767577', true: colors.primary + '80' }}
-                thumbColor={autoRestart ? colors.primary : '#f4f3f4'}
-                ios_backgroundColor="#3e3e3e"
-              />
-            </View>
-          )}
 
           <View style={[styles.switchSetting, { backgroundColor: colors.card }]}>
             <View style={[styles.switchTextContainer, { backgroundColor: colors.card }]}>

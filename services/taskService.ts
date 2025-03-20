@@ -54,11 +54,19 @@ export const createTask = async (input: CreateTaskInput): Promise<Task> => {
       reminderUnit: input.reminderUnit,
       reminderTime: input.reminderTime,
       dateType: input.dateType || 'solar',
+      isLunar: input.isLunar === true,
+      isRecurring: input.isRecurring === true,
+      reminderDays: input.reminderDays || 0,
+      reminderHours: input.reminderHours || 0,
+      reminderMinutes: input.reminderMinutes || 0,
       isActive: input.isActive !== undefined ? input.isActive : true,
       autoRestart: input.autoRestart !== undefined ? input.autoRestart : true,
       syncToCalendar: input.syncToCalendar !== undefined ? input.syncToCalendar : false,
       createdAt: now,
       updatedAt: now,
+      tags: input.tags || [],
+      backgroundColor: input.backgroundColor,
+      specialDate: input.specialDate,
     };
     
     // 保存任务
@@ -491,10 +499,18 @@ export const updateTask = async (id: number, input: UpdateTaskInput): Promise<Ta
       reminderUnit: input.reminderUnit,
       reminderTime: input.reminderTime,
       dateType: input.dateType,
+      isLunar: input.isLunar,
+      isRecurring: input.isRecurring === true,
+      reminderDays: input.reminderDays || 0,
+      reminderHours: input.reminderHours || 0,
+      reminderMinutes: input.reminderMinutes || 0,
       isActive: input.isActive !== undefined ? input.isActive : existingTask.isActive,
       autoRestart: input.autoRestart !== undefined ? input.autoRestart : existingTask.autoRestart,
       syncToCalendar: input.syncToCalendar !== undefined ? input.syncToCalendar : existingTask.syncToCalendar,
       updatedAt: new Date().toISOString(),
+      tags: input.tags || existingTask.tags,
+      backgroundColor: input.backgroundColor !== undefined ? input.backgroundColor : existingTask.backgroundColor,
+      specialDate: input.specialDate !== undefined ? input.specialDate : existingTask.specialDate,
     };
     
     // 如果提供了新的开始日期和截止日期，更新当前周期

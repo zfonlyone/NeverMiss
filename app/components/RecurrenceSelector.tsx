@@ -305,48 +305,48 @@ export default function RecurrenceSelector({
   const getRecurrenceDescription = () => {
     switch (recurrencePattern.type) {
       case 'daily':
-        return `每 ${recurrencePattern.value} 天`;
+        return `${t.task.every} ${recurrencePattern.value} ${t.task.days}`;
         
       case 'weekly':
-        return `每 ${recurrencePattern.value} 周的 ${
+        return `${t.task.every} ${recurrencePattern.value} ${t.task.weeks} ${
           recurrencePattern.weekDay !== undefined 
             ? weekDays.find(d => d.value === recurrencePattern.weekDay)?.label 
-            : '(请选择星期几)'
+            : t.task.weekDay || '(请选择星期几)'
         }`;
         
       case 'monthly':
-        return `每 ${recurrencePattern.value} 月的 ${
+        return `${t.task.every} ${recurrencePattern.value} ${t.task.months} ${
           recurrencePattern.monthDay 
             ? (recurrencePattern.monthDay > 0 
-                ? `第 ${recurrencePattern.monthDay} 天` 
-                : `倒数第 ${Math.abs(recurrencePattern.monthDay)} 天`)
-            : '(请选择日期)'
+                ? `${t.task.day} ${recurrencePattern.monthDay}` 
+                : `${t.task.last || '倒数'} ${Math.abs(recurrencePattern.monthDay)} ${t.task.day}`)
+            : t.task.monthDay || '(请选择日期)'
         }`;
         
       case 'yearly':
-        return `每 ${recurrencePattern.value} 年的 ${
+        return `${t.task.every} ${recurrencePattern.value} ${t.task.years} ${
           recurrencePattern.month 
             ? months.find(m => m.value === recurrencePattern.month)?.label 
-            : '(请选择月份)'
-        } 月`;
+            : t.task.month || '(请选择月份)'
+        }`;
         
       case 'weekOfMonth':
-        return `每 ${recurrencePattern.value} 月的 ${
+        return `${t.task.every} ${recurrencePattern.value} ${t.task.months} ${
           recurrencePattern.month 
             ? months.find(m => m.value === recurrencePattern.month)?.label 
-            : '(请选择月份)'
-        } 月的 ${
+            : t.task.month || '(请选择月份)'
+        } ${
           recurrencePattern.weekOfMonth 
             ? weeksOfMonth.find(w => w.value === recurrencePattern.weekOfMonth)?.label 
-            : '(请选择第几周)'
-        } 的 ${
+            : t.task.weekNumber || '(请选择第几周)'
+        } ${
           recurrencePattern.weekDay !== undefined 
             ? weekDays.find(d => d.value === recurrencePattern.weekDay)?.label 
-            : '(请选择星期几)'
+            : t.task.weekDay || '(请选择星期几)'
         }`;
         
       default:
-        return '请选择重复类型';
+        return t.task.selectRecurrenceType || '请选择重复类型';
     }
   };
   
