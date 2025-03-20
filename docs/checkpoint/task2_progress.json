@@ -16,11 +16,11 @@
       "提取日期类型为独立设置项，使一次性任务也能设置日期类型",
       "从循环设置组件中移除日期类型选择器",
       "特殊日期选择器实现",
-      "实现节假日、节气数据导入",
-      "优化RecurrenceSettings组件UI和操作逻辑",
-      "RecurrenceSettings增加特殊日期支持"
+      "实现节假日、节气数据导入"
     ],
-    "pending_items": []
+    "pending_items": [
+      "优化TaskFormInline组件中的循环设置UI"
+    ]
   },
   "data_model": {
     "status": "完成",
@@ -40,9 +40,11 @@
     ]
   },
   "next_actions": [
-    "继续完善农历日期选择支持"
+    "继续完善农历日期选择支持",
+    "改进TaskFormInline组件中的重复设置UI"
   ],
   "known_issues": [
-    "部分UI样式需调整以适应不同屏幕尺寸"
+    "部分UI样式需调整以适应不同屏幕尺寸",
+    "已移除独立的RecurrenceSettings组件，改为在TaskFormInline中直接实现简化版重复设置UI"
   ]
 } 

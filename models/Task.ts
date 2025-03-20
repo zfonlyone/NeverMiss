@@ -25,6 +25,7 @@ export interface RecurrencePattern {
   value: number;
   unit?: RecurrenceUnit;
   weekDay?: WeekDay;
+  weekDays?: WeekDay[]; // 支持多选周几
   weekType?: WeekType;
   monthDay?: number; // 每月第几天
   yearDay?: number; // 每年第几天

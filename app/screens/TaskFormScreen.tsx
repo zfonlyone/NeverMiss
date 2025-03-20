@@ -785,7 +785,8 @@ const styles = StyleSheet.create({
     textAlignVertical: 'top',
   },
   recurrenceContainer: {
-    height: 460, // Adjustable based on your RecurrenceSelector's actual height
+    height: 100,
+    marginBottom: 10,
   },
   setting: {
     flexDirection: 'row',

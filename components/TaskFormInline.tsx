@@ -26,6 +26,7 @@ import {
   ReminderUnit,
   ReminderTime,
   DateType,
+  WeekDay,
 } from '../models/Task';
 import { createTask, updateTask } from '../services/taskService';
 import { Ionicons } from '@expo/vector-icons';
@@ -35,7 +36,6 @@ import { checkPermissionsForFeature, requestPermissionsForFeature } from '../ser
 import { useLanguage } from '../contexts/LanguageContext';
 import { useTheme } from '../contexts/ThemeContext';
 import lunarService from '../services/lunarService';
-import RecurrenceSettings from './RecurrenceSettings';
 
 interface TaskFormInlineProps {
   task?: Task;
@@ -48,6 +48,10 @@ interface FormData extends Omit<CreateTaskInput, 'startDate' | 'dueDate'> {
   dueDate: string;
 }
 
+interface RecurrencePatternExtended extends RecurrencePattern {
+  weekDays?: WeekDay[];
+}
+
 export default function TaskFormInline({ task, onSave, onCancel }: TaskFormInlineProps) {
   const { t } = useLanguage();
   const { colors, isDarkMode } = useTheme();
@@ -58,7 +62,7 @@ export default function TaskFormInline({ task, onSave, onCancel }: TaskFormInlin
   const [pickerMode, setPickerMode] = useState<'date' | 'time'>('date');
   const [useLunar, setUseLunar] = useState(task?.dateType === 'lunar' || false);
 
-  const [formData, setFormData] = useState<FormData>({
+  const [formData, setFormData] = useState<FormData & { recurrencePattern: RecurrencePatternExtended }>({
     title: task?.title || '',
     description: task?.description || '',
     recurrencePattern: task?.recurrencePattern || {
@@ -69,6 +73,11 @@ export default function TaskFormInline({ task, onSave, onCancel }: TaskFormInlin
     reminderUnit: task?.reminderUnit || 'minutes',
     reminderTime: task?.reminderTime || { hour: 9, minute: 0 },
     dateType: task?.dateType || 'solar',
+    isLunar: task?.isLunar || false,
+    isRecurring: task?.isRecurring !== undefined ? task.isRecurring : true,
+    reminderDays: task?.reminderDays || 0,
+    reminderHours: task?.reminderHours || 0,
+    reminderMinutes: task?.reminderMinutes || 30,
     isActive: task?.isActive !== undefined ? task?.isActive : true,
     autoRestart: task?.autoRestart !== undefined ? task?.autoRestart : true,
     syncToCalendar: task?.syncToCalendar !== undefined ? task?.syncToCalendar : false,
@@ -118,21 +127,26 @@ export default function TaskFormInline({ task, onSave, onCancel }: TaskFormInlin
         return;
       }
 
-      // 准备任务数据
-      const taskData: Partial<Task> = {
+      // 准备基础任务数据
+      const baseTaskData = {
         title: formData.title,
         description: formData.description,
         recurrencePattern: formData.recurrencePattern,
         dateType: formData.dateType,
+        isLunar: formData.isLunar,
+        isRecurring: formData.isRecurring,
         reminderOffset: parseInt(formData.reminderOffset.toString()),
         reminderUnit: formData.reminderUnit,
         reminderTime: {
           hour: formData.reminderTime.hour,
           minute: formData.reminderTime.minute
         },
-        isActive: true,
-        autoRestart: true,
-        syncToCalendar: false
+        reminderDays: formData.reminderDays,
+        reminderHours: formData.reminderHours,
+        reminderMinutes: formData.reminderMinutes,
+        isActive: formData.isActive,
+        autoRestart: formData.autoRestart,
+        syncToCalendar: formData.syncToCalendar
       };
 
       // Check calendar permissions if needed
@@ -146,7 +160,7 @@ export default function TaskFormInline({ task, onSave, onCancel }: TaskFormInlin
               t.permissions.calendarPermissionMessage,
               [{ text: t.common.cancel }]
             );
-            taskData.syncToCalendar = false;
+            baseTaskData.syncToCalendar = false;
           }
         }
       }
@@ -168,10 +182,18 @@ export default function TaskFormInline({ task, onSave, onCancel }: TaskFormInlin
       // Create or update task
       if (task) {
         // Update existing task
-        await updateTask(task.id, taskData);
+        const updateData: UpdateTaskInput = {
+          ...baseTaskData
+        };
+        await updateTask(task.id, updateData);
       } else {
         // Create new task
-        await createTask(taskData);
+        const createData: CreateTaskInput = {
+          ...baseTaskData,
+          startDate: formData.startDate,
+          dueDate: formData.dueDate
+        };
+        await createTask(createData);
       }
 
       onSave();
@@ -238,10 +260,11 @@ export default function TaskFormInline({ task, onSave, onCancel }: TaskFormInlin
     setShowReminderTimePicker(false);
   };
 
-  const handleRecurrenceChange = (newPattern: RecurrencePattern) => {
+  const handleRecurrenceChange = (pattern: RecurrencePatternExtended) => {
     setFormData({
       ...formData,
-      recurrencePattern: newPattern
+      recurrencePattern: pattern,
+      isRecurring: true,
     });
   };
 
@@ -249,8 +272,149 @@ export default function TaskFormInline({ task, onSave, onCancel }: TaskFormInlin
     setUseLunar(newDateType === 'lunar');
     setFormData({
       ...formData,
-      dateType: newDateType
+      dateType: newDateType,
+      isLunar: newDateType === 'lunar'
     });
+  };
+
+  const renderRecurrenceSettings = () => {
+    // 常用重复模式
+    const commonPatterns = [
+      { label: t.task.daily, type: 'daily', value: 1 },
+      { label: t.task.weekly, type: 'weekly', value: 1 },
+      { label: t.task.monthly, type: 'monthly', value: 1 },
+      { label: t.task.yearly, type: 'yearly', value: 1 },
+      { label: t.task.weekdays, type: 'custom', value: 1, custom: 'weekdays' },
+      { label: t.task.weekend, type: 'custom', value: 1, custom: 'weekend' },
+    ];
+
+    const handleCommonPatternSelect = (pattern: any) => {
+      // 处理特殊模式
+      if (pattern.custom === 'weekdays') {
+        // 周一至周五
+        handleRecurrenceChange({ 
+          type: 'weekly', 
+          value: 1,
+          weekDays: [1, 2, 3, 4, 5]  // 周一到周五
+        });
+        return;
+      } else if (pattern.custom === 'weekend') {
+        // 周末
+        handleRecurrenceChange({ 
+          type: 'weekly', 
+          value: 1,
+          weekDays: [0, 6]  // 周日和周六
+        });
+        return;
+      }
+
+      // 常规模式
+      handleRecurrenceChange({
+        type: pattern.type,
+        value: pattern.value
+      });
+    };
+
+    return (
+      <View style={styles.formSection}>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>{t.task.recurrenceSettings}</Text>
+        
+        {/* 常用重复模式 */}
+        <View style={styles.recurrencePatterns}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            {commonPatterns.map((pattern, index) => (
+              <TouchableOpacity
+                key={index}
+                style={[
+                  styles.patternButton,
+                  (formData.recurrencePattern.type === pattern.type && 
+                   formData.recurrencePattern.value === pattern.value &&
+                   (
+                     (pattern.custom === 'weekdays' && 
+                      formData.recurrencePattern.weekDays?.join(',') === [1,2,3,4,5].join(',')) ||
+                     (pattern.custom === 'weekend' && 
+                      formData.recurrencePattern.weekDays?.join(',') === [0,6].join(',')) ||
+                     !pattern.custom
+                   )
+                  ) && [
+                    styles.patternButtonActive,
+                    { backgroundColor: colors.primary }
+                  ],
+                  { borderColor: colors.border }
+                ]}
+                onPress={() => handleCommonPatternSelect(pattern)}
+              >
+                <Text
+                  style={[
+                    styles.patternButtonText,
+                    (formData.recurrencePattern.type === pattern.type && 
+                    formData.recurrencePattern.value === pattern.value &&
+                    (
+                      (pattern.custom === 'weekdays' && 
+                       formData.recurrencePattern.weekDays?.join(',') === [1,2,3,4,5].join(',')) ||
+                      (pattern.custom === 'weekend' && 
+                       formData.recurrencePattern.weekDays?.join(',') === [0,6].join(',')) ||
+                      !pattern.custom
+                    )
+                   ) && styles.patternButtonTextActive,
+                    { color: (formData.recurrencePattern.type === pattern.type && 
+                      formData.recurrencePattern.value === pattern.value &&
+                      (
+                        (pattern.custom === 'weekdays' && 
+                         formData.recurrencePattern.weekDays?.join(',') === [1,2,3,4,5].join(',')) ||
+                        (pattern.custom === 'weekend' && 
+                         formData.recurrencePattern.weekDays?.join(',') === [0,6].join(',')) ||
+                        !pattern.custom
+                      )
+                     ) ? 'white' : colors.text }
+                  ]}
+                >
+                  {pattern.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+        
+        {/* 自定义重复值 */}
+        <View style={styles.customRecurrenceContainer}>
+          <Text style={[styles.label, { color: colors.text }]}>{t.task.recurrenceValue}</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <TextInput
+              style={[
+                styles.input,
+                { 
+                  width: 100, 
+                  marginRight: 8,
+                  color: colors.text, 
+                  borderColor: errors.recurrenceValue ? colors.error : colors.border 
+                }
+              ]}
+              value={formData.recurrencePattern.value?.toString() || '1'}
+              onChangeText={(text) => {
+                const value = parseInt(text) || 1;
+                handleRecurrenceChange({ 
+                  ...formData.recurrencePattern, 
+                  value: value 
+                });
+              }}
+              keyboardType="numeric"
+              placeholder="1"
+              placeholderTextColor={colors.subText}
+            />
+            <Text style={{ color: colors.text }}>
+              {formData.recurrencePattern.type === 'daily' && t.task.days}
+              {formData.recurrencePattern.type === 'weekly' && t.task.weeks}
+              {formData.recurrencePattern.type === 'monthly' && t.task.months}
+              {formData.recurrencePattern.type === 'yearly' && t.task.years}
+            </Text>
+          </View>
+          {errors.recurrenceValue && (
+            <Text style={[styles.errorText, { color: colors.error }]}>{errors.recurrenceValue}</Text>
+          )}
+        </View>
+      </View>
+    );
   };
 
   return (
@@ -322,16 +486,7 @@ export default function TaskFormInline({ task, onSave, onCancel }: TaskFormInlin
         </View>
 
         {/* Recurrence Settings */}
-        <View style={styles.formSection}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>{t.task.recurrenceSettings}</Text>
-          
-          <RecurrenceSettings 
-            recurrencePattern={formData.recurrencePattern}
-            dateType={formData.dateType}
-            onRecurrenceChange={handleRecurrenceChange}
-            onDateTypeChange={handleDateTypeChange}
-          />
-        </View>
+        {renderRecurrenceSettings()}
 
         {/* Start Date */}
         <View style={styles.formGroup}>
@@ -689,27 +844,25 @@ const styles = StyleSheet.create({
   timeText: {
     fontSize: 16,
   },
-  recurrenceTypeContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginBottom: 8,
+  recurrencePatterns: {
+    marginVertical: 10,
   },
-  recurrenceTypeButton: {
-    paddingVertical: 8,
+  patternButton: {
     paddingHorizontal: 16,
-    borderRadius: 8,
+    paddingVertical: 8,
+    borderRadius: 20,
     borderWidth: 1,
     marginRight: 8,
     marginBottom: 8,
   },
-  recurrenceTypeButtonActive: {
-    borderColor: 'transparent',
+  patternButtonActive: {
+    borderWidth: 0,
   },
-  recurrenceTypeText: {
+  patternButtonText: {
     fontSize: 14,
   },
-  recurrenceTypeTextActive: {
-    color: 'white',
+  patternButtonTextActive: {
+    fontWeight: 'bold',
   },
   reminderContainer: {
     marginTop: 8,
