@@ -128,6 +128,7 @@ export default function StatisticsScreen() {
         options={{
           title: t.menu.statistics,
           headerShown: true,
+          headerBackTitle: t.menu.home,
           headerStyle: {
             backgroundColor: colors.card,
           },

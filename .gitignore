@@ -69,6 +69,8 @@ asyncstorage-backup/
 # Prebuild folders - comment these out if you're using EAS Build without prebuild
 /android
 /ios
+android/
+ios/
 
 # VSCode
 .vscode/

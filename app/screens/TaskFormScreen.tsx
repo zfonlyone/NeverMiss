@@ -199,7 +199,11 @@ export default function TaskFormScreen({ taskId }: TaskFormScreenProps) {
         await createTaskService(createInput);
       }
 
-      router.back();
+      // 创建完任务后，返回任务列表页面并触发刷新
+      router.push({
+        pathname: '/tasks',
+        params: { refresh: 'true' }
+      });
     } catch (error) {
       console.error('Error saving task:', error);
       Alert.alert(t.task.saveTaskFailed);
@@ -536,7 +540,7 @@ export default function TaskFormScreen({ taskId }: TaskFormScreenProps) {
             <DateTimePicker
               value={startDate}
               mode="date"
-              display="default"
+              display={Platform.OS === 'ios' ? 'spinner' : 'default'}
               onChange={handleStartDateChange}
             />
           )}
@@ -545,7 +549,7 @@ export default function TaskFormScreen({ taskId }: TaskFormScreenProps) {
             <DateTimePicker
               value={dueDate}
               mode="date"
-              display="default"
+              display={Platform.OS === 'ios' ? 'spinner' : 'default'}
               onChange={handleDueDateChange}
             />
           )}
@@ -554,7 +558,7 @@ export default function TaskFormScreen({ taskId }: TaskFormScreenProps) {
             <DateTimePicker
               value={startDate}
               mode="time"
-              display="default"
+              display={Platform.OS === 'ios' ? 'spinner' : 'default'}
               onChange={handleStartTimeChange}
             />
           )}
@@ -563,7 +567,7 @@ export default function TaskFormScreen({ taskId }: TaskFormScreenProps) {
             <DateTimePicker
               value={dueDate}
               mode="time"
-              display="default"
+              display={Platform.OS === 'ios' ? 'spinner' : 'default'}
               onChange={handleDueTimeChange}
             />
           )}
@@ -632,7 +636,7 @@ export default function TaskFormScreen({ taskId }: TaskFormScreenProps) {
             <DateTimePicker
               value={new Date(new Date().setHours(reminderTime.hour, reminderTime.minute))}
               mode="time"
-              display="default"
+              display={Platform.OS === 'ios' ? 'spinner' : 'default'}
               onChange={handleTimeChange}
             />
           )}

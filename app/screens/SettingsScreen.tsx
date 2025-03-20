@@ -570,6 +570,7 @@ const SettingsScreen = () => {
         options={{
           title: t.settings.title,
           headerShown: true,
+          headerBackTitle: t.menu.home,
           headerStyle: {
             backgroundColor: colors.card,
           },

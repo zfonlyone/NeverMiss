@@ -1,13 +1,15 @@
 import React from 'react';
-import { Stack } from 'expo-router';
-import { View, StyleSheet } from 'react-native';
+import { Stack, useRouter } from 'expo-router';
+import { View, StyleSheet, TouchableOpacity } from 'react-native';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useTheme } from '../contexts/ThemeContext';
 import TaskListScreen from './screens/TaskListScreen';
+import { Ionicons } from '@expo/vector-icons';
 
 export default function TasksScreen() {
   const { t } = useLanguage();
   const { colors } = useTheme();
+  const router = useRouter();
 
   return (
     <View style={[
@@ -18,6 +20,14 @@ export default function TasksScreen() {
         options={{
           title: t.menu.taskManagement,
           headerShown: true,
+          headerLeft: () => (
+            <TouchableOpacity 
+              onPress={() => router.replace('/')}
+              style={{ marginLeft: 8, padding: 8 }}
+            >
+              <Ionicons name="arrow-back" size={24} color={colors.text} />
+            </TouchableOpacity>
+          ),
           headerStyle: {
             backgroundColor: colors.card,
           },

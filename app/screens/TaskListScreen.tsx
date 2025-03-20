@@ -7,7 +7,8 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Alert,
-  RefreshControl
+  RefreshControl,
+  BackHandler
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useLanguage } from '../../contexts/LanguageContext';
@@ -18,12 +19,13 @@ import * as TaskService from '../../services/taskService';
 import { Task } from '../../models/Task';
 import TaskListFilter, { FilterOptions } from '../components/TaskListFilter';
 import { filterTasks, sortTasks, extractAllTags } from '../../utils/taskUtils';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 
 export default function TaskListScreen() {
   const { t } = useLanguage();
   const { colors, isDarkMode } = useTheme();
   const router = useRouter();
+  const params = useLocalSearchParams();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -35,6 +37,21 @@ export default function TaskListScreen() {
     tagsFilter: [],
     showDisabled: true
   });
+
+  // 添加返回键监听，确保返回到首页
+  useEffect(() => {
+    const backAction = () => {
+      router.replace('/');
+      return true;
+    };
+
+    const backHandler = BackHandler.addEventListener(
+      'hardwareBackPress',
+      backAction
+    );
+
+    return () => backHandler.remove();
+  }, [router]);
 
   // 提取所有任务中的标签
   const availableTags = useMemo(() => {
@@ -50,6 +67,13 @@ export default function TaskListScreen() {
   useEffect(() => {
     loadTasks();
   }, []);
+
+  // 当从任务表单返回时，如果参数中有refresh=true，则刷新任务列表
+  useEffect(() => {
+    if (params.refresh === 'true') {
+      loadTasks();
+    }
+  }, [params.refresh]);
 
   const loadTasks = async () => {
     try {
