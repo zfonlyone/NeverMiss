@@ -533,8 +533,8 @@ const SettingsScreen = () => {
             onPress={() => handleChangeLanguage('en')}
           >
             <View style={styles.languageContent}>
-              <Text style={[styles.languageTitle, { color: colors.text }]}>{t.settings.englishName}</Text>
-              <Text style={[styles.languageDesc, { color: colors.subText }]}>{t.settings.englishDesc}</Text>
+              <Text style={[styles.languageTitle, { color: colors.text }]}>English</Text>
+              <Text style={[styles.languageDesc, { color: colors.subText }]}>Display app interface in English</Text>
             </View>
             {language === 'en' && <Ionicons name="checkmark" size={24} color={colors.primary} />}
           </TouchableOpacity>
@@ -547,8 +547,8 @@ const SettingsScreen = () => {
             onPress={() => handleChangeLanguage('zh')}
           >
             <View style={styles.languageContent}>
-              <Text style={[styles.languageTitle, { color: colors.text }]}>{t.settings.chineseName}</Text>
-              <Text style={[styles.languageDesc, { color: colors.subText }]}>{t.settings.chineseDesc}</Text>
+              <Text style={[styles.languageTitle, { color: colors.text }]}>中文</Text>
+              <Text style={[styles.languageDesc, { color: colors.subText }]}>使用中文显示应用界面</Text>
             </View>
             {language === 'zh' && <Ionicons name="checkmark" size={24} color={colors.primary} />}
           </TouchableOpacity>

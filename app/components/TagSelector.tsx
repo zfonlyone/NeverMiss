@@ -9,7 +9,8 @@ import {
   Modal
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useLanguage } from '../../hooks/useLanguage';
+import { useLanguage } from '../../contexts/LanguageContext';
+import { useTheme } from '../../contexts/ThemeContext';
 
 // 预定义的标签颜色
 const TAG_COLORS = [
@@ -30,6 +31,7 @@ interface TagSelectorProps {
 
 export default function TagSelector({ selectedTags, onTagsChange }: TagSelectorProps) {
   const { t } = useLanguage();
+  const { colors, isDarkMode } = useTheme();
   const [modalVisible, setModalVisible] = useState(false);
   const [newTag, setNewTag] = useState('');
   
@@ -73,8 +75,8 @@ export default function TagSelector({ selectedTags, onTagsChange }: TagSelectorP
           style={styles.addTagButton}
           onPress={() => setModalVisible(true)}
         >
-          <Ionicons name="add-circle-outline" size={18} color="#007AFF" />
-          <Text style={styles.addTagText}>{t.task.addTags}</Text>
+          <Ionicons name="add-circle-outline" size={18} color={colors.primary} />
+          <Text style={[styles.addTagText, { color: colors.primary }]}>{t.task.addTags}</Text>
         </TouchableOpacity>
       );
     }
@@ -87,13 +89,19 @@ export default function TagSelector({ selectedTags, onTagsChange }: TagSelectorP
           contentContainerStyle={styles.selectedTagsScroll}
         >
           {selectedTags.map((tag, index) => (
-            <View key={index} style={styles.selectedTag}>
-              <Text style={styles.selectedTagText}>{tag}</Text>
+            <View key={index} style={[
+              styles.selectedTag, 
+              { backgroundColor: isDarkMode ? '#333' : '#f0f0f0' }
+            ]}>
+              <Text style={[
+                styles.selectedTagText, 
+                { color: colors.text }
+              ]}>{tag}</Text>
               <TouchableOpacity 
                 onPress={() => handleRemoveTag(tag)}
                 style={styles.removeTagButton}
               >
-                <Ionicons name="close-circle" size={16} color="#8E8E93" />
+                <Ionicons name="close-circle" size={16} color={colors.subText} />
               </TouchableOpacity>
             </View>
           ))}
@@ -101,7 +109,7 @@ export default function TagSelector({ selectedTags, onTagsChange }: TagSelectorP
             style={styles.addMoreButton}
             onPress={() => setModalVisible(true)}
           >
-            <Ionicons name="add" size={18} color="#007AFF" />
+            <Ionicons name="add" size={18} color={colors.primary} />
           </TouchableOpacity>
         </ScrollView>
       </View>
@@ -110,7 +118,7 @@ export default function TagSelector({ selectedTags, onTagsChange }: TagSelectorP
 
   return (
     <View style={styles.container}>
-      <Text style={styles.label}>{t.task.tags}</Text>
+      <Text style={[styles.label, { color: colors.text }]}>{t.task.tags}</Text>
       {renderSelectedTags()}
 
       <Modal
@@ -120,51 +128,61 @@ export default function TagSelector({ selectedTags, onTagsChange }: TagSelectorP
         onRequestClose={() => setModalVisible(false)}
       >
         <View style={styles.modalContainer}>
-          <View style={styles.modalContent}>
+          <View style={[styles.modalContent, { backgroundColor: colors.card }]}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>{t.task.selectTags}</Text>
+              <Text style={[styles.modalTitle, { color: colors.text }]}>{t.task.selectTags}</Text>
               <TouchableOpacity onPress={() => setModalVisible(false)}>
-                <Ionicons name="close" size={24} color="#8E8E93" />
+                <Ionicons name="close" size={24} color={colors.subText} />
               </TouchableOpacity>
             </View>
 
             <View style={styles.addTagContainer}>
               <TextInput
-                style={styles.tagInput}
+                style={[
+                  styles.tagInput, 
+                  { 
+                    backgroundColor: isDarkMode ? colors.background : '#f9f9f9',
+                    borderColor: colors.border,
+                    color: colors.text
+                  }
+                ]}
                 placeholder={t.task.newTagPlaceholder}
+                placeholderTextColor={colors.subText}
                 value={newTag}
                 onChangeText={setNewTag}
                 returnKeyType="done"
                 onSubmitEditing={handleAddTag}
               />
               <TouchableOpacity 
-                style={styles.addButton}
+                style={[
+                  styles.addButton,
+                  { backgroundColor: colors.primary },
+                  !newTag.trim() && { opacity: 0.5 }
+                ]}
                 onPress={handleAddTag}
                 disabled={!newTag.trim()}
               >
-                <Text style={[
-                  styles.addButtonText,
-                  !newTag.trim() && styles.addButtonTextDisabled
-                ]}>
+                <Text style={styles.addButtonText}>
                   {t.task.add}
                 </Text>
               </TouchableOpacity>
             </View>
 
-            <Text style={styles.sectionTitle}>{t.task.commonTags}</Text>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>{t.task.commonTags}</Text>
             <View style={styles.commonTagsContainer}>
               {commonTags.map((tag, index) => (
                 <TouchableOpacity
                   key={index}
                   style={[
                     styles.commonTag,
-                    selectedTags.includes(tag) && styles.commonTagSelected
+                    { backgroundColor: isDarkMode ? '#333' : '#f0f0f0' },
+                    selectedTags.includes(tag) && [styles.commonTagSelected, { backgroundColor: colors.primary }]
                   ]}
                   onPress={() => handleToggleTag(tag)}
                 >
                   <Text style={[
                     styles.commonTagText,
-                    selectedTags.includes(tag) && styles.commonTagTextSelected
+                    { color: selectedTags.includes(tag) ? 'white' : colors.text }
                   ]}>
                     {tag}
                   </Text>
@@ -174,10 +192,13 @@ export default function TagSelector({ selectedTags, onTagsChange }: TagSelectorP
 
             {selectedTags.length > 0 && (
               <>
-                <Text style={styles.sectionTitle}>{t.task.selectedTags}</Text>
+                <Text style={[styles.sectionTitle, { color: colors.text }]}>{t.task.selectedTags}</Text>
                 <View style={styles.selectedTagsGrid}>
                   {selectedTags.map((tag, index) => (
-                    <View key={index} style={styles.selectedTagInModal}>
+                    <View key={index} style={[
+                      styles.selectedTagInModal, 
+                      { backgroundColor: colors.primary }
+                    ]}>
                       <Text style={styles.selectedTagInModalText}>{tag}</Text>
                       <TouchableOpacity 
                         onPress={() => handleRemoveTag(tag)}
@@ -192,7 +213,7 @@ export default function TagSelector({ selectedTags, onTagsChange }: TagSelectorP
             )}
 
             <TouchableOpacity 
-              style={styles.doneButton}
+              style={[styles.doneButton, { backgroundColor: colors.primary }]}
               onPress={() => setModalVisible(false)}
             >
               <Text style={styles.doneButtonText}>{t.common.done}</Text>
@@ -212,7 +233,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     marginBottom: 8,
-    color: '#333',
   },
   addTagButton: {
     flexDirection: 'row',
@@ -220,7 +240,6 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   addTagText: {
-    color: '#007AFF',
     marginLeft: 4,
     fontSize: 15,
   },
@@ -234,7 +253,6 @@ const styles = StyleSheet.create({
   selectedTag: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f0f0f0',
     borderRadius: 16,
     paddingHorizontal: 12,
     paddingVertical: 6,
@@ -242,7 +260,6 @@ const styles = StyleSheet.create({
   },
   selectedTagText: {
     fontSize: 14,
-    color: '#333',
     marginRight: 4,
   },
   removeTagButton: {
@@ -252,81 +269,73 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#f0f0f0',
     justifyContent: 'center',
     alignItems: 'center',
-    marginLeft: 4,
   },
   modalContainer: {
     flex: 1,
     justifyContent: 'flex-end',
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)'
   },
   modalContent: {
-    backgroundColor: 'white',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    padding: 16,
-    maxHeight: '80%',
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    paddingBottom: 30,
+    paddingTop: 16,
+    paddingHorizontal: 16,
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 16,
   },
   modalTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#333',
+    fontSize: 18,
+    fontWeight: '600',
   },
   addTagContainer: {
     flexDirection: 'row',
-    alignItems: 'center',
     marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
-    borderRadius: 8,
-    overflow: 'hidden',
   },
   tagInput: {
     flex: 1,
     height: 44,
+    borderWidth: 1,
+    borderRadius: 8,
     paddingHorizontal: 12,
+    marginRight: 8,
     fontSize: 16,
   },
   addButton: {
     paddingHorizontal: 16,
-    height: 44,
+    borderRadius: 8,
     justifyContent: 'center',
-    backgroundColor: '#f8f9fa',
-    borderLeftWidth: 1,
-    borderLeftColor: '#e0e0e0',
+    alignItems: 'center',
   },
   addButtonText: {
-    color: '#007AFF',
-    fontWeight: '600',
+    color: 'white',
     fontSize: 16,
+    fontWeight: '500',
   },
   addButtonTextDisabled: {
-    color: '#bbb',
+    opacity: 0.5,
   },
   sectionTitle: {
     fontSize: 16,
     fontWeight: '600',
+    marginTop: 8,
     marginBottom: 12,
-    color: '#333',
   },
   commonTagsContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    marginBottom: 20,
+    marginBottom: 16,
   },
   commonTag: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
     borderRadius: 16,
-    backgroundColor: '#f0f0f0',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
     marginRight: 8,
     marginBottom: 8,
   },
@@ -335,7 +344,6 @@ const styles = StyleSheet.create({
   },
   commonTagText: {
     fontSize: 14,
-    color: '#333',
   },
   commonTagTextSelected: {
     color: 'white',
@@ -343,7 +351,7 @@ const styles = StyleSheet.create({
   selectedTagsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    marginBottom: 20,
+    marginBottom: 24,
   },
   selectedTagInModal: {
     flexDirection: 'row',
@@ -364,15 +372,14 @@ const styles = StyleSheet.create({
     marginLeft: 2,
   },
   doneButton: {
-    backgroundColor: '#007AFF',
+    height: 50,
     borderRadius: 8,
-    paddingVertical: 14,
+    justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 8,
   },
   doneButtonText: {
     color: 'white',
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: '600',
   },
 }); 

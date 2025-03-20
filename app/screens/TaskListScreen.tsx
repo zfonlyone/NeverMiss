@@ -10,7 +10,8 @@ import {
   RefreshControl
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import { useLanguage } from '../../hooks/useLanguage';
+import { useLanguage } from '../../contexts/LanguageContext';
+import { useTheme } from '../../contexts/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
 import * as TaskService from '../../services/taskService';
@@ -21,6 +22,7 @@ import { useRouter } from 'expo-router';
 
 export default function TaskListScreen() {
   const { t } = useLanguage();
+  const { colors, isDarkMode } = useTheme();
   const router = useRouter();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -80,15 +82,15 @@ export default function TaskListScreen() {
     const isOverdue = item.currentCycle?.isOverdue;
     const isCompleted = item.currentCycle?.isCompleted;
     
-    let statusColor = '#0984e3'; // Default blue
+    let statusColor = colors.primary; // Default blue
     if (isOverdue) {
-      statusColor = '#d63031'; // Red for overdue
+      statusColor = colors.error; // Red for overdue
     } else if (isCompleted) {
-      statusColor = '#00b894'; // Green for completed
+      statusColor = colors.success; // Green for completed
     }
 
-    // Use custom background color if available, otherwise use default
-    const backgroundColor = item.backgroundColor || 'white';
+    // Use custom background color if available, otherwise use default theme card color
+    const backgroundColor = item.backgroundColor || colors.card;
 
     // Format the recurrence pattern for display
     const getRecurrenceText = () => {
@@ -127,38 +129,38 @@ export default function TaskListScreen() {
       >
         <View style={[styles.statusIndicator, { backgroundColor: statusColor }]} />
         <View style={styles.taskContent}>
-          <Text style={styles.taskTitle}>{item.title}</Text>
+          <Text style={[styles.taskTitle, { color: colors.text }]}>{item.title}</Text>
           {item.description && (
-            <Text style={styles.taskDescription} numberOfLines={1}>
+            <Text style={[styles.taskDescription, { color: colors.subText }]} numberOfLines={1}>
               {item.description}
             </Text>
           )}
-          <Text style={styles.recurrenceInfo}>{getRecurrenceText()}</Text>
+          <Text style={[styles.recurrenceInfo, { color: colors.subText }]}>{getRecurrenceText()}</Text>
           
           {/* Display tags if available */}
           {item.tags && item.tags.length > 0 && (
             <View style={styles.tagsContainer}>
               {item.tags.map((tag, index) => (
-                <View key={index} style={styles.tagBadge}>
-                  <Text style={styles.tagText}>{tag}</Text>
+                <View key={index} style={[styles.tagBadge, { backgroundColor: isDarkMode ? '#333' : '#f0f0f0' }]}>
+                  <Text style={[styles.tagText, { color: colors.subText }]}>{tag}</Text>
                 </View>
               ))}
             </View>
           )}
         </View>
         {!item.isActive && (
-          <View style={styles.disabledBadge}>
-            <Text style={styles.disabledText}>{t.task.taskDisabled}</Text>
+          <View style={[styles.disabledBadge, { backgroundColor: isDarkMode ? '#333' : '#f0f0f0' }]}>
+            <Text style={[styles.disabledText, { color: colors.subText }]}>{t.task.taskDisabled}</Text>
           </View>
         )}
-        <Ionicons name="chevron-forward" size={20} color="#aaa" />
+        <Ionicons name="chevron-forward" size={20} color={colors.subText} />
       </TouchableOpacity>
     );
   };
 
   return (
-    <View style={styles.container}>
-      <StatusBar style="dark" />
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <StatusBar style={isDarkMode ? "light" : "dark"} />
       
       {/* 搜索、排序和筛选组件 */}
       <TaskListFilter 
@@ -169,7 +171,7 @@ export default function TaskListScreen() {
       
       {isLoading && !refreshing ? (
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#007AFF" />
+          <ActivityIndicator size="large" color={colors.primary} />
         </View>
       ) : filteredTasks.length > 0 ? (
         <FlatList
@@ -182,15 +184,15 @@ export default function TaskListScreen() {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={onRefresh}
-              colors={["#007AFF"]}
-              tintColor="#007AFF"
+              colors={[colors.primary]}
+              tintColor={colors.primary}
             />
           }
         />
       ) : (
         <View style={styles.emptyContainer}>
-          <Ionicons name="calendar-outline" size={80} color="#ddd" />
-          <Text style={styles.emptyText}>
+          <Ionicons name="calendar-outline" size={80} color={colors.border} />
+          <Text style={[styles.emptyText, { color: colors.subText }]}>
             {filterOptions.searchText || 
              filterOptions.statusFilter !== 'all' || 
              filterOptions.tagsFilter.length > 0 ? 
@@ -201,7 +203,7 @@ export default function TaskListScreen() {
       )}
       
       <TouchableOpacity 
-        style={styles.addButton} 
+        style={[styles.addButton, { backgroundColor: colors.primary }]} 
         onPress={handleCreateTask}
         activeOpacity={0.8}
       >
@@ -214,7 +216,6 @@ export default function TaskListScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
   },
   loadingContainer: {
     flex: 1,
@@ -227,7 +228,6 @@ const styles = StyleSheet.create({
   taskItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'white',
     borderRadius: 12,
     marginBottom: 12,
     padding: 16,
@@ -252,17 +252,14 @@ const styles = StyleSheet.create({
   taskTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#333',
     marginBottom: 4,
   },
   taskDescription: {
     fontSize: 14,
-    color: '#666',
     marginBottom: 4,
   },
   recurrenceInfo: {
     fontSize: 12,
-    color: '#999',
   },
   tagsContainer: {
     flexDirection: 'row',
@@ -270,7 +267,6 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   tagBadge: {
-    backgroundColor: '#f0f0f0',
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 12,
@@ -279,11 +275,9 @@ const styles = StyleSheet.create({
   },
   tagText: {
     fontSize: 11,
-    color: '#666',
     fontWeight: '500',
   },
   disabledBadge: {
-    backgroundColor: '#f0f0f0',
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 4,
@@ -291,7 +285,6 @@ const styles = StyleSheet.create({
   },
   disabledText: {
     fontSize: 12,
-    color: '#999',
   },
   emptyContainer: {
     flex: 1,
@@ -302,17 +295,15 @@ const styles = StyleSheet.create({
   emptyText: {
     marginTop: 16,
     fontSize: 16,
-    color: '#999',
     textAlign: 'center',
   },
   addButton: {
     position: 'absolute',
-    right: 20,
-    bottom: 20,
+    bottom: 24,
+    right: 24,
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: '#007AFF',
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: '#000',
@@ -320,7 +311,7 @@ const styles = StyleSheet.create({
       width: 0,
       height: 2,
     },
-    shadowOpacity: 0.3,
+    shadowOpacity: 0.25,
     shadowRadius: 3.84,
     elevation: 5,
   },

@@ -10,7 +10,8 @@ import {
   Switch
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useLanguage } from '../../hooks/useLanguage';
+import { useLanguage } from '../../contexts/LanguageContext';
+import { useTheme } from '../../contexts/ThemeContext';
 
 export type SortOption = 'title' | 'dueDate' | 'startDate' | 'createdAt' | 'lastUpdated';
 export type SortDirection = 'asc' | 'desc';
@@ -37,6 +38,7 @@ export default function TaskListFilter({
   availableTags
 }: TaskListFilterProps) {
   const { t } = useLanguage();
+  const { colors, isDarkMode } = useTheme();
   const [filterModalVisible, setFilterModalVisible] = useState(false);
   const [sortModalVisible, setSortModalVisible] = useState(false);
   const [tempOptions, setTempOptions] = useState<FilterOptions>({ ...filterOptions });
@@ -130,20 +132,21 @@ export default function TaskListFilter({
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.card }]}>
       {/* 搜索栏 */}
-      <View style={styles.searchContainer}>
-        <Ionicons name="search" size={20} color="#aaa" style={styles.searchIcon} />
+      <View style={[styles.searchContainer, { backgroundColor: isDarkMode ? colors.background : '#f0f0f0' }]}>
+        <Ionicons name="search" size={20} color={colors.subText} style={styles.searchIcon} />
         <TextInput
-          style={styles.searchInput}
+          style={[styles.searchInput, { color: colors.text }]}
           placeholder={t.task.searchPlaceholder}
+          placeholderTextColor={colors.subText}
           value={filterOptions.searchText}
           onChangeText={handleSearchChange}
           clearButtonMode="while-editing"
         />
         {filterOptions.searchText ? (
           <TouchableOpacity onPress={() => handleSearchChange('')}>
-            <Ionicons name="close-circle" size={20} color="#aaa" />
+            <Ionicons name="close-circle" size={20} color={colors.subText} />
           </TouchableOpacity>
         ) : null}
       </View>
@@ -152,7 +155,7 @@ export default function TaskListFilter({
       {(filterOptions.statusFilter !== 'all' || 
        filterOptions.tagsFilter.length > 0 || 
        !filterOptions.showDisabled) && (
-        <View style={styles.filterBadge}>
+        <View style={[styles.filterBadge, { backgroundColor: colors.primary }]}>
           <Text style={styles.filterBadgeText}>
             {(filterOptions.statusFilter !== 'all' ? 1 : 0) + 
              (filterOptions.tagsFilter.length > 0 ? 1 : 0) + 
@@ -169,7 +172,7 @@ export default function TaskListFilter({
           setFilterModalVisible(true);
         }}
       >
-        <Ionicons name="filter" size={22} color="#666" />
+        <Ionicons name="filter" size={22} color={colors.text} />
       </TouchableOpacity>
       
       {/* 排序按钮 */}
@@ -177,7 +180,7 @@ export default function TaskListFilter({
         style={styles.iconButton} 
         onPress={() => setSortModalVisible(true)}
       >
-        <Ionicons name="swap-vertical" size={22} color="#666" />
+        <Ionicons name="swap-vertical" size={22} color={colors.text} />
       </TouchableOpacity>
 
       {/* 筛选模态框 */}
@@ -188,116 +191,127 @@ export default function TaskListFilter({
         onRequestClose={() => setFilterModalVisible(false)}
       >
         <View style={styles.modalContainer}>
-          <View style={styles.modalContent}>
+          <View style={[styles.modalContent, { backgroundColor: colors.card }]}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>{t.task.filterTasks}</Text>
+              <Text style={[styles.modalTitle, { color: colors.text }]}>{t.task.filterTasks}</Text>
               <TouchableOpacity onPress={() => setFilterModalVisible(false)}>
-                <Ionicons name="close" size={24} color="#666" />
+                <Ionicons name="close" size={24} color={colors.text} />
               </TouchableOpacity>
             </View>
 
             <ScrollView style={styles.modalScroll}>
               {/* 任务状态筛选 */}
-              <Text style={styles.sectionTitle}>{t.task.statusFilter}</Text>
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>{t.task.statusFilter}</Text>
               <View style={styles.statusOptions}>
                 <TouchableOpacity
                   style={[
                     styles.statusOption, 
-                    filterOptions.statusFilter === 'all' && styles.selectedStatusOption
+                    { backgroundColor: isDarkMode ? '#333' : '#f0f0f0' },
+                    filterOptions.statusFilter === 'all' && [styles.selectedStatusOption, { backgroundColor: colors.primary }]
                   ]}
                   onPress={() => handleStatusFilter('all')}
                 >
-                  <Text style={styles.statusText}>{t.task.statusAll}</Text>
+                  <Text style={[
+                    styles.statusText, 
+                    { color: filterOptions.statusFilter === 'all' ? '#ffffff' : colors.text }
+                  ]}>{t.task.statusAll}</Text>
                 </TouchableOpacity>
                 
                 <TouchableOpacity
                   style={[
                     styles.statusOption,
-                    filterOptions.statusFilter === 'active' && styles.selectedStatusOption
+                    { backgroundColor: isDarkMode ? '#333' : '#f0f0f0' },
+                    filterOptions.statusFilter === 'active' && [styles.selectedStatusOption, { backgroundColor: colors.primary }]
                   ]}
                   onPress={() => handleStatusFilter('active')}
                 >
-                  <Text style={styles.statusText}>{t.task.statusActive}</Text>
+                  <Text style={[
+                    styles.statusText,
+                    { color: filterOptions.statusFilter === 'active' ? '#ffffff' : colors.text }
+                  ]}>{t.task.statusActive}</Text>
                 </TouchableOpacity>
                 
                 <TouchableOpacity
                   style={[
                     styles.statusOption,
-                    filterOptions.statusFilter === 'completed' && styles.selectedStatusOption
+                    { backgroundColor: isDarkMode ? '#333' : '#f0f0f0' },
+                    filterOptions.statusFilter === 'completed' && [styles.selectedStatusOption, { backgroundColor: colors.primary }]
                   ]}
                   onPress={() => handleStatusFilter('completed')}
                 >
-                  <Text style={styles.statusText}>{t.task.statusCompleted}</Text>
+                  <Text style={[
+                    styles.statusText,
+                    { color: filterOptions.statusFilter === 'completed' ? '#ffffff' : colors.text }
+                  ]}>{t.task.statusCompleted}</Text>
                 </TouchableOpacity>
                 
                 <TouchableOpacity
                   style={[
                     styles.statusOption,
-                    filterOptions.statusFilter === 'overdue' && styles.selectedStatusOption
+                    { backgroundColor: isDarkMode ? '#333' : '#f0f0f0' },
+                    filterOptions.statusFilter === 'overdue' && [styles.selectedStatusOption, { backgroundColor: colors.primary }]
                   ]}
                   onPress={() => handleStatusFilter('overdue')}
                 >
-                  <Text style={styles.statusText}>{t.task.statusOverdue}</Text>
+                  <Text style={[
+                    styles.statusText,
+                    { color: filterOptions.statusFilter === 'overdue' ? '#ffffff' : colors.text }
+                  ]}>{t.task.statusOverdue}</Text>
                 </TouchableOpacity>
               </View>
 
               {/* 禁用任务显示设置 */}
               <View style={styles.switchRow}>
-                <Text style={styles.switchLabel}>{t.task.showDisabledTasks}</Text>
+                <Text style={[styles.switchLabel, { color: colors.text }]}>{t.task.showDisabledTasks}</Text>
                 <Switch
                   value={tempOptions.showDisabled}
                   onValueChange={handleShowDisabledChange}
-                  trackColor={{ false: '#ccc', true: '#007AFF' }}
+                  trackColor={{ false: colors.border, true: colors.primary }}
+                  thumbColor={tempOptions.showDisabled ? '#ffffff' : '#f4f3f4'}
                 />
               </View>
 
               {/* 标签筛选 */}
               {availableTags.length > 0 && (
                 <>
-                  <Text style={styles.sectionTitle}>{t.task.filterByTags}</Text>
+                  <Text style={[styles.sectionTitle, { color: colors.text }]}>{t.task.filterByTags}</Text>
                   <View style={styles.tagsContainer}>
                     {availableTags.map((tag, index) => (
                       <TouchableOpacity
                         key={index}
                         style={[
                           styles.tagOption,
-                          tempOptions.tagsFilter.includes(tag) && styles.tagOptionSelected
+                          { backgroundColor: isDarkMode ? '#333' : '#f0f0f0' },
+                          tempOptions.tagsFilter.includes(tag) && [styles.selectedTagOption, { backgroundColor: colors.primary }]
                         ]}
                         onPress={() => handleTagsFilterChange(tag)}
                       >
-                        <Text 
-                          style={[
-                            styles.tagOptionText,
-                            tempOptions.tagsFilter.includes(tag) && styles.tagOptionTextSelected
-                          ]}
-                        >
-                          {tag}
-                        </Text>
-                        {tempOptions.tagsFilter.includes(tag) && (
-                          <Ionicons name="checkmark" size={16} color="white" style={styles.tagCheckIcon} />
-                        )}
+                        <Text style={[
+                          styles.tagText,
+                          { color: tempOptions.tagsFilter.includes(tag) ? '#ffffff' : colors.text }
+                        ]}>{tag}</Text>
                       </TouchableOpacity>
                     ))}
                   </View>
                 </>
               )}
-            </ScrollView>
 
-            <View style={styles.modalFooter}>
-              <TouchableOpacity 
-                style={styles.resetButton} 
-                onPress={resetFilters}
-              >
-                <Text style={styles.resetButtonText}>{t.task.resetFilters}</Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity 
-                style={styles.applyButton} 
-                onPress={applyFilters}
-              >
-                <Text style={styles.applyButtonText}>{t.task.applyFilters}</Text>
-              </TouchableOpacity>
-            </View>
+              {/* 按钮组 */}
+              <View style={styles.buttonRow}>
+                <TouchableOpacity 
+                  style={[styles.resetButton, { borderColor: colors.border }]} 
+                  onPress={resetFilters}
+                >
+                  <Text style={[styles.resetButtonText, { color: colors.text }]}>{t.task.reset}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={[styles.applyButton, { backgroundColor: colors.primary }]} 
+                  onPress={applyFilters}
+                >
+                  <Text style={styles.applyButtonText}>{t.task.apply}</Text>
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
           </View>
         </View>
       </Modal>
@@ -310,208 +324,61 @@ export default function TaskListFilter({
         onRequestClose={() => setSortModalVisible(false)}
       >
         <View style={styles.modalContainer}>
-          <View style={styles.modalContent}>
+          <View style={[styles.modalContent, { backgroundColor: colors.card }]}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>{t.task.sortTasks}</Text>
+              <Text style={[styles.modalTitle, { color: colors.text }]}>{t.task.sortTasks}</Text>
               <TouchableOpacity onPress={() => setSortModalVisible(false)}>
-                <Ionicons name="close" size={24} color="#666" />
+                <Ionicons name="close" size={24} color={colors.text} />
               </TouchableOpacity>
             </View>
 
             <ScrollView style={styles.modalScroll}>
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>{t.task.sort}</Text>
+              
               {/* 排序选项 */}
               <TouchableOpacity
-                style={styles.sortOption}
+                style={[styles.sortOption, { borderBottomColor: colors.border }]}
                 onPress={() => handleSortChange('title', 'asc')}
               >
-                <Text style={styles.sortOptionText}>{t.task.sortByName} - {t.task.ascending}</Text>
+                <Text style={[styles.sortOptionText, { color: colors.text }]}>{t.task.sortByName} ({t.task.ascending})</Text>
                 {filterOptions.sortBy === 'title' && filterOptions.sortDirection === 'asc' && (
-                  <Ionicons name="checkmark" size={20} color="#007AFF" />
+                  <Ionicons name="checkmark" size={22} color={colors.primary} />
                 )}
               </TouchableOpacity>
               
               <TouchableOpacity
-                style={styles.sortOption}
+                style={[styles.sortOption, { borderBottomColor: colors.border }]}
                 onPress={() => handleSortChange('title', 'desc')}
               >
-                <Text style={styles.sortOptionText}>{t.task.sortByName} - {t.task.descending}</Text>
+                <Text style={[styles.sortOptionText, { color: colors.text }]}>{t.task.sortByName} ({t.task.descending})</Text>
                 {filterOptions.sortBy === 'title' && filterOptions.sortDirection === 'desc' && (
-                  <Ionicons name="checkmark" size={20} color="#007AFF" />
+                  <Ionicons name="checkmark" size={22} color={colors.primary} />
                 )}
               </TouchableOpacity>
               
               <TouchableOpacity
-                style={styles.sortOption}
+                style={[styles.sortOption, { borderBottomColor: colors.border }]}
                 onPress={() => handleSortChange('dueDate', 'asc')}
               >
-                <Text style={styles.sortOptionText}>{t.task.sortByDueDate} - {t.task.ascending}</Text>
+                <Text style={[styles.sortOptionText, { color: colors.text }]}>{t.task.sortByDueDate} ({t.task.ascending})</Text>
                 {filterOptions.sortBy === 'dueDate' && filterOptions.sortDirection === 'asc' && (
-                  <Ionicons name="checkmark" size={20} color="#007AFF" />
+                  <Ionicons name="checkmark" size={22} color={colors.primary} />
                 )}
               </TouchableOpacity>
               
               <TouchableOpacity
-                style={styles.sortOption}
+                style={[styles.sortOption, { borderBottomColor: colors.border }]}
                 onPress={() => handleSortChange('dueDate', 'desc')}
               >
-                <Text style={styles.sortOptionText}>{t.task.sortByDueDate} - {t.task.descending}</Text>
+                <Text style={[styles.sortOptionText, { color: colors.text }]}>{t.task.sortByDueDate} ({t.task.descending})</Text>
                 {filterOptions.sortBy === 'dueDate' && filterOptions.sortDirection === 'desc' && (
-                  <Ionicons name="checkmark" size={20} color="#007AFF" />
-                )}
-              </TouchableOpacity>
-              
-              <TouchableOpacity
-                style={styles.sortOption}
-                onPress={() => handleSortChange('startDate', 'asc')}
-              >
-                <Text style={styles.sortOptionText}>{t.task.sortByStartDate} - {t.task.ascending}</Text>
-                {filterOptions.sortBy === 'startDate' && filterOptions.sortDirection === 'asc' && (
-                  <Ionicons name="checkmark" size={20} color="#007AFF" />
-                )}
-              </TouchableOpacity>
-              
-              <TouchableOpacity
-                style={styles.sortOption}
-                onPress={() => handleSortChange('startDate', 'desc')}
-              >
-                <Text style={styles.sortOptionText}>{t.task.sortByStartDate} - {t.task.descending}</Text>
-                {filterOptions.sortBy === 'startDate' && filterOptions.sortDirection === 'desc' && (
-                  <Ionicons name="checkmark" size={20} color="#007AFF" />
-                )}
-              </TouchableOpacity>
-              
-              <TouchableOpacity
-                style={styles.sortOption}
-                onPress={() => handleSortChange('createdAt', 'asc')}
-              >
-                <Text style={styles.sortOptionText}>{t.task.sortByCreatedDate} - {t.task.ascending}</Text>
-                {filterOptions.sortBy === 'createdAt' && filterOptions.sortDirection === 'asc' && (
-                  <Ionicons name="checkmark" size={20} color="#007AFF" />
-                )}
-              </TouchableOpacity>
-              
-              <TouchableOpacity
-                style={styles.sortOption}
-                onPress={() => handleSortChange('createdAt', 'desc')}
-              >
-                <Text style={styles.sortOptionText}>{t.task.sortByCreatedDate} - {t.task.descending}</Text>
-                {filterOptions.sortBy === 'createdAt' && filterOptions.sortDirection === 'desc' && (
-                  <Ionicons name="checkmark" size={20} color="#007AFF" />
-                )}
-              </TouchableOpacity>
-              
-              <TouchableOpacity
-                style={styles.sortOption}
-                onPress={() => handleSortChange('lastUpdated', 'asc')}
-              >
-                <Text style={styles.sortOptionText}>{t.task.sortByLastUpdated} - {t.task.ascending}</Text>
-                {filterOptions.sortBy === 'lastUpdated' && filterOptions.sortDirection === 'asc' && (
-                  <Ionicons name="checkmark" size={20} color="#007AFF" />
-                )}
-              </TouchableOpacity>
-              
-              <TouchableOpacity
-                style={styles.sortOption}
-                onPress={() => handleSortChange('lastUpdated', 'desc')}
-              >
-                <Text style={styles.sortOptionText}>{t.task.sortByLastUpdated} - {t.task.descending}</Text>
-                {filterOptions.sortBy === 'lastUpdated' && filterOptions.sortDirection === 'desc' && (
-                  <Ionicons name="checkmark" size={20} color="#007AFF" />
+                  <Ionicons name="checkmark" size={22} color={colors.primary} />
                 )}
               </TouchableOpacity>
             </ScrollView>
           </View>
         </View>
       </Modal>
-
-      {/* 排序和筛选指示器 */}
-      {(filterOptions.searchText || 
-        filterOptions.statusFilter !== 'all' || 
-        filterOptions.tagsFilter.length > 0 || 
-        !filterOptions.showDisabled) && (
-        <View style={styles.activeFiltersBar}>
-          {filterOptions.searchText && (
-            <View style={styles.activeFilter}>
-              <Text style={styles.activeFilterText}>
-                {t.task.search}: {filterOptions.searchText}
-              </Text>
-              <TouchableOpacity 
-                onPress={() => handleSearchChange('')}
-                style={styles.clearFilterButton}
-              >
-                <Ionicons name="close-circle" size={16} color="#666" />
-              </TouchableOpacity>
-            </View>
-          )}
-          
-          {filterOptions.statusFilter !== 'all' && (
-            <View style={styles.activeFilter}>
-              <Text style={styles.activeFilterText}>
-                {filterOptions.statusFilter === 'active' && t.task.statusInProgress}
-                {filterOptions.statusFilter === 'completed' && t.task.statusCompleted}
-                {filterOptions.statusFilter === 'overdue' && t.task.statusOverdue}
-              </Text>
-              <TouchableOpacity 
-                onPress={() => {
-                  const newOptions = { ...filterOptions, statusFilter: 'all' as TaskStatusFilter };
-                  onFilterChange(newOptions);
-                }}
-                style={styles.clearFilterButton}
-              >
-                <Ionicons name="close-circle" size={16} color="#666" />
-              </TouchableOpacity>
-            </View>
-          )}
-          
-          {filterOptions.tagsFilter.length > 0 && (
-            <View style={styles.activeFilter}>
-              <Text style={styles.activeFilterText}>
-                {t.task.tags}: {filterOptions.tagsFilter.join(', ')}
-              </Text>
-              <TouchableOpacity 
-                onPress={() => {
-                  const newOptions = { ...filterOptions, tagsFilter: [] };
-                  onFilterChange(newOptions);
-                }}
-                style={styles.clearFilterButton}
-              >
-                <Ionicons name="close-circle" size={16} color="#666" />
-              </TouchableOpacity>
-            </View>
-          )}
-          
-          {!filterOptions.showDisabled && (
-            <View style={styles.activeFilter}>
-              <Text style={styles.activeFilterText}>{t.task.hidingDisabledTasks}</Text>
-              <TouchableOpacity 
-                onPress={() => {
-                  const newOptions = { ...filterOptions, showDisabled: true };
-                  onFilterChange(newOptions);
-                }}
-                style={styles.clearFilterButton}
-              >
-                <Ionicons name="close-circle" size={16} color="#666" />
-              </TouchableOpacity>
-            </View>
-          )}
-          
-          <TouchableOpacity 
-            style={styles.clearAllButton}
-            onPress={() => {
-              const newOptions: FilterOptions = {
-                ...filterOptions,
-                searchText: '',
-                statusFilter: 'all',
-                tagsFilter: [],
-                showDisabled: true
-              };
-              onFilterChange(newOptions);
-            }}
-          >
-            <Text style={styles.clearAllText}>{t.task.clearAllFilters}</Text>
-          </TouchableOpacity>
-        </View>
-      )}
     </View>
   );
 }
@@ -557,7 +424,6 @@ const styles = StyleSheet.create({
     marginLeft: 4,
   },
   filterBadge: {
-    backgroundColor: '#007AFF',
     width: 18,
     height: 18,
     borderRadius: 9,
@@ -568,7 +434,7 @@ const styles = StyleSheet.create({
     right: 66,
   },
   filterBadgeText: {
-    color: 'white',
+    color: '#ffffff',
     fontSize: 12,
     fontWeight: 'bold',
   },
@@ -740,5 +606,17 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#007AFF',
     fontWeight: '500',
+  },
+  buttonRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    padding: 16,
+  },
+  selectedTagOption: {
+    backgroundColor: '#007AFF',
+  },
+  tagText: {
+    fontSize: 14,
+    color: '#333',
   },
 }); 

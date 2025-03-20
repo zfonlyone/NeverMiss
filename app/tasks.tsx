@@ -1,7 +1,7 @@
 import React from 'react';
 import { Stack } from 'expo-router';
 import { View, StyleSheet } from 'react-native';
-import { useLanguage } from '../hooks/useLanguage';
+import { useLanguage } from '../contexts/LanguageContext';
 import { useTheme } from '../contexts/ThemeContext';
 import TaskListScreen from './screens/TaskListScreen';
 
@@ -22,6 +22,10 @@ export default function TasksScreen() {
             backgroundColor: colors.card,
           },
           headerTintColor: colors.text,
+          headerTitleStyle: {
+            color: colors.text,
+            fontWeight: 'bold'
+          },
         }}
       />
       <TaskListScreen />

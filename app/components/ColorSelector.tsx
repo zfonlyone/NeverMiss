@@ -6,7 +6,8 @@ import {
   TouchableOpacity,
   ScrollView
 } from 'react-native';
-import { useLanguage } from '../../hooks/useLanguage';
+import { useLanguage } from '../../contexts/LanguageContext';
+import { useTheme } from '../../contexts/ThemeContext';
 
 // 预定义的背景颜色
 const BACKGROUND_COLORS = [
@@ -28,10 +29,11 @@ interface ColorSelectorProps {
 
 export default function ColorSelector({ selectedColor, onColorChange }: ColorSelectorProps) {
   const { t } = useLanguage();
+  const { colors, isDarkMode } = useTheme();
 
   return (
     <View style={styles.container}>
-      <Text style={styles.label}>{t.task.backgroundColor}</Text>
+      <Text style={[styles.label, { color: colors.text }]}>{t.task.backgroundColor}</Text>
       <ScrollView 
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -43,12 +45,12 @@ export default function ColorSelector({ selectedColor, onColorChange }: ColorSel
             style={[
               styles.colorButton,
               { backgroundColor: color },
-              selectedColor === color && styles.colorButtonSelected
+              selectedColor === color && [styles.colorButtonSelected, { borderColor: colors.primary }]
             ]}
             onPress={() => onColorChange(color)}
           >
             {selectedColor === color && (
-              <View style={styles.colorButtonCheck} />
+              <View style={[styles.colorButtonCheck, { backgroundColor: colors.primary }]} />
             )}
           </TouchableOpacity>
         ))}
@@ -65,7 +67,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     marginBottom: 8,
-    color: '#333',
   },
   colorList: {
     flexDirection: 'row',
@@ -83,12 +84,10 @@ const styles = StyleSheet.create({
   },
   colorButtonSelected: {
     borderWidth: 2,
-    borderColor: '#007AFF',
   },
   colorButtonCheck: {
     width: 12,
     height: 12,
     borderRadius: 6,
-    backgroundColor: '#007AFF',
   },
 }); 

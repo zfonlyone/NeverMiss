@@ -13,8 +13,8 @@ import {
   ActivityIndicator
 } from 'react-native';
 import { useRouter, useLocalSearchParams, Stack } from 'expo-router';
-import { useLanguage } from '../../hooks/useLanguage';
-import { useTheme } from '../../hooks/useTheme';
+import { useLanguage } from '../../contexts/LanguageContext';
+import { useTheme } from '../../contexts/ThemeContext';
 import RecurrenceSelector from '../components/RecurrenceSelector';
 import TagSelector from '../components/TagSelector';
 import ColorSelector from '../components/ColorSelector';
@@ -30,7 +30,6 @@ import {
   ReminderUnit,
   validateTask
 } from '../../models/Task';
-import * as TaskController from '../../controllers/TaskController';
 import { createTask as createTaskService, updateTask as updateTaskService, getTask as getTaskById } from '../../services/taskService';
 import RNPickerSelect from 'react-native-picker-select';
 
@@ -40,6 +39,7 @@ interface TaskFormScreenProps {
 
 export default function TaskFormScreen({ taskId }: TaskFormScreenProps) {
   const { t } = useLanguage();
+  const { colors, isDarkMode } = useTheme();
   const router = useRouter();
   const isEditMode = !!taskId;
 
@@ -182,9 +182,9 @@ export default function TaskFormScreen({ taskId }: TaskFormScreenProps) {
       paddingVertical: 12,
       paddingHorizontal: 10,
       borderWidth: 1,
-      borderColor: '#e0e0e0',
+      borderColor: colors.border,
       borderRadius: 8,
-      color: '#333',
+      color: colors.text,
       paddingRight: 30,
     },
     inputAndroid: {
@@ -192,13 +192,13 @@ export default function TaskFormScreen({ taskId }: TaskFormScreenProps) {
       paddingVertical: 8,
       paddingHorizontal: 10,
       borderWidth: 1,
-      borderColor: '#e0e0e0',
+      borderColor: colors.border,
       borderRadius: 8,
-      color: '#333',
+      color: colors.text,
       paddingRight: 30,
     },
     placeholder: {
-      color: '#999',
+      color: colors.subText,
     },
     iconContainer: {
       top: 10,
@@ -208,67 +208,99 @@ export default function TaskFormScreen({ taskId }: TaskFormScreenProps) {
 
   return (
     <KeyboardAvoidingView
-      style={styles.container}
+      style={[styles.container, { backgroundColor: colors.background }]}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       keyboardVerticalOffset={100}
     >
       {isLoading && (
         <View style={styles.loadingOverlay}>
-          <ActivityIndicator size="large" color="#007AFF" />
+          <ActivityIndicator size="large" color={colors.primary} />
         </View>
       )}
       
-      <StatusBar style="dark" />
-      <View style={styles.header}>
+      <StatusBar style={isDarkMode ? "light" : "dark"} />
+      <View style={[styles.header, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={handleCancel} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color="#007AFF" />
+          <Ionicons name="arrow-back" size={24} color={colors.primary} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>{isEditMode ? t.task.editTask : t.task.newTask}</Text>
-        <TouchableOpacity onPress={handleSave} disabled={isLoading} style={styles.saveButton}>
-          <Text style={[styles.saveButtonText, isLoading && styles.disabledText]}>{isLoading ? t.common.saving : t.common.save}</Text>
+        <Text style={[styles.headerTitle, { color: colors.text }]}>
+          {isEditMode ? t.task.editTask : t.task.newTask}
+        </Text>
+        <TouchableOpacity onPress={handleSave} disabled={isLoading} style={styles.headerSaveButton}>
+          {isLoading ? (
+            <ActivityIndicator size="small" color={colors.primary} />
+          ) : (
+            <Ionicons name="checkmark" size={28} color={colors.primary} />
+          )}
         </TouchableOpacity>
       </View>
 
-      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
-        <View style={styles.formSection}>
-          <Text style={styles.sectionTitle}>{t.task.title}</Text>
+      <ScrollView 
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+      >
+        <View style={[styles.formSection, { backgroundColor: colors.card }]}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>{t.task.title}</Text>
           <TextInput
-            style={styles.titleInput}
+            style={[
+              styles.titleInput, 
+              { 
+                borderColor: colors.border, 
+                backgroundColor: isDarkMode ? colors.card : '#f9f9f9',
+                color: colors.text 
+              }
+            ]}
             value={title}
             onChangeText={setTitle}
             placeholder={t.task.title}
+            placeholderTextColor={colors.subText}
             maxLength={100}
           />
         </View>
 
-        <View style={styles.formSection}>
-          <Text style={styles.sectionTitle}>{t.task.description}</Text>
+        <View style={[styles.formSection, { backgroundColor: colors.card }]}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>{t.task.description}</Text>
           <TextInput
-            style={styles.descriptionInput}
+            style={[
+              styles.descriptionInput, 
+              { 
+                borderColor: colors.border,
+                backgroundColor: isDarkMode ? colors.card : '#f9f9f9',
+                color: colors.text
+              }
+            ]}
             value={description}
             onChangeText={setDescription}
             placeholder={t.task.description}
+            placeholderTextColor={colors.subText}
             multiline
             numberOfLines={3}
           />
         </View>
 
-        <View style={styles.formSection}>
+        <View style={[styles.formSection, { backgroundColor: colors.card }]}>
           <TagSelector selectedTags={tags} onTagsChange={setTags} />
         </View>
 
-        <View style={styles.formSection}>
+        <View style={[styles.formSection, { backgroundColor: colors.card }]}>
           <ColorSelector selectedColor={backgroundColor} onColorChange={setBackgroundColor} />
         </View>
 
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>{t.reminder.reminderSettings}</Text>
+        <View style={[styles.section, { backgroundColor: colors.card }]}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>{t.reminder.reminderSettings}</Text>
           
-          <View style={styles.reminderContainer}>
-            <View style={styles.reminderGroup}>
-              <Text style={styles.label}>{t.reminder.reminderTime}</Text>
+          <View style={[styles.reminderContainer, { backgroundColor: colors.card }]}>
+            <View style={[styles.reminderGroup, { backgroundColor: colors.card }]}>
+              <Text style={[styles.label, { color: colors.text }]}>{t.reminder.reminderTime}</Text>
               <TextInput
-                style={[styles.input, { width: 80 }]}
+                style={[
+                  styles.input, 
+                  { 
+                    borderColor: colors.border,
+                    backgroundColor: isDarkMode ? colors.card : '#f9f9f9',
+                    color: colors.text
+                  }
+                ]}
                 value={reminderTime.toString()}
                 onChangeText={validateAndSetReminderTime}
                 keyboardType="numeric"
@@ -276,15 +308,15 @@ export default function TaskFormScreen({ taskId }: TaskFormScreenProps) {
               />
             </View>
             
-            <View style={styles.reminderGroup}>
-              <Text style={styles.label}>{t.reminder.reminderUnit}</Text>
+            <View style={[styles.reminderGroup, { backgroundColor: colors.card }]}>
+              <Text style={[styles.label, { color: colors.text }]}>{t.reminder.reminderUnit}</Text>
               <RNPickerSelect
                 value={reminderUnit}
                 onValueChange={(value) => setReminderUnit(value || 'minutes')}
                 items={[
-                  { label: 'Minutes', value: 'minutes' },
-                  { label: 'Hours', value: 'hours' },
-                  { label: 'Days', value: 'days' },
+                  { label: t.task.minutes, value: 'minutes' },
+                  { label: t.task.hours, value: 'hours' },
+                  { label: t.task.days, value: 'days' },
                 ]}
                 style={pickerSelectStyles}
               />
@@ -292,10 +324,10 @@ export default function TaskFormScreen({ taskId }: TaskFormScreenProps) {
           </View>
         </View>
         
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>{t.reminder.recurrenceSettings}</Text>
+        <View style={[styles.section, { backgroundColor: colors.card }]}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>{t.reminder.recurrenceSettings}</Text>
           
-          <View style={styles.recurrenceContainer}>
+          <View style={[styles.recurrenceContainer, { backgroundColor: colors.card }]}>
             <RecurrenceSelector
               recurrencePattern={recurrencePattern}
               dateType={dateType}
@@ -305,62 +337,52 @@ export default function TaskFormScreen({ taskId }: TaskFormScreenProps) {
           </View>
         </View>
 
-        <View style={styles.formSection}>
-          <Text style={styles.sectionTitle}>{t.menu.settings}</Text>
+        <View style={[styles.formSection, { backgroundColor: colors.card }]}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>{t.menu.settings}</Text>
           
-          <View style={styles.switchSetting}>
-            <View style={styles.switchTextContainer}>
-              <Text style={styles.switchLabel}>{t.task.enableTask}</Text>
-              <Text style={styles.switchDescription}>{t.task.enableTaskDesc}</Text>
+          <View style={[styles.switchSetting, { backgroundColor: colors.card }]}>
+            <View style={[styles.switchTextContainer, { backgroundColor: colors.card }]}>
+              <Text style={[styles.switchLabel, { color: colors.text }]}>{t.task.enableTask}</Text>
+              <Text style={[styles.switchDescription, { color: colors.subText }]}>{t.task.enableTaskDesc}</Text>
             </View>
             <Switch
               value={isActive}
               onValueChange={setIsActive}
-              trackColor={{ false: '#767577', true: '#81b0ff' }}
-              thumbColor={isActive ? '#007AFF' : '#f4f3f4'}
+              trackColor={{ false: '#767577', true: colors.primary + '80' }}
+              thumbColor={isActive ? colors.primary : '#f4f3f4'}
               ios_backgroundColor="#3e3e3e"
             />
           </View>
 
-          <View style={styles.switchSetting}>
-            <View style={styles.switchTextContainer}>
-              <Text style={styles.switchLabel}>{t.task.autoRestart}</Text>
-              <Text style={styles.switchDescription}>{t.task.autoRestartDesc}</Text>
+          <View style={[styles.switchSetting, { backgroundColor: colors.card }]}>
+            <View style={[styles.switchTextContainer, { backgroundColor: colors.card }]}>
+              <Text style={[styles.switchLabel, { color: colors.text }]}>{t.task.autoRestart}</Text>
+              <Text style={[styles.switchDescription, { color: colors.subText }]}>{t.task.autoRestartDesc}</Text>
             </View>
             <Switch
               value={autoRestart}
               onValueChange={setAutoRestart}
-              trackColor={{ false: '#767577', true: '#81b0ff' }}
-              thumbColor={autoRestart ? '#007AFF' : '#f4f3f4'}
+              trackColor={{ false: '#767577', true: colors.primary + '80' }}
+              thumbColor={autoRestart ? colors.primary : '#f4f3f4'}
               ios_backgroundColor="#3e3e3e"
             />
           </View>
 
-          <View style={styles.switchSetting}>
-            <View style={styles.switchTextContainer}>
-              <Text style={styles.switchLabel}>{t.task.syncToCalendar}</Text>
-              <Text style={styles.switchDescription}>{t.task.syncToCalendarDesc}</Text>
+          <View style={[styles.switchSetting, { backgroundColor: colors.card }]}>
+            <View style={[styles.switchTextContainer, { backgroundColor: colors.card }]}>
+              <Text style={[styles.switchLabel, { color: colors.text }]}>{t.task.syncToCalendar}</Text>
+              <Text style={[styles.switchDescription, { color: colors.subText }]}>{t.task.syncToCalendarDesc}</Text>
             </View>
             <Switch
               value={syncToCalendar}
               onValueChange={setSyncToCalendar}
-              trackColor={{ false: '#767577', true: '#81b0ff' }}
-              thumbColor={syncToCalendar ? '#007AFF' : '#f4f3f4'}
+              trackColor={{ false: '#767577', true: colors.primary + '80' }}
+              thumbColor={syncToCalendar ? colors.primary : '#f4f3f4'}
               ios_backgroundColor="#3e3e3e"
             />
           </View>
         </View>
       </ScrollView>
-      
-      <View style={styles.saveButtonContainer}>
-        <TouchableOpacity 
-          style={styles.saveButton}
-          onPress={handleSave}
-          disabled={isLoading}
-        >
-          <Text style={styles.saveButtonText}>{t.common.save}</Text>
-        </TouchableOpacity>
-      </View>
     </KeyboardAvoidingView>
   );
 }
@@ -368,16 +390,20 @@ export default function TaskFormScreen({ taskId }: TaskFormScreenProps) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
+  },
+  loadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1000,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     padding: 16,
-    backgroundColor: 'white',
     borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
     height: 56,
   },
   backButton: {
@@ -389,15 +415,15 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#333',
   },
-  saveButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+  headerSaveButton: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   saveButtonText: {
     fontSize: 16,
-    color: '#007AFF',
     fontWeight: '600',
   },
   disabledText: {
@@ -410,7 +436,6 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
   },
   formSection: {
-    backgroundColor: 'white',
     marginTop: 16,
     padding: 16,
     borderRadius: 8,
@@ -428,25 +453,20 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     marginBottom: 16,
-    color: '#333',
   },
   titleInput: {
     height: 48,
     borderWidth: 1,
-    borderColor: '#e0e0e0',
     borderRadius: 8,
     paddingHorizontal: 12,
     fontSize: 16,
-    backgroundColor: '#f9f9f9',
   },
   descriptionInput: {
     borderWidth: 1,
-    borderColor: '#e0e0e0',
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingTop: 12,
     fontSize: 16,
-    backgroundColor: '#f9f9f9',
     minHeight: 100,
     textAlignVertical: 'top',
   },
@@ -461,7 +481,6 @@ const styles = StyleSheet.create({
   },
   settingLabel: {
     fontSize: 16,
-    color: '#333',
   },
   timeButton: {
     flexDirection: 'row',
@@ -538,39 +557,6 @@ const styles = StyleSheet.create({
   switchDescription: {
     fontSize: 14,
     color: '#666',
-  },
-  loadingOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  saveButtonContainer: {
-    padding: 16,
-    backgroundColor: 'white',
-    borderTopWidth: 1,
-    borderTopColor: '#e0e0e0',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -3 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 5,
-  },
-  saveButton: {
-    backgroundColor: '#007AFF',
-    borderRadius: 8,
-    padding: 15,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  saveButtonText: {
-    color: 'white',
-    fontSize: 18,
-    fontWeight: 'bold',
   },
   section: {
     backgroundColor: 'white',

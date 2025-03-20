@@ -18,7 +18,7 @@ import Animated, {
   interpolateColor,
   interpolate,
 } from 'react-native-reanimated';
-import { useLanguage } from '../../hooks/useLanguage';
+import { useLanguage } from '../../contexts/LanguageContext';
 import {
   RecurrenceType,
   RecurrenceUnit,
@@ -48,7 +48,7 @@ export default function RecurrenceSelector({
   onDateTypeChange,
 }: RecurrenceSelectorProps) {
   const { t } = useLanguage();
-  const { colors } = useTheme();
+  const { colors, isDarkMode } = useTheme();
   const insets = useSafeAreaInsets();
   const scrollViewRef = useRef<ScrollView>(null);
   const [customValue, setCustomValue] = useState(String(recurrencePattern.value || 1));
@@ -151,13 +151,13 @@ export default function RecurrenceSelector({
 
   // Week days
   const weekDays = [
-    { value: 0, label: t.task.sunday || '日', short: '日' },
-    { value: 1, label: t.task.monday || '一', short: '一' },
-    { value: 2, label: t.task.tuesday || '二', short: '二' },
-    { value: 3, label: t.task.wednesday || '三', short: '三' },
-    { value: 4, label: t.task.thursday || '四', short: '四' },
-    { value: 5, label: t.task.friday || '五', short: '五' },
-    { value: 6, label: t.task.saturday || '六', short: '六' },
+    { value: 0, label: t.task.sunday.charAt(0) },
+    { value: 1, label: t.task.monday.charAt(0) },
+    { value: 2, label: t.task.tuesday.charAt(0) },
+    { value: 3, label: t.task.wednesday.charAt(0) },
+    { value: 4, label: t.task.thursday.charAt(0) },
+    { value: 5, label: t.task.friday.charAt(0) },
+    { value: 6, label: t.task.saturday.charAt(0) }
   ];
 
   // Weeks of month
@@ -257,6 +257,14 @@ export default function RecurrenceSelector({
     }
   };
 
+  // Handle week day change
+  const handleWeekDayChange = (dayValue: number) => {
+    onRecurrenceChange({
+      ...recurrencePattern,
+      weekDay: dayValue as WeekDay
+    });
+  };
+
   // Render recurrence types grid
   const renderRecurrenceTypeGrid = () => {
     return (
@@ -290,97 +298,107 @@ export default function RecurrenceSelector({
     <View style={styles.dateTypeContainer}>
       <Text style={[styles.sectionTitle, { color: colors.text }]}>{t.task.dateType}</Text>
       <View style={[styles.segmentedControl, { backgroundColor: colors.card }]}>
-        {dateTypes.map((item, index) => (
-          <Pressable
-            key={item.type}
+        <TouchableOpacity
+          style={[
+            styles.segmentButton,
+            styles.segmentButtonLeft,
+            dateType === 'solar' && { backgroundColor: colors.primary },
+            dateType !== 'solar' && { backgroundColor: colors.border }
+          ]}
+          onPress={() => handleDateTypeChange('solar')}
+        >
+          <Text
             style={[
-              styles.segmentButton,
-              dateType === item.type ? [styles.segmentButtonActive, { backgroundColor: colors.primary }] : null,
-              index === 0 ? styles.segmentButtonLeft : null,
-              index === dateTypes.length - 1 ? styles.segmentButtonRight : null,
-            ]}
-            onPress={() => handleDateTypeChange(item.type)}
-          >
-            <Text style={[
               styles.segmentButtonText,
-              { color: dateType === item.type ? '#fff' : colors.text }
-            ]}>
-              {item.label}
-            </Text>
-          </Pressable>
-        ))}
+              dateType === 'solar' ? { color: '#FFFFFF' } : { color: colors.text }
+            ]}
+          >
+            {t.task.solarCalendar}
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[
+            styles.segmentButton,
+            styles.segmentButtonRight,
+            dateType === 'lunar' && { backgroundColor: colors.primary },
+            dateType !== 'lunar' && { backgroundColor: colors.border }
+          ]}
+          onPress={() => handleDateTypeChange('lunar')}
+        >
+          <Text
+            style={[
+              styles.segmentButtonText,
+              dateType === 'lunar' ? { color: '#FFFFFF' } : { color: colors.text }
+            ]}
+          >
+            {t.task.lunarCalendar}
+          </Text>
+        </TouchableOpacity>
       </View>
     </View>
   );
 
   // Render quick value selection buttons
-  const renderValueButtons = () => (
-    <View style={styles.valueContainer}>
-      <Text style={[styles.sectionTitle, { color: colors.text }]}>
-        {patternTypes[activeIndex].description.replace('X', '')}
-      </Text>
-      
-      <View style={styles.valueButtonsRow}>
-        {presetValues.map((value) => (
-          <Pressable
-            key={value}
-            style={[
-              styles.valueButton,
-              recurrencePattern.value === value ? [styles.valueButtonActive, { backgroundColor: colors.primary }] : { backgroundColor: colors.card }
-            ]}
-            onPress={() => handleValueChange(value)}
-          >
-            <Text style={[
-              styles.valueButtonText,
-              { color: recurrencePattern.value === value ? '#fff' : colors.text }
-            ]}>
-              {value}
-            </Text>
-          </Pressable>
-        ))}
-        
-        <View style={[styles.customValueContainer, { backgroundColor: colors.card }]}>
-          <TextInput
-            style={[styles.customValueInput, { color: colors.text }]}
-            value={customValue}
-            onChangeText={handleCustomValueChange}
-            keyboardType="number-pad"
-            maxLength={3}
-          />
+  const renderValueButtons = () => {
+    if (recurrencePattern.type === 'custom') return null;
+
+    // Common values for daily, weekly, monthly, yearly recurrence
+    const values = [1, 2, 3, 5, 7, 14, 30, 90];
+
+    return (
+      <View style={styles.valueContainer}>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>{t.task.recurrenceValue}</Text>
+        <View style={styles.valueButtonsRow}>
+          {values.map(value => (
+            <TouchableOpacity
+              key={value}
+              style={[
+                styles.valueButton,
+                { backgroundColor: isDarkMode ? colors.card : '#f0f0f0' },
+                recurrencePattern.value === value && { backgroundColor: colors.primary }
+              ]}
+              onPress={() => handleValueChange(value)}
+            >
+              <Text
+                style={[
+                  styles.valueButtonText,
+                  { color: recurrencePattern.value === value ? '#fff' : colors.text }
+                ]}
+              >
+                {value}
+              </Text>
+            </TouchableOpacity>
+          ))}
         </View>
       </View>
-    </View>
-  );
+    );
+  };
 
   // Render week day selector
   const renderWeekDaySelector = () => {
-    if (recurrencePattern.type !== 'weekly' && recurrencePattern.type !== 'weekOfMonth') {
-      return null;
-    }
+    if (recurrencePattern.type !== 'weekly') return null;
 
     return (
       <View style={styles.optionSection}>
         <Text style={[styles.sectionTitle, { color: colors.text }]}>{t.task.weekDay}</Text>
         <View style={styles.weekDaysContainer}>
-          {weekDays.map((day) => (
-            <Pressable
+          {weekDays.map(day => (
+            <TouchableOpacity
               key={day.value}
               style={[
                 styles.weekDayButton,
-                recurrencePattern.weekDay === day.value ? [styles.weekDayButtonActive, { backgroundColor: colors.primary }] : { backgroundColor: colors.card }
+                { backgroundColor: isDarkMode ? colors.card : '#f0f0f0' },
+                recurrencePattern.weekDay === day.value && { backgroundColor: colors.primary }
               ]}
-              onPress={() => onRecurrenceChange({
-                ...recurrencePattern,
-                weekDay: day.value as WeekDay
-              })}
+              onPress={() => handleWeekDayChange(day.value)}
             >
               <Text style={[
                 styles.weekDayText,
-                { color: recurrencePattern.weekDay === day.value ? '#fff' : colors.text }
+                { color: recurrencePattern.weekDay === day.value ? '#ffffff' : colors.text }
               ]}>
-                {day.short}
+                {day.label}
               </Text>
-            </Pressable>
+            </TouchableOpacity>
           ))}
         </View>
       </View>
@@ -611,9 +629,6 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     alignItems: 'center',
   },
-  segmentButtonActive: {
-    backgroundColor: '#007AFF',
-  },
   segmentButtonLeft: {
     borderTopLeftRadius: 8,
     borderBottomLeftRadius: 8,
@@ -625,9 +640,6 @@ const styles = StyleSheet.create({
   segmentButtonText: {
     fontSize: 14,
     fontWeight: '500',
-  },
-  segmentButtonTextActive: {
-    color: '#FFFFFF',
   },
   valueContainer: {
     marginBottom: 20,
@@ -645,9 +657,7 @@ const styles = StyleSheet.create({
     marginRight: 10,
     marginBottom: 10,
   },
-  valueButtonActive: {
-    backgroundColor: '#007AFF',
-  },
+  valueButtonActive: { },
   valueButtonText: {
     fontSize: 16,
     fontWeight: '500',
@@ -680,9 +690,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  weekDayButtonActive: {
-    backgroundColor: '#007AFF',
-  },
+  weekDayButtonActive: { },
   weekDayText: {
     fontSize: 14,
     fontWeight: '500',
@@ -704,9 +712,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     margin: 5,
   },
-  dayButtonActive: {
-    backgroundColor: '#007AFF',
-  },
+  dayButtonActive: { },
   dayText: {
     fontSize: 14,
     fontWeight: '500',
@@ -722,9 +728,7 @@ const styles = StyleSheet.create({
     marginRight: 8,
     marginBottom: 8,
   },
-  weekButtonActive: {
-    backgroundColor: '#007AFF',
-  },
+  weekButtonActive: { },
   weekText: {
     fontSize: 14,
     fontWeight: '500',
@@ -742,9 +746,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     marginRight: 8,
   },
-  monthButtonActive: {
-    backgroundColor: '#007AFF',
-  },
+  monthButtonActive: { },
   monthText: {
     fontSize: 14,
     fontWeight: '500',
@@ -760,9 +762,7 @@ const styles = StyleSheet.create({
     marginRight: 8,
     marginBottom: 8,
   },
-  unitButtonActive: {
-    backgroundColor: '#007AFF',
-  },
+  unitButtonActive: { },
   unitText: {
     fontSize: 14,
     fontWeight: '500',

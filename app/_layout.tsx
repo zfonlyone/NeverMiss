@@ -4,11 +4,12 @@ import * as SplashScreen from 'expo-splash-screen';
 import { initStorage } from '../services/storageService';
 import { LanguageProvider } from '../contexts/LanguageContext';
 import { ThemeProvider } from '../contexts/ThemeContext';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 // 确保启动屏幕保持可见，直到明确隐藏
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
-export default function RootLayout() {
+export default function AppLayout() {
   const [appIsReady, setAppIsReady] = useState(false);
 
   useEffect(() => {
@@ -42,10 +43,16 @@ export default function RootLayout() {
   }
 
   return (
-    <ThemeProvider>
-      <LanguageProvider>
-        <Stack screenOptions={{ headerShown: false }} />
-      </LanguageProvider>
-    </ThemeProvider>
+    <SafeAreaProvider>
+      <ThemeProvider>
+        <LanguageProvider>
+          <Stack
+            screenOptions={{
+              headerShown: false,
+            }}
+          />
+        </LanguageProvider>
+      </ThemeProvider>
+    </SafeAreaProvider>
   );
 }
