@@ -269,9 +269,9 @@ export default function TaskListScreen() {
               style={styles.backButton}
               onPress={() => router.replace('/')}
             >
-              <Ionicons name="arrow-back" size={24} color={colors.primary} />
-              <Text style={[styles.backButtonText, { color: colors.primary }]}>
-                返回主页
+              <Ionicons name="arrow-back" size={24} color={isDarkMode ? colors.text : "#000"} />
+              <Text style={[styles.backButtonText, { color: isDarkMode ? colors.text : "#000" }]}>
+                首页
               </Text>
             </TouchableOpacity>
           ),
