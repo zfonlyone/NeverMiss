@@ -8,25 +8,17 @@ import {
   Modal,
   ScrollView,
   TextInput,
+  ActivityIndicator,
 } from 'react-native';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { Ionicons } from '@expo/vector-icons';
-
-export type SpecialDateType = 'holiday' | 'solarTerm' | 'custom';
-
-export interface SpecialDate {
-  id: string;
-  name: string;
-  type: SpecialDateType;
-  month: number;
-  day: number;
-  isLunar?: boolean;
-}
+import { SpecialDate as SpecialDateModel, SpecialDateType } from '../../models/Task';
+import SpecialDateController from '../../controllers/SpecialDateController';
 
 interface SpecialDateSelectorProps {
-  selectedDate?: SpecialDate | null;
-  onDateSelect: (date: SpecialDate | null) => void;
+  selectedDate?: SpecialDateModel | null;
+  onDateSelect: (date: SpecialDateModel | null) => void;
   isLunarCalendar: boolean;
 }
 
@@ -39,50 +31,67 @@ const SpecialDateSelector: React.FC<SpecialDateSelectorProps> = ({
   const { t } = useLanguage();
   const [modalVisible, setModalVisible] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [filteredDates, setFilteredDates] = useState<SpecialDate[]>([]);
+  const [filteredDates, setFilteredDates] = useState<SpecialDateModel[]>([]);
   const [activeTab, setActiveTab] = useState<SpecialDateType>('holiday');
+  const [isLoading, setIsLoading] = useState(false);
+  const [allDates, setAllDates] = useState<{
+    holiday: SpecialDateModel[];
+    solarTerm: SpecialDateModel[];
+    custom: SpecialDateModel[];
+  }>({
+    holiday: [],
+    solarTerm: [],
+    custom: []
+  });
 
-  // Predefined special dates - in a real app, these would come from a data file or API
-  const holidays: SpecialDate[] = [
-    { id: 'spring_festival', name: '春节', type: 'holiday', month: 1, day: 1, isLunar: true },
-    { id: 'lantern_festival', name: '元宵节', type: 'holiday', month: 1, day: 15, isLunar: true },
-    { id: 'dragon_boat', name: '端午节', type: 'holiday', month: 5, day: 5, isLunar: true },
-    { id: 'mid_autumn', name: '中秋节', type: 'holiday', month: 8, day: 15, isLunar: true },
-    { id: 'new_year', name: '元旦', type: 'holiday', month: 1, day: 1, isLunar: false },
-    { id: 'labor_day', name: '劳动节', type: 'holiday', month: 5, day: 1, isLunar: false },
-    { id: 'national_day', name: '国庆节', type: 'holiday', month: 10, day: 1, isLunar: false },
-  ];
+  // Load special dates when component mounts
+  useEffect(() => {
+    loadSpecialDates();
+  }, []);
 
-  const solarTerms: SpecialDate[] = [
-    { id: 'lichun', name: '立春', type: 'solarTerm', month: 2, day: 4, isLunar: false },
-    { id: 'jingzhe', name: '惊蛰', type: 'solarTerm', month: 3, day: 6, isLunar: false },
-    { id: 'qingming', name: '清明', type: 'solarTerm', month: 4, day: 5, isLunar: false },
-    { id: 'lixia', name: '立夏', type: 'solarTerm', month: 5, day: 6, isLunar: false },
-    { id: 'mangzhong', name: '芒种', type: 'solarTerm', month: 6, day: 6, isLunar: false },
-    { id: 'xiazhi', name: '夏至', type: 'solarTerm', month: 6, day: 21, isLunar: false },
-    { id: 'lidong', name: '立冬', type: 'solarTerm', month: 11, day: 7, isLunar: false },
-    { id: 'dongzhi', name: '冬至', type: 'solarTerm', month: 12, day: 22, isLunar: false },
-  ];
+  // Load dates from the controller
+  const loadSpecialDates = async () => {
+    setIsLoading(true);
+    try {
+      const dates = await SpecialDateController.loadAllSpecialDates();
+      setAllDates(dates);
+    } catch (error) {
+      console.error('Error loading special dates:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-  // Combined list for searching
-  const allDates = [...holidays, ...solarTerms];
-
+  // Filter dates based on search and active tab
   useEffect(() => {
     filterDates();
-  }, [searchQuery, activeTab]);
+  }, [searchQuery, activeTab, allDates, isLunarCalendar]);
 
   const filterDates = () => {
-    // Filter by tab and search query
-    let filtered = allDates.filter(date => date.type === activeTab || activeTab === 'custom');
+    // Get the appropriate array based on the active tab
+    let datesToFilter: SpecialDateModel[] = [];
     
-    // If search query exists, further filter by name
+    switch (activeTab) {
+      case 'holiday':
+        datesToFilter = allDates.holiday;
+        break;
+      case 'solarTerm':
+        datesToFilter = allDates.solarTerm;
+        break;
+      case 'custom':
+        datesToFilter = allDates.custom;
+        break;
+    }
+    
+    // Filter by search query if provided
+    let filtered = datesToFilter;
     if (searchQuery.trim()) {
       filtered = filtered.filter(date => 
         date.name.toLowerCase().includes(searchQuery.toLowerCase())
       );
     }
     
-    // Filter by calendar type
+    // Filter by lunar/solar calendar type if not custom
     if (activeTab !== 'custom') {
       filtered = filtered.filter(date => 
         isLunarCalendar ? date.isLunar : !date.isLunar
@@ -92,7 +101,7 @@ const SpecialDateSelector: React.FC<SpecialDateSelectorProps> = ({
     setFilteredDates(filtered);
   };
 
-  const handleSelect = (date: SpecialDate) => {
+  const handleSelect = (date: SpecialDateModel) => {
     onDateSelect(date);
     setModalVisible(false);
   };
@@ -101,7 +110,7 @@ const SpecialDateSelector: React.FC<SpecialDateSelectorProps> = ({
     onDateSelect(null);
   };
 
-  const renderDateItem = ({ item }: { item: SpecialDate }) => (
+  const renderDateItem = ({ item }: { item: SpecialDateModel }) => (
     <TouchableOpacity
       style={[
         styles.dateItem,
@@ -229,22 +238,49 @@ const SpecialDateSelector: React.FC<SpecialDateSelectorProps> = ({
                   {t.task.solarTerms || '节气'}
                 </Text>
               </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.tab, 
+                  activeTab === 'custom' && [styles.activeTab, { backgroundColor: colors.primary }]
+                ]}
+                onPress={() => setActiveTab('custom')}
+              >
+                <Text
+                  style={[
+                    styles.tabText,
+                    { color: activeTab === 'custom' ? '#ffffff' : colors.text }
+                  ]}
+                >
+                  {t.task.customDates || '自定义'}
+                </Text>
+              </TouchableOpacity>
             </View>
 
-            <FlatList
-              data={filteredDates}
-              renderItem={renderDateItem}
-              keyExtractor={item => item.id}
-              contentContainerStyle={styles.dateList}
-              showsVerticalScrollIndicator={false}
-              ListEmptyComponent={
-                <View style={styles.emptyContainer}>
-                  <Text style={[styles.emptyText, { color: colors.subText }]}>
-                    {t.task.noMatchingDates || '没有匹配的日期'}
-                  </Text>
-                </View>
-              }
-            />
+            {isLoading ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color={colors.primary} />
+                <Text style={[styles.loadingText, { color: colors.text }]}>
+                  {t.common.loading || '加载中...'}
+                </Text>
+              </View>
+            ) : (
+              <FlatList
+                data={filteredDates}
+                renderItem={renderDateItem}
+                keyExtractor={item => item.id}
+                contentContainerStyle={styles.dateList}
+                showsVerticalScrollIndicator={false}
+                ListEmptyComponent={
+                  <View style={styles.emptyContainer}>
+                    <Text style={[styles.emptyText, { color: colors.subText }]}>
+                      {activeTab === 'custom' 
+                        ? (t.task.noCustomDates || '没有自定义日期') 
+                        : (t.task.noMatchingDates || '没有匹配的日期')}
+                    </Text>
+                  </View>
+                }
+              />
+            )}
           </View>
         </View>
       </Modal>
@@ -378,6 +414,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   emptyText: {
+    fontSize: 16,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 12,
     fontSize: 16,
   },
 });

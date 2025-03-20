@@ -240,6 +240,11 @@ export default {
     noSpecialDateSelected: '未选择特殊日期',
     noMatchingDates: '没有匹配的日期',
     select: '选择',
+    customDates: '自定义',
+    noCustomDates: '没有自定义日期',
+    addCustomDate: '添加自定义日期',
+    deleteCustomDate: '删除自定义日期',
+    confirmDeleteCustomDate: '确定删除这个自定义日期吗？',
   },
   validation: {
     titleRequired: '请输入任务标题',

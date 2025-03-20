@@ -13,6 +13,7 @@ export default {
     enabled: 'Enabled',
     disabled: 'Disabled',
     close: 'Close',
+    clear: 'Clear',
   },
   app: {
     tagline: 'Never Miss Important Tasks',
@@ -208,6 +209,21 @@ export default {
     overdue: 'Overdue',
     reset: 'Reset',
     apply: 'Apply',
+    
+    // Special dates related translations
+    specialDates: 'Special Dates',
+    select: 'Select',
+    noSpecialDateSelected: 'No special date selected',
+    selectSpecialDate: 'Select Special Date',
+    searchSpecialDates: 'Search special dates...',
+    holidays: 'Holidays',
+    solarTerms: 'Solar Terms',
+    customDates: 'Custom',
+    noMatchingDates: 'No matching dates',
+    noCustomDates: 'No custom dates',
+    addCustomDate: 'Add Custom Date',
+    deleteCustomDate: 'Delete Custom Date',
+    confirmDeleteCustomDate: 'Are you sure you want to delete this custom date?',
   },
   validation: {
     titleRequired: 'Title is required',

@@ -13,20 +13,27 @@ import MainNavigator from './app/navigation/MainNavigator';
 import { LanguageProvider } from './contexts/LanguageContext';
 import { initializePersistentNotification } from './controllers/NotificationController';
 import { configureNotifications } from './services/notificationService';
+import { initializeSpecialDates } from './services/specialDateService';
 
 export default function App() {
   useEffect(() => {
-    // 初始化通知
+    // 初始化应用
     const initializeApp = async () => {
-      // 配置通知
-      await configureNotifications();
-      // 初始化通知栏常驻
-      await initializePersistentNotification();
+      try {
+        // 配置通知
+        await configureNotifications();
+        // 初始化通知栏常驻
+        await initializePersistentNotification();
+        // 初始化特殊日期数据
+        await initializeSpecialDates();
+        
+        console.log('应用初始化完成');
+      } catch (error) {
+        console.error('初始化应用时出错:', error);
+      }
     };
     
-    initializeApp().catch(error => {
-      console.error('初始化应用时出错:', error);
-    });
+    initializeApp();
   }, []);
   
   return (
