@@ -36,16 +36,12 @@ const CARD_SIZE = width / 3 - 24;
 
 interface RecurrenceSelectorProps {
   recurrencePattern: RecurrencePattern;
-  dateType: DateType;
   onRecurrenceChange: (pattern: RecurrencePattern) => void;
-  onDateTypeChange?: (dateType: DateType) => void;
 }
 
 export default function RecurrenceSelector({
   recurrencePattern,
-  dateType,
   onRecurrenceChange,
-  onDateTypeChange,
 }: RecurrenceSelectorProps) {
   const { t } = useLanguage();
   const { colors, isDarkMode } = useTheme();
@@ -122,12 +118,6 @@ export default function RecurrenceSelector({
       activeColor: '#D1D1D6',
       description: t.task.customDesc || "自定义重复模式"
     },
-  ];
-
-  // Date types for the segmented control
-  const dateTypes = [
-    { type: 'solar' as DateType, label: t.task.solarCalendar },
-    { type: 'lunar' as DateType, label: t.task.lunarCalendar },
   ];
 
   // Quick value selections
@@ -250,13 +240,6 @@ export default function RecurrenceSelector({
     });
   };
 
-  // Handle date type change
-  const handleDateTypeChange = (newDateType: DateType) => {
-    if (onDateTypeChange) {
-      onDateTypeChange(newDateType);
-    }
-  };
-
   // Handle week day change
   const handleWeekDayChange = (dayValue: number) => {
     onRecurrenceChange({
@@ -292,51 +275,6 @@ export default function RecurrenceSelector({
       </View>
     );
   };
-
-  // Render date type selector - segmented control
-  const renderDateTypeSelector = () => (
-    <View style={styles.dateTypeContainer}>
-      <Text style={[styles.sectionTitle, { color: colors.text }]}>{t.task.dateType}</Text>
-      <View style={[styles.segmentedControl, { backgroundColor: colors.card }]}>
-        <TouchableOpacity
-          style={[
-            styles.segmentButton,
-            styles.segmentButtonLeft,
-            dateType === 'solar' && { backgroundColor: colors.primary },
-            dateType !== 'solar' && { backgroundColor: colors.border }
-          ]}
-          onPress={() => handleDateTypeChange('solar')}
-        >
-          <Text
-            style={[
-              styles.segmentButtonText,
-              dateType === 'solar' ? { color: '#FFFFFF' } : { color: colors.text }
-            ]}
-          >
-            {t.task.solarCalendar}
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[
-            styles.segmentButton,
-            styles.segmentButtonRight,
-            dateType === 'lunar' && { backgroundColor: colors.primary },
-            dateType !== 'lunar' && { backgroundColor: colors.border }
-          ]}
-          onPress={() => handleDateTypeChange('lunar')}
-        >
-          <Text
-            style={[
-              styles.segmentButtonText,
-              dateType === 'lunar' ? { color: '#FFFFFF' } : { color: colors.text }
-            ]}
-          >
-            {t.task.lunarCalendar}
-          </Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
 
   // Render quick value selection buttons
   const renderValueButtons = () => {
@@ -561,7 +499,6 @@ export default function RecurrenceSelector({
         contentContainerStyle={styles.scrollContent}
       >
         {renderRecurrenceTypeGrid()}
-        {renderDateTypeSelector()}
         
         {!showCustom && renderValueButtons()}
         
@@ -615,31 +552,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     marginBottom: 12,
-  },
-  dateTypeContainer: {
-    marginBottom: 20,
-  },
-  segmentedControl: {
-    flexDirection: 'row',
-    borderRadius: 8,
-    overflow: 'hidden',
-  },
-  segmentButton: {
-    flex: 1,
-    paddingVertical: 10,
-    alignItems: 'center',
-  },
-  segmentButtonLeft: {
-    borderTopLeftRadius: 8,
-    borderBottomLeftRadius: 8,
-  },
-  segmentButtonRight: {
-    borderTopRightRadius: 8,
-    borderBottomRightRadius: 8,
-  },
-  segmentButtonText: {
-    fontSize: 14,
-    fontWeight: '500',
   },
   valueContainer: {
     marginBottom: 20,

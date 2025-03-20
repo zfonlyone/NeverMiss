@@ -1,0 +1,51 @@
+{
+  "task": "改进新建任务和修改任务的实现逻辑",
+  "progress": {
+    "current_stage": "UI界面设计与实现",
+    "completed_items": [
+      "更新Task数据模型",
+      "新增isLunar、isRecurring字段",
+      "新增提醒相关字段(reminderDays, reminderHours, reminderMinutes)",
+      "基础表单UI实现",
+      "农历/公历开关",
+      "循环/一次性开关",
+      "将重复设置卡片移至截止日期前",
+      "修改截止日期标签为日期设置",
+      "为开始日期和截止日期添加时间选择功能",
+      "调整提醒设置布局与日期设置保持一致",
+      "提取日期类型为独立设置项，使一次性任务也能设置日期类型",
+      "从循环设置组件中移除日期类型选择器"
+    ],
+    "pending_items": [
+      "特殊日期选择器实现",
+      "多级循环设置面板",
+      "实现节假日、节气数据导入"
+    ]
+  },
+  "data_model": {
+    "status": "部分完成",
+    "changes_applied": [
+      "添加isLunar字段",
+      "添加isRecurring字段",
+      "添加提醒详细设置字段"
+    ],
+    "pending_changes": [
+      "完善多级循环设置数据结构",
+      "添加特殊日期支持"
+    ]
+  },
+  "dependencies": {
+    "required": [
+      "lunar-javascript库：农历支持",
+      "日历数据：节假日、节气信息"
+    ]
+  },
+  "next_actions": [
+    "实现循环配置界面",
+    "完善RecurrenceSelector组件",
+    "添加农历日期选择支持"
+  ],
+  "known_issues": [
+    "部分UI样式需调整以适应不同屏幕尺寸"
+  ]
+} 

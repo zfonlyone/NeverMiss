@@ -49,6 +49,11 @@ export interface Task {
   reminderUnit: ReminderUnit;
   reminderTime: ReminderTime;
   dateType: DateType;
+  isLunar: boolean; // 是否使用农历
+  isRecurring: boolean; // 是否是循环任务
+  reminderDays: number; // 提前提醒天数
+  reminderHours: number; // 提前提醒小时
+  reminderMinutes: number; // 提前提醒分钟
   isActive: boolean;
   autoRestart: boolean;
   syncToCalendar: boolean;
@@ -73,6 +78,11 @@ export interface CreateTaskInput {
   reminderUnit: ReminderUnit;
   reminderTime: ReminderTime;
   dateType: DateType;
+  isLunar: boolean;
+  isRecurring: boolean;
+  reminderDays: number;
+  reminderHours: number;
+  reminderMinutes: number;
   isActive?: boolean;
   autoRestart?: boolean;
   syncToCalendar?: boolean;
@@ -90,6 +100,11 @@ export interface UpdateTaskInput {
   reminderUnit: ReminderUnit;
   reminderTime: ReminderTime;
   dateType: DateType;
+  isLunar: boolean;
+  isRecurring: boolean;
+  reminderDays: number;
+  reminderHours: number;
+  reminderMinutes: number;
   isActive?: boolean;
   autoRestart?: boolean;
   syncToCalendar?: boolean;
@@ -126,6 +141,11 @@ export function createTask(
     reminderUnit,
     reminderTime,
     dateType,
+    isLunar: dateType === 'lunar',
+    isRecurring: recurrenceType !== 'custom' || (recurrenceType === 'custom' && recurrenceValue > 0),
+    reminderDays: reminderUnit === 'days' ? reminderOffset : 0,
+    reminderHours: reminderUnit === 'hours' ? reminderOffset : 0,
+    reminderMinutes: reminderUnit === 'minutes' ? reminderOffset : 0,
     isActive: true,
     autoRestart,
     syncToCalendar: false,
@@ -158,6 +178,19 @@ export function validateTask(task: Partial<Task>): string[] {
   
   if (task.reminderOffset === undefined || task.reminderOffset < 0) {
     errors.push('提醒时间必须大于等于0');
+  }
+  
+  if (task.isRecurring && !task.recurrencePattern.type) {
+    errors.push('循环任务必须指定重复类型');
+  }
+  
+  // 验证提醒天数、小时、分钟
+  if (
+    (task.reminderDays !== undefined && task.reminderDays < 0) ||
+    (task.reminderHours !== undefined && task.reminderHours < 0) ||
+    (task.reminderMinutes !== undefined && task.reminderMinutes < 0)
+  ) {
+    errors.push('提醒时间设置必须大于等于0');
   }
   
   return errors;

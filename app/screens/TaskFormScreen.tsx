@@ -43,17 +43,39 @@ export default function TaskFormScreen({ taskId }: TaskFormScreenProps) {
   const router = useRouter();
   const isEditMode = !!taskId;
 
+  // 基本信息
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
+  
+  // 日期类型设置
+  const [dateType, setDateType] = useState<DateType>('solar');
+  const [isLunar, setIsLunar] = useState(false);
+  
+  // 循环设置
+  const [isRecurring, setIsRecurring] = useState(false);
   const [recurrencePattern, setRecurrencePattern] = useState<RecurrencePattern>({
     type: 'daily',
     value: 1
   });
-  const [dateType, setDateType] = useState<DateType>('solar');
+  
+  // 时间设置
+  const [startDate, setStartDate] = useState(new Date());
+  const [dueDate, setDueDate] = useState(new Date(Date.now() + 24*60*60*1000)); // 默认截止日期为明天
+  const [showStartDatePicker, setShowStartDatePicker] = useState(false);
+  const [showDueDatePicker, setShowDueDatePicker] = useState(false);
+  const [showStartTimePicker, setShowStartTimePicker] = useState(false);
+  const [showDueTimePicker, setShowDueTimePicker] = useState(false);
+  
+  // 提醒设置
   const [reminderOffset, setReminderOffset] = useState(30);
   const [reminderUnit, setReminderUnit] = useState<ReminderUnit>('minutes');
+  const [reminderDays, setReminderDays] = useState(0);
+  const [reminderHours, setReminderHours] = useState(0);
+  const [reminderMinutes, setReminderMinutes] = useState(30);
   const [reminderTime, setReminderTime] = useState({ hour: 9, minute: 0 });
   const [showTimePicker, setShowTimePicker] = useState(false);
+  
+  // 其他设置
   const [isActive, setIsActive] = useState(true);
   const [autoRestart, setAutoRestart] = useState(true);
   const [syncToCalendar, setSyncToCalendar] = useState(false);
@@ -67,6 +89,28 @@ export default function TaskFormScreen({ taskId }: TaskFormScreenProps) {
     }
   }, [taskId]);
 
+  // 根据日期类型更新isLunar
+  useEffect(() => {
+    setIsLunar(dateType === 'lunar');
+  }, [dateType]);
+
+  // 根据提醒单位设置对应的提醒值
+  useEffect(() => {
+    if (reminderUnit === 'days') {
+      setReminderDays(reminderOffset);
+      setReminderHours(0);
+      setReminderMinutes(0);
+    } else if (reminderUnit === 'hours') {
+      setReminderDays(0);
+      setReminderHours(reminderOffset);
+      setReminderMinutes(0);
+    } else {
+      setReminderDays(0);
+      setReminderHours(0);
+      setReminderMinutes(reminderOffset);
+    }
+  }, [reminderOffset, reminderUnit]);
+
   const loadTask = async () => {
     if (!taskId) return;
     
@@ -79,14 +123,24 @@ export default function TaskFormScreen({ taskId }: TaskFormScreenProps) {
         setDescription(task.description || '');
         setRecurrencePattern(task.recurrencePattern);
         setDateType(task.dateType);
+        setIsLunar(task.isLunar || false);
+        setIsRecurring(task.isRecurring || false);
         setReminderOffset(task.reminderOffset);
         setReminderUnit(task.reminderUnit);
+        setReminderDays(task.reminderDays || 0);
+        setReminderHours(task.reminderHours || 0);
+        setReminderMinutes(task.reminderMinutes || 0);
         setReminderTime(task.reminderTime);
         setIsActive(task.isActive);
         setAutoRestart(task.autoRestart);
         setSyncToCalendar(task.syncToCalendar);
         setTags(task.tags || []);
         setBackgroundColor(task.backgroundColor || '#FFFFFF');
+        
+        if (task.currentCycle) {
+          setStartDate(new Date(task.currentCycle.startDate));
+          setDueDate(new Date(task.currentCycle.dueDate));
+        }
       }
     } catch (error) {
       console.error('Error loading task:', error);
@@ -103,8 +157,13 @@ export default function TaskFormScreen({ taskId }: TaskFormScreenProps) {
         description,
         recurrencePattern,
         dateType,
+        isLunar,
+        isRecurring,
         reminderOffset,
         reminderUnit,
+        reminderDays,
+        reminderHours,
+        reminderMinutes,
         reminderTime,
         isActive,
         autoRestart,
@@ -124,10 +183,6 @@ export default function TaskFormScreen({ taskId }: TaskFormScreenProps) {
       if (isEditMode) {
         await updateTaskService(taskId!, taskData as any);
       } else {
-        const startDate = new Date();
-        const dueDate = new Date();
-        dueDate.setDate(dueDate.getDate() + 1);
-
         const createInput: CreateTaskInput = {
           ...taskData as any,
           startDate: startDate.toISOString(),
@@ -146,6 +201,24 @@ export default function TaskFormScreen({ taskId }: TaskFormScreenProps) {
     }
   };
 
+  const handleStartDateChange = (event: any, selectedDate?: Date) => {
+    setShowStartDatePicker(false);
+    if (selectedDate) {
+      const newDate = new Date(selectedDate);
+      newDate.setHours(startDate.getHours(), startDate.getMinutes());
+      setStartDate(newDate);
+    }
+  };
+
+  const handleDueDateChange = (event: any, selectedDate?: Date) => {
+    setShowDueDatePicker(false);
+    if (selectedDate) {
+      const newDate = new Date(selectedDate);
+      newDate.setHours(dueDate.getHours(), dueDate.getMinutes());
+      setDueDate(newDate);
+    }
+  };
+
   const handleTimeChange = (event: any, selectedTime?: Date) => {
     setShowTimePicker(false);
     if (selectedTime) {
@@ -156,6 +229,32 @@ export default function TaskFormScreen({ taskId }: TaskFormScreenProps) {
     }
   };
 
+  const handleStartTimeChange = (event: any, selectedTime?: Date) => {
+    setShowStartTimePicker(false);
+    if (selectedTime) {
+      const newDate = new Date(startDate);
+      newDate.setHours(selectedTime.getHours(), selectedTime.getMinutes());
+      setStartDate(newDate);
+    }
+  };
+
+  const handleDueTimeChange = (event: any, selectedTime?: Date) => {
+    setShowDueTimePicker(false);
+    if (selectedTime) {
+      const newDate = new Date(dueDate);
+      newDate.setHours(selectedTime.getHours(), selectedTime.getMinutes());
+      setDueDate(newDate);
+    }
+  };
+
+  const formatDate = (date: Date) => {
+    return date.toLocaleDateString(undefined, { 
+      year: 'numeric', 
+      month: 'short', 
+      day: 'numeric' 
+    });
+  };
+
   const formatTime = (hour: number, minute: number) => {
     return `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
   };
@@ -164,15 +263,34 @@ export default function TaskFormScreen({ taskId }: TaskFormScreenProps) {
     router.back();
   };
 
-  const validateAndSetReminderTime = (text: string) => {
+  const handleDateTypeToggle = () => {
+    const newDateType = dateType === 'solar' ? 'lunar' : 'solar';
+    setDateType(newDateType);
+    setIsLunar(newDateType === 'lunar');
+  };
+
+  const handleRecurringToggle = () => {
+    setIsRecurring(!isRecurring);
+  };
+
+  const handleReminderDaysChange = (text: string) => {
     const value = parseInt(text);
     if (!isNaN(value) && value >= 0) {
-      setReminderTime({
-        hour: Math.floor(value / 60),
-        minute: value % 60
-      });
-    } else if (text === '') {
-      setReminderTime({ hour: 9, minute: 0 });
+      setReminderDays(value);
+    }
+  };
+
+  const handleReminderHoursChange = (text: string) => {
+    const value = parseInt(text);
+    if (!isNaN(value) && value >= 0 && value < 24) {
+      setReminderHours(value);
+    }
+  };
+
+  const handleReminderMinutesChange = (text: string) => {
+    const value = parseInt(text);
+    if (!isNaN(value) && value >= 0 && value < 60) {
+      setReminderMinutes(value);
     }
   };
 
@@ -239,6 +357,7 @@ export default function TaskFormScreen({ taskId }: TaskFormScreenProps) {
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
       >
+        {/* 基本信息部分 */}
         <View style={[styles.formSection, { backgroundColor: colors.card }]}>
           <Text style={[styles.sectionTitle, { color: colors.text }]}>{t.task.title}</Text>
           <TextInput
@@ -278,65 +397,242 @@ export default function TaskFormScreen({ taskId }: TaskFormScreenProps) {
           />
         </View>
 
+        {/* 日期类型选择 - 独立卡片 */}
         <View style={[styles.formSection, { backgroundColor: colors.card }]}>
-          <TagSelector selectedTags={tags} onTagsChange={setTags} />
-        </View>
-
-        <View style={[styles.formSection, { backgroundColor: colors.card }]}>
-          <ColorSelector selectedColor={backgroundColor} onColorChange={setBackgroundColor} />
-        </View>
-
-        <View style={[styles.section, { backgroundColor: colors.card }]}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>{t.reminder.reminderSettings}</Text>
-          
-          <View style={[styles.reminderContainer, { backgroundColor: colors.card }]}>
-            <View style={[styles.reminderGroup, { backgroundColor: colors.card }]}>
-              <Text style={[styles.label, { color: colors.text }]}>{t.reminder.reminderTime}</Text>
-              <TextInput
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>{t.task.dateType}</Text>
+          <View style={[styles.segmentedControl, { backgroundColor: colors.border }]}>
+            <TouchableOpacity
+              style={[
+                styles.segmentButton,
+                styles.segmentButtonLeft,
+                dateType === 'solar' && { backgroundColor: colors.primary }
+              ]}
+              onPress={() => setDateType('solar')}
+            >
+              <Text
                 style={[
-                  styles.input, 
-                  { 
-                    borderColor: colors.border,
-                    backgroundColor: isDarkMode ? colors.card : '#f9f9f9',
-                    color: colors.text
-                  }
+                  styles.segmentButtonText,
+                  dateType === 'solar' ? { color: '#FFFFFF' } : { color: colors.text }
                 ]}
-                value={reminderTime.toString()}
-                onChangeText={validateAndSetReminderTime}
-                keyboardType="numeric"
-                placeholder="0"
-              />
-            </View>
-            
-            <View style={[styles.reminderGroup, { backgroundColor: colors.card }]}>
-              <Text style={[styles.label, { color: colors.text }]}>{t.reminder.reminderUnit}</Text>
-              <RNPickerSelect
-                value={reminderUnit}
-                onValueChange={(value) => setReminderUnit(value || 'minutes')}
-                items={[
-                  { label: t.task.minutes, value: 'minutes' },
-                  { label: t.task.hours, value: 'hours' },
-                  { label: t.task.days, value: 'days' },
+              >
+                {t.task.solarCalendar}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.segmentButton,
+                styles.segmentButtonRight,
+                dateType === 'lunar' && { backgroundColor: colors.primary }
+              ]}
+              onPress={() => setDateType('lunar')}
+            >
+              <Text
+                style={[
+                  styles.segmentButtonText,
+                  dateType === 'lunar' ? { color: '#FFFFFF' } : { color: colors.text }
                 ]}
-                style={pickerSelectStyles}
+              >
+                {t.task.lunarCalendar}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+        
+        {/* 循环设置选择 */}
+        <View style={[styles.formSection, { backgroundColor: colors.card }]}>
+          <View style={styles.settingRow}>
+            <Text style={[styles.settingLabel, { color: colors.text }]}>{t.task.recurrenceSettings}</Text>
+            <View style={styles.recurringToggle}>
+              <Text style={[styles.recurringText, { color: colors.text }]}>
+                {isRecurring ? t.common.enabled : t.common.disabled}
+              </Text>
+              <Switch
+                value={isRecurring}
+                onValueChange={handleRecurringToggle}
+                trackColor={{ false: '#767577', true: colors.primary + '80' }}
+                thumbColor={isRecurring ? colors.primary : '#f4f3f4'}
+                ios_backgroundColor="#3e3e3e"
               />
             </View>
           </View>
         </View>
         
-        <View style={[styles.section, { backgroundColor: colors.card }]}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>{t.reminder.recurrenceSettings}</Text>
-          
-          <View style={[styles.recurrenceContainer, { backgroundColor: colors.card }]}>
-            <RecurrenceSelector
-              recurrencePattern={recurrencePattern}
-              dateType={dateType}
-              onRecurrenceChange={setRecurrencePattern}
-              onDateTypeChange={setDateType}
-            />
+        {/* 循环设置部分 - 移到日期设置前面 */}
+        {isRecurring && (
+          <View style={[styles.section, { backgroundColor: colors.card }]}>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>{t.task.recurrenceSettings}</Text>
+            
+            <View style={[styles.recurrenceContainer, { backgroundColor: colors.card }]}>
+              <RecurrenceSelector
+                recurrencePattern={recurrencePattern}
+                onRecurrenceChange={setRecurrencePattern}
+              />
+            </View>
           </View>
+        )}
+
+        {/* 日期设置部分 */}
+        <View style={[styles.formSection, { backgroundColor: colors.card }]}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>日期设置</Text>
+          
+          {isRecurring && (
+            <View>
+              <Text style={[styles.dateLabel, { color: colors.text, marginTop: 8 }]}>{t.task.startDate}</Text>
+              <View style={styles.dateTimeContainer}>
+                <TouchableOpacity 
+                  style={[styles.dateButton, { borderColor: colors.border }]}
+                  onPress={() => setShowStartDatePicker(true)}
+                >
+                  <Text style={[styles.dateButtonText, { color: colors.text }]}>
+                    {formatDate(startDate)}
+                  </Text>
+                  <Ionicons name="calendar-outline" size={20} color={colors.primary} />
+                </TouchableOpacity>
+                
+                <TouchableOpacity 
+                  style={[styles.timeButton, { borderColor: colors.border }]}
+                  onPress={() => setShowStartTimePicker(true)}
+                >
+                  <Text style={[styles.timeButtonText, { color: colors.text }]}>
+                    {formatTime(startDate.getHours(), startDate.getMinutes())}
+                  </Text>
+                  <Ionicons name="time-outline" size={20} color={colors.primary} />
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+          
+          <Text style={[styles.dateLabel, { color: colors.text, marginTop: 8 }]}>{t.task.dueDate}</Text>
+          <View style={styles.dateTimeContainer}>
+            <TouchableOpacity 
+              style={[styles.dateButton, { borderColor: colors.border }]}
+              onPress={() => setShowDueDatePicker(true)}
+            >
+              <Text style={[styles.dateButtonText, { color: colors.text }]}>
+                {formatDate(dueDate)}
+              </Text>
+              <Ionicons name="calendar-outline" size={20} color={colors.primary} />
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={[styles.timeButton, { borderColor: colors.border }]}
+              onPress={() => setShowDueTimePicker(true)}
+            >
+              <Text style={[styles.timeButtonText, { color: colors.text }]}>
+                {formatTime(dueDate.getHours(), dueDate.getMinutes())}
+              </Text>
+              <Ionicons name="time-outline" size={20} color={colors.primary} />
+            </TouchableOpacity>
+          </View>
+          
+          {showStartDatePicker && (
+            <DateTimePicker
+              value={startDate}
+              mode="date"
+              display="default"
+              onChange={handleStartDateChange}
+            />
+          )}
+          
+          {showDueDatePicker && (
+            <DateTimePicker
+              value={dueDate}
+              mode="date"
+              display="default"
+              onChange={handleDueDateChange}
+            />
+          )}
+          
+          {showStartTimePicker && (
+            <DateTimePicker
+              value={startDate}
+              mode="time"
+              display="default"
+              onChange={handleStartTimeChange}
+            />
+          )}
+          
+          {showDueTimePicker && (
+            <DateTimePicker
+              value={dueDate}
+              mode="time"
+              display="default"
+              onChange={handleDueTimeChange}
+            />
+          )}
         </View>
 
+        {/* 提醒设置部分 */}
+        <View style={[styles.formSection, { backgroundColor: colors.card }]}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>{t.reminder.reminderSettings}</Text>
+          
+          <Text style={[styles.dateLabel, { color: colors.text, marginTop: 8 }]}>{t.task.reminderOffset}</Text>
+          <View style={styles.dateTimeContainer}>
+            <View style={styles.reminderRow}>
+              <TextInput
+                style={[styles.reminderInput, { borderColor: colors.border, color: colors.text }]}
+                value={reminderDays.toString()}
+                onChangeText={handleReminderDaysChange}
+                keyboardType="numeric"
+                placeholder="0"
+                placeholderTextColor={colors.subText}
+              />
+              <Text style={[styles.reminderUnitText, { color: colors.text }]}>{t.task.days}</Text>
+              
+              <TextInput
+                style={[styles.reminderInput, { borderColor: colors.border, color: colors.text }]}
+                value={reminderHours.toString()}
+                onChangeText={handleReminderHoursChange}
+                keyboardType="numeric"
+                placeholder="0"
+                placeholderTextColor={colors.subText}
+              />
+              <Text style={[styles.reminderUnitText, { color: colors.text }]}>{t.task.hours}</Text>
+              
+              <TextInput
+                style={[styles.reminderInput, { borderColor: colors.border, color: colors.text }]}
+                value={reminderMinutes.toString()}
+                onChangeText={handleReminderMinutesChange}
+                keyboardType="numeric"
+                placeholder="0"
+                placeholderTextColor={colors.subText}
+              />
+              <Text style={[styles.reminderUnitText, { color: colors.text }]}>{t.task.minutes}</Text>
+            </View>
+          </View>
+          
+          <Text style={[styles.dateLabel, { color: colors.text, marginTop: 12 }]}>{t.reminder.reminderTime}</Text>
+          <TouchableOpacity 
+            style={[styles.timePickerButton, { borderColor: colors.border }]}
+            onPress={() => setShowTimePicker(true)}
+          >
+            <Text style={[styles.timeButtonText, { color: colors.text }]}>
+              {formatTime(reminderTime.hour, reminderTime.minute)}
+            </Text>
+            <Ionicons name="time-outline" size={20} color={colors.primary} />
+          </TouchableOpacity>
+          
+          {showTimePicker && (
+            <DateTimePicker
+              value={new Date(new Date().setHours(reminderTime.hour, reminderTime.minute))}
+              mode="time"
+              display="default"
+              onChange={handleTimeChange}
+            />
+          )}
+        </View>
+
+        {/* 标签选择 */}
+        <View style={[styles.formSection, { backgroundColor: colors.card }]}>
+          <TagSelector selectedTags={tags} onTagsChange={setTags} />
+        </View>
+
+        {/* 颜色选择 */}
+        <View style={[styles.formSection, { backgroundColor: colors.card }]}>
+          <ColorSelector selectedColor={backgroundColor} onColorChange={setBackgroundColor} />
+        </View>
+
+        {/* 其他设置部分 */}
         <View style={[styles.formSection, { backgroundColor: colors.card }]}>
           <Text style={[styles.sectionTitle, { color: colors.text }]}>{t.menu.settings}</Text>
           
@@ -354,19 +650,21 @@ export default function TaskFormScreen({ taskId }: TaskFormScreenProps) {
             />
           </View>
 
-          <View style={[styles.switchSetting, { backgroundColor: colors.card }]}>
-            <View style={[styles.switchTextContainer, { backgroundColor: colors.card }]}>
-              <Text style={[styles.switchLabel, { color: colors.text }]}>{t.task.autoRestart}</Text>
-              <Text style={[styles.switchDescription, { color: colors.subText }]}>{t.task.autoRestartDesc}</Text>
+          {isRecurring && (
+            <View style={[styles.switchSetting, { backgroundColor: colors.card }]}>
+              <View style={[styles.switchTextContainer, { backgroundColor: colors.card }]}>
+                <Text style={[styles.switchLabel, { color: colors.text }]}>{t.task.autoRestart}</Text>
+                <Text style={[styles.switchDescription, { color: colors.subText }]}>{t.task.autoRestartDesc}</Text>
+              </View>
+              <Switch
+                value={autoRestart}
+                onValueChange={setAutoRestart}
+                trackColor={{ false: '#767577', true: colors.primary + '80' }}
+                thumbColor={autoRestart ? colors.primary : '#f4f3f4'}
+                ios_backgroundColor="#3e3e3e"
+              />
             </View>
-            <Switch
-              value={autoRestart}
-              onValueChange={setAutoRestart}
-              trackColor={{ false: '#767577', true: colors.primary + '80' }}
-              thumbColor={autoRestart ? colors.primary : '#f4f3f4'}
-              ios_backgroundColor="#3e3e3e"
-            />
-          </View>
+          )}
 
           <View style={[styles.switchSetting, { backgroundColor: colors.card }]}>
             <View style={[styles.switchTextContainer, { backgroundColor: colors.card }]}>
@@ -482,20 +780,80 @@ const styles = StyleSheet.create({
   settingLabel: {
     fontSize: 16,
   },
-  timeButton: {
+  timePickerButton: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     backgroundColor: '#f9f9f9',
     paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingVertical: 12,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: '#e0e0e0',
   },
+  dateButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#f9f9f9',
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    flex: 2,
+  },
+  timeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#f9f9f9',
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    flex: 1,
+    marginLeft: 8,
+  },
   timeButtonText: {
     fontSize: 16,
+    flex: 1,
+    textAlign: 'right',
     marginRight: 8,
-    color: '#333',
+  },
+  dateButtonText: {
+    fontSize: 16,
+    flex: 1,
+    textAlign: 'left',
+  },
+  dateLabel: {
+    fontSize: 16,
+    fontWeight: '500',
+    marginBottom: 8,
+    color: '#666',
+  },
+  reminderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+  },
+  reminderInput: {
+    width: 60,
+    height: 48,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    fontSize: 16,
+    backgroundColor: '#f9f9f9',
+    textAlign: 'center',
+  },
+  reminderUnitText: {
+    fontSize: 16,
+    marginLeft: 8,
+    marginRight: 16,
   },
   reminderOffsetContainer: {
     flexDirection: 'column',
@@ -595,5 +953,56 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     fontSize: 16,
     backgroundColor: '#f9f9f9',
+  },
+  settingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  dateTypeToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  dateTypeText: {
+    fontSize: 16,
+    marginRight: 8,
+  },
+  recurringToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  recurringText: {
+    fontSize: 16,
+    marginRight: 8,
+  },
+  dateTimeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  segmentedControl: {
+    flexDirection: 'row',
+    borderRadius: 8,
+    overflow: 'hidden',
+    height: 44,
+  },
+  segmentButton: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  segmentButtonLeft: {
+    borderTopLeftRadius: 8,
+    borderBottomLeftRadius: 8,
+  },
+  segmentButtonRight: {
+    borderTopRightRadius: 8,
+    borderBottomRightRadius: 8,
+  },
+  segmentButtonText: {
+    fontSize: 16,
+    fontWeight: '500',
+    textAlign: 'center',
   },
 }); 
