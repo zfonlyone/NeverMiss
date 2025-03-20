@@ -158,6 +158,17 @@ export default function TaskFormScreen({ taskId }: TaskFormScreenProps) {
 
   const handleSave = async () => {
     try {
+      // 验证截止日期不能早于当前日期
+      const currentDate = new Date();
+      if (dueDate < currentDate) {
+        Alert.alert(
+          "错误",
+          "截止日期不能早于当前日期。请选择有效的未来日期。",
+          [{ text: "确定", style: "default" }]
+        );
+        return;
+      }
+
       const taskData: CreateTaskInput = {
         title,
         description,
@@ -183,7 +194,7 @@ export default function TaskFormScreen({ taskId }: TaskFormScreenProps) {
 
       const errors = validateTask(taskData);
       if (errors.length > 0) {
-        Alert.alert('Validation Error', errors.join('\n'));
+        Alert.alert('验证错误', errors.join('\n'));
         return;
       }
 
@@ -224,12 +235,22 @@ export default function TaskFormScreen({ taskId }: TaskFormScreenProps) {
   };
 
   const handleDueDateChange = (event: any, selectedDate?: Date) => {
-    setShowDueDatePicker(false);
-    if (selectedDate) {
-      const newDate = new Date(selectedDate);
-      newDate.setHours(dueDate.getHours(), dueDate.getMinutes());
-      setDueDate(newDate);
+    const currentDate = new Date();
+    const newDate = selectedDate || dueDate;
+    
+    // 验证选择的日期不早于当前日期
+    if (newDate < currentDate) {
+      Alert.alert(
+        "错误",
+        "截止日期不能早于当前日期。请选择有效的未来日期。",
+        [{ text: "确定", style: "default" }]
+      );
+      setShowDueDatePicker(false);
+      return;
     }
+    
+    setShowDueDatePicker(false);
+    setDueDate(newDate);
   };
 
   const handleTimeChange = (event: any, selectedTime?: Date) => {

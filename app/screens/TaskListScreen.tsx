@@ -19,7 +19,9 @@ import * as TaskService from '../../services/taskService';
 import { Task } from '../../models/Task';
 import TaskListFilter, { FilterOptions } from '../components/TaskListFilter';
 import { filterTasks, sortTasks, extractAllTags } from '../../utils/taskUtils';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter, useLocalSearchParams, Stack } from 'expo-router';
+import { differenceInDays, format } from 'date-fns';
+import { zhCN } from 'date-fns/locale';
 
 export default function TaskListScreen() {
   const { t } = useLanguage();
@@ -78,11 +80,11 @@ export default function TaskListScreen() {
   const loadTasks = async () => {
     try {
       setIsLoading(true);
-      const fetchedTasks = await TaskService.getAllTasks();
+      const fetchedTasks = await TaskService.getAllTasks(false, false);
       setTasks(fetchedTasks);
     } catch (error) {
       console.error('Error loading tasks:', error);
-      Alert.alert('Error', 'Failed to load tasks');
+      Alert.alert('错误', '加载任务失败');
     } finally {
       setIsLoading(false);
       setRefreshing(false);
@@ -102,22 +104,68 @@ export default function TaskListScreen() {
     router.push({ pathname: '/task-form', params: { taskId } });
   };
 
+  const getDaysUntilDue = (dueDate: string) => {
+    const today = new Date();
+    const due = new Date(dueDate);
+    const days = differenceInDays(due, today);
+    
+    if (days === 0) {
+      return '今天到期';
+    } else if (days < 0) {
+      return `已逾期 ${Math.abs(days)} 天`;
+    } else {
+      return `剩余 ${days} 天`;
+    }
+  };
+
+  const formatReminderInfo = (task: Task) => {
+    if (!task.reminderTime) return '';
+    
+    const { hour, minute } = task.reminderTime;
+    const time = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+    
+    let reminderOffset = '';
+    if (task.reminderDays > 0) {
+      reminderOffset = `提前 ${task.reminderDays} 天`;
+    } else if (task.reminderHours > 0) {
+      reminderOffset = `提前 ${task.reminderHours} 小时`;
+    } else if (task.reminderMinutes > 0) {
+      reminderOffset = `提前 ${task.reminderMinutes} 分钟`;
+    }
+    
+    return `${time} ${reminderOffset}提醒`;
+  };
+
   const renderTaskItem = ({ item }: { item: Task }) => {
     const isOverdue = item.currentCycle?.isOverdue;
     const isCompleted = item.currentCycle?.isCompleted;
     
-    let statusColor = colors.primary; // Default blue
-    if (isOverdue) {
-      statusColor = colors.error; // Red for overdue
+    // 状态指示器颜色逻辑修改: 运行中蓝色，禁用黄色
+    let statusColor = colors.primary; // 运行中蓝色
+    if (!item.isActive) {
+      statusColor = '#FFC107'; // 禁用黄色
+    } else if (isOverdue) {
+      statusColor = colors.error; // 逾期红色
     } else if (isCompleted) {
-      statusColor = colors.success; // Green for completed
+      statusColor = colors.success; // 完成绿色
     }
 
-    // Use custom background color if available, otherwise use default theme card color
+    // 使用任务的自定义背景颜色
     const backgroundColor = item.backgroundColor || colors.card;
+
+    // 获取截止日期的倒计时
+    const dueCountdown = item.currentCycle ? getDaysUntilDue(item.currentCycle.dueDate) : '';
+    
+    // 获取提醒信息
+    const reminderInfo = formatReminderInfo(item);
 
     // Format the recurrence pattern for display
     const getRecurrenceText = () => {
+      // 如果任务不是循环任务，则不显示循环周期信息
+      if (!item.isRecurring) {
+        return '';
+      }
+      
       const pattern = item.recurrencePattern;
       switch (pattern.type) {
         case 'daily':
@@ -154,12 +202,36 @@ export default function TaskListScreen() {
         <View style={[styles.statusIndicator, { backgroundColor: statusColor }]} />
         <View style={styles.taskContent}>
           <Text style={[styles.taskTitle, { color: colors.text }]}>{item.title}</Text>
+          
           {item.description && (
             <Text style={[styles.taskDescription, { color: colors.subText }]} numberOfLines={1}>
               {item.description}
             </Text>
           )}
-          <Text style={[styles.recurrenceInfo, { color: colors.subText }]}>{getRecurrenceText()}</Text>
+          
+          {/* 循环周期信息 */}
+          {getRecurrenceText() !== '' && (
+            <View style={styles.infoRow}>
+              <Ionicons name="repeat" size={14} color={colors.subText} style={styles.infoIcon} />
+              <Text style={[styles.infoText, { color: colors.subText }]}>{getRecurrenceText()}</Text>
+            </View>
+          )}
+          
+          {/* 截止日期倒计时 */}
+          {dueCountdown !== '' && (
+            <View style={styles.infoRow}>
+              <Ionicons name="calendar" size={14} color={colors.subText} style={styles.infoIcon} />
+              <Text style={[styles.infoText, { color: colors.subText }]}>{dueCountdown}</Text>
+            </View>
+          )}
+          
+          {/* 提醒信息 */}
+          {reminderInfo !== '' && (
+            <View style={styles.infoRow}>
+              <Ionicons name="notifications" size={14} color={colors.subText} style={styles.infoIcon} />
+              <Text style={[styles.infoText, { color: colors.subText }]}>{reminderInfo}</Text>
+            </View>
+          )}
           
           {/* Display tags if available */}
           {item.tags && item.tags.length > 0 && (
@@ -172,11 +244,13 @@ export default function TaskListScreen() {
             </View>
           )}
         </View>
+        
         {!item.isActive && (
           <View style={[styles.disabledBadge, { backgroundColor: isDarkMode ? '#333' : '#f0f0f0' }]}>
             <Text style={[styles.disabledText, { color: colors.subText }]}>{t.task.taskDisabled}</Text>
           </View>
         )}
+        
         <Ionicons name="chevron-forward" size={20} color={colors.subText} />
       </TouchableOpacity>
     );
@@ -185,6 +259,24 @@ export default function TaskListScreen() {
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <StatusBar style={isDarkMode ? "light" : "dark"} />
+      
+      {/* 添加头部导航栏 */}
+      <Stack.Screen
+        options={{
+          title: '任务管理',
+          headerLeft: () => (
+            <TouchableOpacity
+              style={styles.backButton}
+              onPress={() => router.replace('/')}
+            >
+              <Ionicons name="arrow-back" size={24} color={colors.primary} />
+              <Text style={[styles.backButtonText, { color: colors.primary }]}>
+                返回主页
+              </Text>
+            </TouchableOpacity>
+          ),
+        }}
+      />
       
       {/* 搜索、排序和筛选组件 */}
       <TaskListFilter 
@@ -282,7 +374,15 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginBottom: 4,
   },
-  recurrenceInfo: {
+  infoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 2,
+  },
+  infoIcon: {
+    marginRight: 4,
+  },
+  infoText: {
     fontSize: 12,
   },
   tagsContainer: {
@@ -338,5 +438,15 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 3.84,
     elevation: 5,
+  },
+  backButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+  },
+  backButtonText: {
+    marginLeft: 4,
+    fontSize: 16,
+    fontWeight: '500',
   },
 }); 

@@ -847,7 +847,7 @@ export const checkAndUpdateOverdueTasks = async (): Promise<{ checkedCount: numb
   try {
     console.log('Checking for overdue tasks...');
     
-    // Get all tasks
+    // Get all tasks (包括逾期和已完成任务)
     const tasks = await getAllTasks(true, true);
     
     console.log(`Found ${tasks.length} tasks to check`);
@@ -887,26 +887,25 @@ export const checkAndUpdateOverdueTasks = async (): Promise<{ checkedCount: numb
           timestamp: new Date().toISOString()
         });
         
-        // 如果任务设置了自动重启，则创建新的周期
-        if (task.autoRestart) {
-          // 对于未完成的逾期任务，使用截止日期作为新周期的开始日期
-          const nextStartDate = task.currentCycle.dueDate;
-          
-          const nextCycle = await createTaskCycle(task);
-          
-          // 更新任务的当前周期
-          task.currentCycle = nextCycle;
-          await saveTask(task);
-          
-          // 如果启用了日历同步，为新周期创建日历事件
-          if (task.syncToCalendar) {
-            try {
-              const eventId = await addTaskToCalendar(task, nextCycle);
-              task.calendarEventId = eventId;
-              await saveTask(task);
-            } catch (error) {
-              console.error('Error syncing task to calendar:', error);
-            }
+        // 对所有逾期任务创建新的周期(不再检查autoRestart设置)
+        // 对于未完成的逾期任务，使用截止日期作为新周期的开始日期
+        const nextStartDate = task.currentCycle.dueDate;
+        
+        // 创建新周期，并自动更新为任务的当前周期
+        const nextCycle = await createTaskCycle(task);
+        
+        // 更新任务的当前周期
+        task.currentCycle = nextCycle;
+        await saveTask(task);
+        
+        // 如果启用了日历同步，为新周期创建日历事件
+        if (task.syncToCalendar) {
+          try {
+            const eventId = await addTaskToCalendar(task, nextCycle);
+            task.calendarEventId = eventId;
+            await saveTask(task);
+          } catch (error) {
+            console.error('Error syncing task to calendar:', error);
           }
         }
         
