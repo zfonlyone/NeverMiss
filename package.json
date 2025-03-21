@@ -19,7 +19,8 @@
     "build:simulator": "./scripts/build-simulator.sh",
     "run:simulator": "./scripts/run-simulator.sh",
     "build:android-local": "./scripts/build-android.sh",
-    "run:android-local": "./scripts/run-android.sh"
+    "run:android-local": "./scripts/run-android.sh",
+    "build:device": "./scripts/build-device.sh"
   },
   "jest": {
     "preset": "jest-expo"
