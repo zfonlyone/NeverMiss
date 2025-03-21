@@ -1,6 +1,7 @@
 import * as BackgroundFetch from 'expo-background-fetch';
 import * as TaskManager from 'expo-task-manager';
 import { Platform } from 'react-native';
+import { checkiOSPushNotificationsSupport } from './notificationService';
 
 // Define the background task name
 export const BACKGROUND_TASK_NAME = 'CHECK_OVERDUE_TASKS';
@@ -91,6 +92,15 @@ export const getBackgroundFetchStatus = async (): Promise<string> => {
  */
 export const registerBackgroundTask = async (): Promise<boolean> => {
   try {
+    // 检查iOS是否支持推送通知
+    if (Platform.OS === 'ios') {
+      const supportsPushNotifications = await checkiOSPushNotificationsSupport();
+      if (!supportsPushNotifications) {
+        console.log('当前iOS环境不支持Push Notifications，无法注册后台任务');
+        return false;
+      }
+    }
+    
     if (!(await isBackgroundFetchAvailable())) {
       console.log('Background fetch is not available on this device');
       return false;
@@ -138,6 +148,14 @@ export const unregisterBackgroundTask = async (): Promise<boolean> => {
  */
 export const isBackgroundTaskRegistered = async (): Promise<boolean> => {
   try {
+    // 检查iOS是否支持推送通知
+    if (Platform.OS === 'ios') {
+      const supportsPushNotifications = await checkiOSPushNotificationsSupport();
+      if (!supportsPushNotifications) {
+        return false; // 如果不支持，直接返回未注册
+      }
+    }
+    
     return await TaskManager.isTaskRegisteredAsync(BACKGROUND_TASK_NAME);
   } catch (error) {
     console.error('Error checking background task registration:', error);

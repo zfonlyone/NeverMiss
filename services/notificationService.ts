@@ -13,6 +13,30 @@ import { TaskCycle } from '../models/TaskCycle';
 import { registerBackgroundTask, unregisterBackgroundTask } from './backgroundTaskService';
 import { checkNotificationPermission, requestNotificationPermission } from './permissionService';
 import * as TaskManager from 'expo-task-manager';
+import * as Application from 'expo-application';
+
+/**
+ * 检查iOS设备是否支持推送通知
+ * 个人开发者账号在iOS上不支持Push Notifications功能
+ */
+export const checkiOSPushNotificationsSupport = async (): Promise<boolean> => {
+  // 只有iOS平台需要检查
+  if (Platform.OS !== 'ios') return true;
+
+  try {
+    // 获取开发者团队信息和推送通知状态
+    const bundleId = Application.applicationId;
+    const pushNotificationStatus = await Notifications.getDevicePushTokenAsync()
+      .then(() => true)
+      .catch(() => false);
+    
+    console.log(`iOS推送状态检查: bundleId=${bundleId}, pushSupported=${pushNotificationStatus}`);
+    return pushNotificationStatus;
+  } catch (error) {
+    console.error('检查iOS推送支持时出错:', error);
+    return false;
+  }
+};
 
 // Configure notifications
 export async function configureNotifications(): Promise<boolean> {
@@ -25,6 +49,9 @@ export async function configureNotifications(): Promise<boolean> {
       return false;
     }
 
+    // 检查iOS推送通知支持
+    const supportsPushNotifications = await checkiOSPushNotificationsSupport();
+    
     // 配置通知处理
     Notifications.setNotificationHandler({
       handleNotification: async () => ({
@@ -58,7 +85,12 @@ export async function configureNotifications(): Promise<boolean> {
     }
     
     // Register background tasks
-    await registerBackgroundTask();
+    // 只有在支持推送通知的情况下才注册后台任务
+    if (supportsPushNotifications || Platform.OS === 'android') {
+      await registerBackgroundTask();
+    } else {
+      console.log('当前iOS环境不支持推送通知，已跳过后台任务注册');
+    }
     
     return true;
   } catch (error) {
@@ -78,6 +110,21 @@ export async function scheduleTaskNotification(
     if (permissionResult.status !== 'granted') {
       console.log('没有通知权限，无法安排提醒');
       return null;
+    }
+    
+    // 检查iOS推送通知支持
+    const supportsPushNotifications = Platform.OS === 'ios' 
+      ? await checkiOSPushNotificationsSupport()
+      : true;
+    
+    // 如果是iOS且不支持推送通知，则不安排后台通知
+    if (Platform.OS === 'ios' && !supportsPushNotifications) {
+      console.log('当前iOS环境不支持推送通知，无法安排后台通知');
+      // 如果当前应用处于前台，仍然可以显示通知
+      const appState = await Device.getDeviceTypeAsync();
+      if (appState === Device.DeviceType.UNKNOWN) {
+        return null;
+      }
     }
     
     // Calculate notification time based on cycle start date and reminder offset

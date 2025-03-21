@@ -13,7 +13,10 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.nevermiss.app",
       "jsEngine": "hermes",
-      "newArchEnabled": true
+      "newArchEnabled": true,
+      "infoPlist": {
+        "UIBackgroundModes": ["remote-notification"]
+      }
     },
     "android": {
       "package": "com.nevermiss.app",
