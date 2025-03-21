@@ -16,9 +16,9 @@ echo "第2步：配置APK签名..."
 cd android
 
 # 检查是否已有签名配置
-if [ ! -f app/nevermiss-key.keystore ]; then
+if [ ! -f nevermiss-key.keystore ]; then
   echo "未找到签名密钥，正在创建新的签名密钥..."
-  mkdir -p app
+  #mkdir -p app
   
   # 生成签名密钥
   keytool -genkeypair -v -storetype PKCS12 -keystore app/nevermiss-key.keystore \
@@ -43,12 +43,12 @@ if ! grep -q "MYAPP_UPLOAD_STORE_FILE" gradle.properties; then
   echo "MYAPP_UPLOAD_KEY_PASSWORD=nevermiss" >> gradle.properties
 fi
 
-# 检查app/build.gradle是否已包含签名配置
-if ! grep -q "signingConfigs.release" app/build.gradle; then
-  echo "修改app/build.gradle添加签名配置..."
+# 检查build.gradle是否已包含签名配置
+if ! grep -q "signingConfigs.release" build.gradle; then
+  echo "修改build.gradle添加签名配置..."
   
   # 先创建一个备份
-  cp app/build.gradle app/build.gradle.bak
+  cp build.gradle build.gradle.bak
   
   # 使用sed添加签名配置
   sed -i.bak '
@@ -65,12 +65,12 @@ if ! grep -q "signingConfigs.release" app/build.gradle; then
             keyPassword MYAPP_UPLOAD_KEY_PASSWORD\
         }\
     }
-  ' app/build.gradle
+  ' build.gradle
   
   # 检查sed是否成功
-  if ! grep -q "signingConfigs.release" app/build.gradle; then
+  if ! grep -q "signingConfigs.release" build.gradle; then
     echo "无法自动修改build.gradle，恢复备份文件"
-    mv app/build.gradle.bak app/build.gradle
+    mv build.gradle.bak build.gradle
     exit 1
   fi
 fi

@@ -10,7 +10,7 @@
 </div>
 
 <p align="center">
-  <img src="assets/icon.png" alt="NeverMiss Logo" width="120" height="120">
+  <img src="assets/images/icon.png" alt="NeverMiss Logo" width="120" height="120">
 </p>
 
 <p align="center">
