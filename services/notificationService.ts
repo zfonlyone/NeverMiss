@@ -13,30 +13,6 @@ import { TaskCycle } from '../models/TaskCycle';
 import { registerBackgroundTask, unregisterBackgroundTask } from './backgroundTaskService';
 import { checkNotificationPermission, requestNotificationPermission } from './permissionService';
 import * as TaskManager from 'expo-task-manager';
-import * as Application from 'expo-application';
-
-/**
- * 检查iOS设备是否支持推送通知
- * 个人开发者账号在iOS上不支持Push Notifications功能
- */
-export const checkiOSPushNotificationsSupport = async (): Promise<boolean> => {
-  // 只有iOS平台需要检查
-  if (Platform.OS !== 'ios') return true;
-
-  try {
-    // 获取开发者团队信息和推送通知状态
-    const bundleId = Application.applicationId;
-    const pushNotificationStatus = await Notifications.getDevicePushTokenAsync()
-      .then(() => true)
-      .catch(() => false);
-    
-    console.log(`iOS推送状态检查: bundleId=${bundleId}, pushSupported=${pushNotificationStatus}`);
-    return pushNotificationStatus;
-  } catch (error) {
-    console.error('检查iOS推送支持时出错:', error);
-    return false;
-  }
-};
 
 // Configure notifications
 export async function configureNotifications(): Promise<boolean> {
@@ -48,9 +24,6 @@ export async function configureNotifications(): Promise<boolean> {
       console.log('未获得通知权限!');
       return false;
     }
-
-    // 检查iOS推送通知支持
-    const supportsPushNotifications = await checkiOSPushNotificationsSupport();
     
     // 配置通知处理
     Notifications.setNotificationHandler({
@@ -84,12 +57,11 @@ export async function configureNotifications(): Promise<boolean> {
       });
     }
     
-    // Register background tasks
-    // 只有在支持推送通知的情况下才注册后台任务
-    if (supportsPushNotifications || Platform.OS === 'android') {
+    // 仅在Android上注册后台任务
+    if (Platform.OS === 'android') {
       await registerBackgroundTask();
     } else {
-      console.log('当前iOS环境不支持推送通知，已跳过后台任务注册');
+      console.log('iOS平台不注册后台任务');
     }
     
     return true;
@@ -112,17 +84,12 @@ export async function scheduleTaskNotification(
       return null;
     }
     
-    // 检查iOS推送通知支持
-    const supportsPushNotifications = Platform.OS === 'ios' 
-      ? await checkiOSPushNotificationsSupport()
-      : true;
-    
-    // 如果是iOS且不支持推送通知，则不安排后台通知
-    if (Platform.OS === 'ios' && !supportsPushNotifications) {
-      console.log('当前iOS环境不支持推送通知，无法安排后台通知');
-      // 如果当前应用处于前台，仍然可以显示通知
+    // iOS平台下，只在前台显示通知
+    if (Platform.OS === 'ios') {
+      // 检查应用状态，如果不在前台则不显示通知
       const appState = await Device.getDeviceTypeAsync();
       if (appState === Device.DeviceType.UNKNOWN) {
+        console.log('iOS平台应用不在前台，跳过通知');
         return null;
       }
     }
@@ -173,7 +140,7 @@ export async function scheduleTaskNotification(
           lightColor: '#FF0000',
         }),
       },
-      trigger: { type: 'timeInterval', seconds: secondsFromNow },
+      trigger: null, // 直接触发通知，不使用timeInterval
     });
     
     console.log(`已为任务 "${task.title}" 安排通知，ID: ${notificationId}, 时间: ${notificationDate.toLocaleString()}`);

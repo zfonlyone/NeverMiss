@@ -13,7 +13,6 @@ import * as DocumentPicker from 'expo-document-picker';
 import { List } from 'react-native-paper';
 import Constants from 'expo-constants';
 import { useTheme, ThemeMode } from '../../contexts/ThemeContext';
-import { checkiOSPushNotificationsSupport } from '../../services/notificationService';
 
 interface DatabaseInfo {
   version: number;
@@ -32,22 +31,12 @@ const SettingsScreen = () => {
   const [isLanguageModalVisible, setIsLanguageModalVisible] = useState(false);
   const [notificationPermission, setNotificationPermission] = useState<string>('undetermined');
   const [calendarPermission, setCalendarPermission] = useState<string>('undetermined');
-  const [pushNotificationsSupported, setPushNotificationsSupported] = useState<boolean | null>(null);
 
   useEffect(() => {
     // 加载设置
     loadSettings();
     loadDatabaseInfo();
     checkPermissions();
-    const checkPushSupport = async () => {
-      if (Platform.OS === 'ios') {
-        const supported = await checkiOSPushNotificationsSupport();
-        setPushNotificationsSupported(supported);
-      } else {
-        setPushNotificationsSupported(true); // Android默认支持
-      }
-    };
-    checkPushSupport();
   }, []);
   
   const loadSettings = async () => {
@@ -392,15 +381,15 @@ const SettingsScreen = () => {
       <Text style={[styles.sectionTitle, { color: colors.text }]}>{t.settings.notificationSettings}</Text>
       <List.Item
         title={t.settings.persistentNotification}
-        description={Platform.OS === 'ios' && !pushNotificationsSupported 
-          ? "当前iOS环境不支持推送通知，无法启用" 
+        description={Platform.OS === 'ios' 
+          ? "iOS平台不支持通知栏常驻" 
           : "在通知栏显示常驻通知以保持应用活跃"}
         left={props => <List.Icon {...props} icon="bell-ring-outline" />}
         right={() => (
           <Switch
             value={isPersistentNotificationEnabled}
             onValueChange={handlePersistentNotificationToggle}
-            disabled={Platform.OS === 'ios' && !pushNotificationsSupported}
+            disabled={Platform.OS === 'ios'}
           />
         )}
         titleStyle={{ color: colors.text }}
