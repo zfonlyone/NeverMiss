@@ -15,7 +15,11 @@
     "update-deps": "expo install --check",
     "prebuild": "expo prebuild",
     "build:android": "eas build -p android",
-    "build:ios": "eas build -p ios"
+    "build:ios": "eas build -p ios",
+    "build:simulator": "./scripts/build-simulator.sh",
+    "run:simulator": "./scripts/run-simulator.sh",
+    "build:android-local": "./scripts/build-android.sh",
+    "run:android-local": "./scripts/run-android.sh"
   },
   "jest": {
     "preset": "jest-expo"
