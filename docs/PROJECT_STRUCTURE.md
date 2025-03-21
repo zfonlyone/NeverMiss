@@ -10,8 +10,9 @@ NeverMiss 是一款任务管理应用，旨在帮助用户追踪和完成重要�
 /
 ├── .expo/                # Expo配置文件和缓存
 ├── .github/              # GitHub工作流和配置文件
-├── .vscode/              # VS Code编辑器配置
+├── .gitignore            # Git忽略文件配置
 ├── android/              # Android原生项目文件
+├── ios/                  # iOS原生项目文件
 ├── app/                  # Expo Router应用入口
 │   ├── _layout.tsx       # 应用布局定义
 │   ├── index.tsx         # 主页面定义
@@ -23,6 +24,9 @@ NeverMiss 是一款任务管理应用，旨在帮助用户追踪和完成重要�
 │   ├── navigation/       # 导航配置
 │   └── screens/          # 应用屏幕组件
 ├── assets/               # 静态资源（图片、字体等）
+│   ├── icon.png          # 应用图标
+│   ├── splash.png        # 启动屏幕
+│   └── screenshots/      # 应用截图
 ├── components/           # 共享UI组件
 │   ├── TaskList.tsx      # 任务列表组件
 │   ├── TaskDetail.tsx    # 任务详情组件
@@ -40,6 +44,10 @@ NeverMiss 是一款任务管理应用，旨在帮助用户追踪和完成重要�
 │   ├── NotificationController.ts # 通知控制器
 │   └── index.ts          # 控制器统一导出
 ├── docs/                 # 项目文档
+│   ├── ARCHITECTURE.md   # 架构说明文档
+│   ├── CONTRIBUTING.md   # 贡献指南
+│   ├── DEVELOPMENT_GUIDE.md # 开发指南
+│   └── PROJECT_STRUCTURE.md # 项目结构说明
 ├── hooks/                # 自定义React Hooks
 ├── locales/              # 国际化资源
 │   ├── en.ts             # 英文翻译
@@ -47,6 +55,7 @@ NeverMiss 是一款任务管理应用，旨在帮助用户追踪和完成重要�
 ├── migrations/           # 数据库迁移脚本
 ├── models/               # 数据模型
 │   ├── Task.ts           # 任务模型
+│   ├── TaskCycle.ts      # 任务周期模型
 │   └── ...               # 其他模型
 ├── navigation/           # 导航配置
 ├── scripts/              # 构建和部署脚本
@@ -62,21 +71,47 @@ NeverMiss 是一款任务管理应用，旨在帮助用户追踪和完成重要�
 │   ├── preferenceService.ts # 用户偏好设置服务
 │   ├── permissionService.ts # 权限管理服务
 │   ├── backgroundTaskService.ts # 后台任务服务
-│   ├── database.ts       # 数据库服务
+│   ├── storageService.ts  # 本地存储服务
 │   └── ...               # 其他服务
 ├── utils/                # 工具函数
 │   ├── dateUtils.ts      # 日期处理工具
+│   ├── lunarUtils.ts     # 农历处理工具
 │   └── ...               # 其他工具函数
 ├── App.tsx               # 应用入口组件
 ├── app.json              # Expo应用配置
 ├── babel.config.js       # Babel配置
 ├── eas.json              # EAS构建配置
+├── export_sample.json    # 导出数据示例
 ├── index.js              # 应用入口点
+├── LICENSE               # 许可证文件
 ├── metro.config.js       # Metro打包配置
 ├── package.json          # 依赖管理 
+├── package-lock.json     # 依赖锁定文件
 ├── tsconfig.json         # TypeScript配置
 └── README.md             # 项目说明文档
 ```
+
+## 核心目录说明
+
+### app/
+
+Expo Router应用的入口点，遵循基于文件系统的路由结构。每个文件代表一个路由，`_layout.tsx`定义了应用的主布局和导航结构。
+
+### components/
+
+包含所有可复用的UI组件，遵循组件化设计原则，每个组件应专注于单一功能。
+
+### controllers/
+
+采用MVC架构的控制器层，处理业务逻辑，将视图层和服务层连接起来。控制器负责数据转换、状态管理和逻辑处理。
+
+### services/
+
+服务层负责与外部系统交互，如本地存储、网络请求、通知系统等。服务层提供了一个抽象接口，使控制器层不需要直接处理底层实现细节。
+
+### models/
+
+定义了应用中使用的数据模型和类型，采用TypeScript接口确保类型安全。
 
 ## 架构说明
 
@@ -137,4 +172,10 @@ NeverMiss 是一款任务管理应用，旨在帮助用户追踪和完成重要�
    - **TaskController**: 处理任务的创建、更新、删除和查询
    - **TagController**: 处理任务标签管理
    - **CalendarController**: 处理任务与日历的集成
-   - **NotificationController**: 处理任务提醒和通知 
+   - **NotificationController**: 处理任务提醒和通知
+
+5. **Services**：处理外部系统和数据交互：
+   - **taskService**: 管理任务数据的存储和检索
+   - **notificationService**: 处理系统通知的创建和管理
+   - **calendarService**: 与设备日历的集成
+   - **storageService**: 管理本地数据存储 
