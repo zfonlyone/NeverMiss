@@ -15,7 +15,11 @@
     "update-deps": "expo install --check",
     "prebuild": "expo prebuild",
     "build:android": "eas build -p android",
-    "build:ios": "eas build -p ios"
+    "build:ios": "eas build -p ios",
+    "build:simulator": "./scripts/build-simulator.sh",
+    "run:simulator": "./scripts/run-simulator.sh",
+    "build:android-local": "./scripts/build-android.sh",
+    "run:android-local": "./scripts/run-android.sh"
   },
   "jest": {
     "preset": "jest-expo"
@@ -98,14 +102,14 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.nevermiss.app"
+      "bundleIdentifier": "com.zfonlyone.nevermiss"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "com.nevermiss.app"
+      "package": "com.zfonlyone.nevermiss"
     },
     "web": {
       "favicon": "./assets/favicon.png"
