@@ -1,7 +1,7 @@
-name: Build and Release
+name: Build Release (Store Version)
 
 on:
-  workflow_dispatch:  # 仅允许手动触发，移除自动触发条件
+  workflow_dispatch:  # 仅允许手动触发，从main/master分支构建商店版本
 
 # 添加权限配置
 permissions:
@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   build-android:
-    name: Build Android App
+    name: Build Android App (Store Version)
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
@@ -109,25 +109,28 @@ jobs:
           }
           EOF
 
-      - name: Build Release APK
+      - name: Build Release APK and AAB
         run: |
           cd android
-          ./gradlew assembleRelease -PreactNativeDevSupport=false -PreactNativeJsEngine=hermes --no-daemon --max-workers=2
-
-      - name: Copy APK to build directory
+          ./gradlew bundleRelease assembleRelease -PreactNativeDevSupport=false -PreactNativeJsEngine=hermes --no-daemon --max-workers=2
+          
+      - name: Copy APK and AAB to build directory
         run: |
           mkdir -p ./build
-          cp android/app/build/outputs/apk/release/app-release.apk ./build/NeverMiss-Android-Release.apk
+          cp android/app/build/outputs/apk/release/app-release.apk ./build/NeverMiss-Android-Store.apk
+          cp android/app/build/outputs/bundle/release/app-release.aab ./build/NeverMiss-Android-Store.aab
 
-      - name: Upload APK artifact
+      - name: Upload APK and AAB artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: android-app
-          path: ./build/NeverMiss-Android-Release.apk
+          name: android-store-artifacts
+          path: |
+            ./build/NeverMiss-Android-Store.apk
+            ./build/NeverMiss-Android-Store.aab
           retention-days: 7
 
   build-ios:
-    name: Build iOS App
+    name: Build iOS App (Store Version)
     runs-on: macos-latest
     steps:
       - name: Check out repository
@@ -208,7 +211,7 @@ jobs:
       - name: Rename and upload IPA artifact
         run: |
           if [ -f "./build/NeverMiss.ipa" ]; then
-            mv ./build/NeverMiss.ipa ./build/NeverMiss-iOS-Release.ipa
+            mv ./build/NeverMiss.ipa ./build/NeverMiss-iOS-Store.ipa
           else
             echo "警告: 找不到IPA文件!"
             find ./build -type f -name "*.ipa"
@@ -217,12 +220,12 @@ jobs:
       - name: Upload IPA artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ios-app
-          path: ./build/NeverMiss-iOS-Release.ipa
+          name: ios-store-artifacts
+          path: ./build/NeverMiss-iOS-Store.ipa
           retention-days: 7
 
   create-release:
-    name: Create Release
+    name: Create Store Release
     needs: [build-android, build-ios]
     runs-on: ubuntu-latest
     steps:
@@ -240,27 +243,23 @@ jobs:
           TS_VERSION=$(node -e "try { const v = require('./config/version').APP_INFO.VERSION; console.log(v); } catch(e) { console.log('未知'); }")
           echo "config/version.ts版本号: $TS_VERSION"
 
-      - name: Download artifacts
-        run: |
-          mkdir -p ./build
-        
-      - name: Download Android artifact
+      - name: Download Android artifacts
         uses: actions/download-artifact@v4
         with:
-          name: android-app
+          name: android-store-artifacts
           path: ./build
           
       - name: Download iOS artifact
         uses: actions/download-artifact@v4
         with:
-          name: ios-app
+          name: ios-store-artifacts
           path: ./build
         continue-on-error: true
 
       - name: Check iOS file exists
         id: check_ios_file
         run: |
-          if [ -f "./build/NeverMiss-iOS-Release.ipa" ] && [ $(stat -c%s "./build/NeverMiss-iOS-Release.ipa") -gt 1000 ]; then
+          if [ -f "./build/NeverMiss-iOS-Store.ipa" ] && [ $(stat -c%s "./build/NeverMiss-iOS-Store.ipa") -gt 1000 ]; then
             echo "ios_file_exists=true" >> $GITHUB_OUTPUT
           else
             echo "ios_file_exists=false" >> $GITHUB_OUTPUT
@@ -278,23 +277,26 @@ jobs:
           BUILD_DATE=$(date +'%Y-%m-%d')
           
           cat > ./build/RELEASE_NOTES.md << EOF
-          ## NeverMiss 正式版本 ${{ steps.version.outputs.version }}
+          ## NeverMiss 商店正式版本 ${{ steps.version.outputs.version }}
           
           ### 发布说明
           
-          这是 NeverMiss 应用的正式发布版本。
+          这是 NeverMiss 应用的正式商店发布版本。
           
           ### 下载说明
           
-          - **Android版本**: NeverMiss-Android-Release.apk
+          - **Android APK版本**: NeverMiss-Android-Store.apk
+            - 已签名可直接安装的商店版本
             - 适用于Android 7.0及以上设备
-            - 已签名可直接安装的正式版本
-            - 下载后直接安装即可使用
           
-          - **iOS版本**: NeverMiss-iOS-Release.ipa
-            - 用于iOS设备的正式版本
-            - 需要通过开发者账号或TestFlight安装
-            - 可使用AltStore等第三方工具安装
+          - **Android AAB版本**: NeverMiss-Android-Store.aab
+            - 适用于Google Play商店上传的二进制包
+            - 不可直接安装，仅用于发布到应用商店
+          
+          - **iOS版本**: NeverMiss-iOS-Store.ipa
+            - 用于上传至App Store的签名版本
+            - 需要通过App Store Connect上传
+            - 或使用AltStore等第三方工具安装测试
           
           ### 构建信息
           
@@ -302,19 +304,21 @@ jobs:
           - 提交: ${{ github.sha }}
           - 构建时间: $(date +'%Y-%m-%d %H:%M:%S')
           - 构建日期: ${BUILD_DATE}
+          - 分支: main/master
           EOF
 
       - name: Create Release
         id: create_release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: ${{ steps.version.outputs.version }}
-          name: NeverMiss 正式版本 ${{ steps.version.outputs.version }}
+          tag_name: store-${{ steps.version.outputs.version }}
+          name: NeverMiss 商店版本 ${{ steps.version.outputs.version }}
           draft: false
           prerelease: false
           body_path: ./build/RELEASE_NOTES.md
           files: |
-            ./build/NeverMiss-Android-Release.apk
-            ${{ steps.check_ios_file.outputs.ios_file_exists == 'true' && './build/NeverMiss-iOS-Release.ipa' || '' }}
+            ./build/NeverMiss-Android-Store.apk
+            ./build/NeverMiss-Android-Store.aab
+            ${{ steps.check_ios_file.outputs.ios_file_exists == 'true' && './build/NeverMiss-iOS-Store.ipa' || '' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 

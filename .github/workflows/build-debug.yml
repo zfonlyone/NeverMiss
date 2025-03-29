@@ -2,11 +2,7 @@ name: Build Debug Version
 
 on:
   push:
-    branches: [ main, master, develop, feature/*, release/* ]
-    tags:
-      - 'v*.*.*'  # 添加版本标签触发条件，如v1.1.0
-  pull_request:
-    branches: [ main, master, develop ]
+    branches: [ dev, develop, feature/*, bugfix/* ]  # 修改为dev分支和开发相关分支
   workflow_dispatch:  # 允许手动触发
 
 # 添加权限配置
@@ -17,7 +13,7 @@ permissions:
 
 jobs:
   build-android-debug:
-    name: Build Android Debug APK
+    name: Build Android Debug APK (开发调试版)
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
@@ -99,7 +95,7 @@ jobs:
           retention-days: 7
 
   build-ios-debug:
-    name: Build iOS Debug App
+    name: Build iOS Debug App (开发调试版)
     runs-on: macos-latest
     steps:
       - name: Check out repository
@@ -176,10 +172,10 @@ jobs:
 
   create-debug-release:
     name: Create Debug Release
-    needs: [build-android-debug]
+    needs: [build-android-debug, build-ios-debug]
     runs-on: ubuntu-latest
-    # 在推送到main或develop分支、使用标签或手动触发时创建发布
-    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/master'
+    # 修改条件：在推送到dev或develop分支或手动触发时创建发布
+    if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/develop' || startsWith(github.ref, 'refs/heads/feature/') || startsWith(github.ref, 'refs/heads/bugfix/')
     steps:
       - name: Check out repository
         uses: actions/checkout@v3
@@ -229,13 +225,8 @@ jobs:
 
       - name: Generate release notes
         run: |
-          if [[ ${{ github.ref }} == refs/tags/v* ]]; then
-            TITLE="NeverMiss 版本 ${{ steps.set_tag.outputs.tag }} ($(date +'%Y-%m-%d'))"
-            DESC="这是 NeverMiss 应用的自动构建版本。"
-          else
-            TITLE="NeverMiss v${{ steps.package_version.outputs.version }} 调试构建"
-            DESC="此版本为开发调试版本，基于 package.json 中的版本号 v${{ steps.package_version.outputs.version }}，未使用签名密钥构建，仅用于测试。"
-          fi
+          TITLE="NeverMiss 开发调试版本 v${{ steps.package_version.outputs.version }}"
+          DESC="此版本为开发调试版本，基于 package.json 中的版本号 v${{ steps.package_version.outputs.version }}，需要PC开发环境支持运行。"
           
           # 获取当前日期
           BUILD_DATE=$(date +'%Y-%m-%d')
@@ -249,13 +240,15 @@ jobs:
           
           ### 下载说明
           
-          - **Android版本**: NeverMiss-Android-debug.apk
+          - **Android 调试版本**: NeverMiss-Android-debug.apk
             - 适用于Android 7.0及以上设备
-            - 可直接安装运行，无需开发环境
+            - 需连接开发环境运行
+            - 开发调试版本，需要PC运行相关服务使用
           
-          - **iOS模拟器版本**: NeverMiss-iOS-Simulator-debug.zip
+          - **iOS模拟器调试版本**: NeverMiss-iOS-Simulator-debug.zip
             - 仅适用于macOS上的iOS模拟器
             - 需要Xcode和iOS模拟器环境
+            - 需要PC运行相关服务使用
             - 解压后，拖拽.app文件到模拟器中安装
           
           ### 构建信息
@@ -265,15 +258,16 @@ jobs:
           - 构建时间: $(date +'%Y-%m-%d %H:%M:%S')
           - 版本: v${{ steps.package_version.outputs.version }}
           - 构建日期: ${BUILD_DATE}
+          - 环境要求: 需要PC运行开发服务器
           EOF
 
       - name: Create Debug Release
         uses: softprops/action-gh-release@v1
         with:
-          name: ${{ startsWith(github.ref, 'refs/tags/v') && format('NeverMiss {0}', steps.set_tag.outputs.tag) || format('NeverMiss v{0} 调试构建 [{1}]', steps.package_version.outputs.version, github.ref_name) }}
+          name: NeverMiss v${{ steps.package_version.outputs.version }} 开发调试版 [${{ github.ref_name }}]
           tag_name: ${{ steps.set_tag.outputs.tag }}
           draft: false
-          prerelease: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+          prerelease: true
           body_path: ./build/RELEASE_NOTES.md
           files: |
             ./build/NeverMiss-Android-debug.apk

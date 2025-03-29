@@ -160,3 +160,101 @@ NeverMiss采用修改版的MVC架构，结合了React Native的组件化特性�
 - [Expo](https://expo.dev/) - 提供了出色的开发平台
 - [React Native](https://reactnative.dev/) - 提供了移动框架
 - [AsyncStorage](https://react-native-async-storage.github.io/async-storage/) - 提供了可靠的数据存储解决方案
+
+# NeverMiss 应用构建说明
+
+## 版本类型
+
+本项目使用GitHub Actions实现自动化构建，分为以下几种版本类型：
+
+### 1. 商店正式版本（Store Version）
+
+- **触发方式**：main/master分支手动触发
+- **工作流名称**：Build Release (Store Version)
+- **构建文件**：`.github/workflows/build-and-release.yml`
+- **构建内容**：
+  - **Android**: 签名版APK和AAB包，可直接上架Google Play
+  - **iOS**: 签名版IPA，可直接上架App Store
+- **使用说明**：适用于正式发布到应用商店的版本
+
+### 2. 发布测试版本（Release Test Version）
+
+- **触发方式**：main/master分支带v标签自动触发，或手动触发
+- **工作流名称**：Build Release Test Version
+- **构建文件**：`.github/workflows/build-test.yml`
+- **构建内容**：
+  - **Android**: 无签名APK
+  - **iOS**: 无签名IPA
+- **使用说明**：适用于上架前测试，验证功能是否正常，但无需正式签名
+
+### 3. 开发调试版本（Debug Version）
+
+- **触发方式**：dev及开发相关分支每次提交自动构建，或手动触发
+- **工作流名称**：Build Debug Version
+- **构建文件**：`.github/workflows/build-debug.yml`
+- **构建内容**：
+  - **Android**: 调试版APK
+  - **iOS**: 模拟器调试包
+- **使用说明**：
+  - 需要PC运行开发服务器
+  - 适用于日常开发调试使用
+
+### 4. Expo云构建版本（Expo Cloud Version）
+
+- **触发方式**：main分支手动触发
+- **工作流名称**：Build Expo Cloud Version
+- **构建文件**：`.github/workflows/build-release-eas.yml`
+- **构建内容**：
+  - **Android**: 由Expo云服务构建和签名的APK
+  - **iOS**: 由Expo云服务构建，需通过TestFlight分发
+- **使用说明**：
+  - 使用Expo托管的构建服务
+  - Android版可直接安装测试
+  - iOS版需通过Expo开发者控制台获取
+
+### 5. Expo开发版本（不需构建）
+
+- **说明**：
+  - 不需要构建app
+  - 运行开发服务器后，使用官方Expo应用扫码测试页面
+
+## 构建产物说明
+
+### Android版本
+
+- `NeverMiss-Android-Store.apk` - 商店正式签名版APK
+- `NeverMiss-Android-Store.aab` - Google Play上传包
+- `NeverMiss-Android-ReleaseTest.apk` - 发布测试版APK（无签名）
+- `NeverMiss-Android-debug.apk` - 开发调试版APK
+- `NeverMiss-Android-ExpoCloud.apk` - Expo云构建版本APK
+
+### iOS版本
+
+- `NeverMiss-iOS-Store.ipa` - App Store上传包（签名版）
+- `NeverMiss-iOS-ReleaseTest.ipa` - 发布测试版IPA（无签名）
+- `NeverMiss-iOS-Simulator-debug.zip` - 模拟器调试包
+- Expo云构建版iOS应用 - 仅在Expo开发者控制台可见
+
+## 使用指南
+
+1. **发布正式版本**：
+   - 确认版本号和功能后，在GitHub仓库手动触发`Build Release (Store Version)`工作流
+   
+2. **发布测试版本**：
+   - 在main/master分支打标签`v*.*.*`(如v1.0.0)自动触发构建
+   - 或手动触发`Build Release Test Version`工作流
+   
+3. **日常开发**：
+   - 提交代码到dev或开发分支会自动构建开发调试版
+   - 需要PC运行开发服务器配合使用
+
+4. **Expo云构建**：
+   - 在main分支手动触发`Build Expo Cloud Version`工作流
+   - 适用于需要使用Expo托管构建服务的情况
+
+## 注意事项
+
+- 所有构建版本可在GitHub Releases页面查看和下载
+- 签名相关密钥和证书请勿上传到仓库
+- 正式发布前请确保package.json中的版本号与config/version.ts保持一致
+- Expo云构建需要有效的Expo账号和相应的访问令牌

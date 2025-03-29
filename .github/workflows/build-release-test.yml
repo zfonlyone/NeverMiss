@@ -1,0 +1,264 @@
+name: Build Release Test Version
+
+on:
+  push:
+    branches: [ main, master ]
+    tags:
+      - 'v*.*.*'  # 添加版本标签触发条件，如v1.1.0
+  workflow_dispatch:  # 允许手动触发
+
+# 添加权限配置
+permissions:
+  contents: write  # 允许工作流写入仓库内容(必须有这个权限才能创建Releases)
+  pull-requests: write  # 可选，如果需要评论PR
+  issues: write  # 可选，如果需要操作Issues
+
+jobs:
+  build-android-test:
+    name: Build Android Release Test APK
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v3
+
+      - name: Get version from package.json
+        id: package_version
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "检测到package.json版本号: $VERSION"
+          
+          # 检查version.ts文件是否已经更新
+          echo "验证config/version.ts中的版本号是否与package.json同步..."
+          TS_VERSION=$(node -e "try { const v = require('./config/version').APP_INFO.VERSION; console.log(v); } catch(e) { console.log('error'); }")
+          echo "config/version.ts中版本号: $TS_VERSION"
+          
+          if [ "$TS_VERSION" != "$VERSION" ] && [ "$TS_VERSION" != "error" ]; then
+            echo "警告: config/version.ts中的版本号($TS_VERSION)与package.json中的版本号($VERSION)不一致"
+            echo "版本文件不同步，但继续构建过程..."
+          fi
+
+      - name: Set up JDK
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      # 添加缓存加速依赖安装
+      - name: Cache node modules
+        uses: actions/cache@v3
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
+
+      - name: Install dependencies
+        run: npm ci --no-audit --prefer-offline
+
+      - name: Generate native Android files
+        run: npx expo prebuild -p android --clean
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v2
+
+      # 添加Gradle缓存
+      - name: Cache Gradle packages
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
+      - name: Build Release APK (unsigned)
+        run: |
+          cd android
+          ./gradlew assembleRelease -PreactNativeDevSupport=false -PreactNativeJsEngine=hermes --no-daemon --max-workers=2
+
+      - name: Create build directory
+        run: mkdir -p ./build
+
+      - name: Copy APK to build directory
+        run: cp android/app/build/outputs/apk/release/app-release-unsigned.apk ./build/NeverMiss-Android-ReleaseTest.apk
+
+      - name: Upload Test APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-release-test-app
+          path: ./build/NeverMiss-Android-ReleaseTest.apk
+          retention-days: 7
+
+  build-ios-test:
+    name: Build iOS Release Test App
+    runs-on: macos-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      # 添加缓存加速依赖安装
+      - name: Cache node modules
+        uses: actions/cache@v3
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
+
+      - name: Install dependencies
+        run: npm ci --no-audit --prefer-offline
+
+      - name: Generate native iOS files
+        run: npx expo prebuild -p ios --clean
+
+      # 添加CocoaPods缓存
+      - name: Cache Pods
+        uses: actions/cache@v3
+        with:
+          path: ios/Pods
+          key: ${{ runner.os }}-pods-${{ hashFiles('**/Podfile.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-pods-
+
+      - name: Install Pods
+        run: |
+          cd ios
+          pod install
+
+      - name: Build iOS App (without signing)
+        run: |
+          cd ios
+          xcodebuild -workspace NeverMiss.xcworkspace -scheme NeverMiss -configuration Release -archivePath ./build/NeverMiss.xcarchive CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" CODE_SIGN_ENTITLEMENTS="" RCT_NO_LAUNCH_PACKAGER=1 NO_FLIPPER=1 COMPILER_INDEX_STORE_ENABLE=NO -quiet archive
+
+      - name: Create unsigned IPA
+        run: |
+          cd ios
+          mkdir -p Payload
+          cp -r build/NeverMiss.xcarchive/Products/Applications/NeverMiss.app Payload/
+          zip -r ../build/NeverMiss-iOS-ReleaseTest.ipa Payload
+          rm -r Payload
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-release-test-app
+          path: ./build/NeverMiss-iOS-ReleaseTest.ipa
+          retention-days: 7
+
+  create-test-release:
+    name: Create Release Test Build
+    needs: [build-android-test, build-ios-test]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v3
+      
+      - name: Get version from package.json
+        id: package_version
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "检测到package.json版本号: $VERSION"
+
+      - name: Set up directory
+        run: mkdir -p ./build
+      
+      - name: Download Android Test artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: android-release-test-app
+          path: ./build
+          
+      - name: Download iOS Test artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ios-release-test-app
+          path: ./build
+        continue-on-error: true
+
+      - name: Check iOS file exists
+        id: check_ios_file
+        run: |
+          if [ -f "./build/NeverMiss-iOS-ReleaseTest.ipa" ] && [ $(stat -c%s "./build/NeverMiss-iOS-ReleaseTest.ipa") -gt 1000 ]; then
+            echo "ios_file_exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "ios_file_exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Set release tag name
+        id: set_tag
+        run: |
+          if [[ ${{ github.ref }} == refs/tags/v* ]]; then
+            TAG="${{ github.ref_name }}"
+          else
+            TAG="release-test-v${{ steps.package_version.outputs.version }}-${{ github.sha }}"
+          fi
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+
+      - name: Generate release notes
+        run: |
+          # 获取当前日期和时间
+          BUILD_DATE=$(date +'%Y-%m-%d')
+          BUILD_TIME=$(date +'%Y-%m-%d %H:%M:%S')
+          
+          if [[ ${{ github.ref }} == refs/tags/v* ]]; then
+            TITLE="NeverMiss 发布测试版本 ${{ steps.set_tag.outputs.tag }}"
+            DESC="这是 NeverMiss 应用的预发布测试版本，基于标签 ${{ steps.set_tag.outputs.tag }} 构建。"
+          else
+            TITLE="NeverMiss v${{ steps.package_version.outputs.version }} 发布测试构建"
+            DESC="这是 NeverMiss 应用的上架前发布测试版本，基于 package.json 中的版本号 v${{ steps.package_version.outputs.version }} 构建，用于上架前功能验证。"
+          fi
+          
+          cat > ./build/RELEASE_NOTES.md << EOF
+          ## ${TITLE}
+          
+          ### 版本说明
+          
+          ${DESC}
+          
+          ### 下载说明
+          
+          - **Android版本**: NeverMiss-Android-ReleaseTest.apk
+            - 适用于Android 7.0及以上设备
+            - 无签名版本，安装时需要允许未知来源应用
+            - 用于上架前功能测试和验证
+          
+          - **iOS版本**: NeverMiss-iOS-ReleaseTest.ipa
+            - 无签名版本，需要使用开发工具安装
+            - 可通过AltStore、Sideloadly等工具安装到测试设备
+            - 用于上架前功能测试和验证
+          
+          ### 构建信息
+          
+          - 分支: ${{ github.ref_name }}
+          - 提交: ${{ github.sha }}
+          - 构建时间: ${BUILD_TIME}
+          - 版本: v${{ steps.package_version.outputs.version }}
+          - 构建日期: ${BUILD_DATE}
+          EOF
+
+      - name: Create Test Release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: ${{ startsWith(github.ref, 'refs/tags/v') && format('NeverMiss {0} 发布测试版', steps.set_tag.outputs.tag) || format('NeverMiss v{0} 发布测试版 [{1}]', steps.package_version.outputs.version, github.ref_name) }}
+          tag_name: ${{ steps.set_tag.outputs.tag }}
+          draft: false
+          prerelease: true  # 测试版本标记为预发布
+          body_path: ./build/RELEASE_NOTES.md
+          files: |
+            ./build/NeverMiss-Android-ReleaseTest.apk
+            ${{ steps.check_ios_file.outputs.ios_file_exists == 'true' && './build/NeverMiss-iOS-ReleaseTest.ipa' || '' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 

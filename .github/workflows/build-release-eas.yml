@@ -1,0 +1,196 @@
+name: Build Expo Cloud Version
+
+on:
+  workflow_dispatch:  # 仅允许手动触发
+
+# 添加权限配置
+permissions:
+  contents: write  # 允许工作流写入仓库内容(必须有这个权限才能创建Releases)
+  pull-requests: write  # 可选，如果需要评论PR
+  issues: write  # 可选，如果需要操作Issues
+
+jobs:
+  check-branch:
+    name: Check Branch
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check if running on main branch
+        run: |
+          if [[ "${{ github.ref }}" != "refs/heads/main" ]]; then
+            echo "::error::This workflow can only be run on the main branch"
+            exit 1
+          fi
+          echo "Running on main branch, proceeding with build"
+
+  build-android:
+    name: Build Android App (Expo Cloud)
+    needs: [check-branch]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Get version from package.json
+        id: package_version
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "检测到package.json版本号: $VERSION"
+
+      - name: Install dependencies
+        run: npm ci --no-audit --prefer-offline
+
+      - name: Setup Expo
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Build Android App
+        run: npx eas build --platform android --non-interactive --no-wait
+
+      - name: Create build directory
+        run: mkdir -p ./build
+
+      - name: Download build artifacts
+        run: npx eas build:download --platform android --latest --output=./build/NeverMiss-Android-ExpoCloud.apk
+        
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-expo-cloud
+          path: ./build/NeverMiss-Android-ExpoCloud.apk
+          retention-days: 7
+
+  build-ios:
+    name: Build iOS App (Expo Cloud)
+    needs: [check-branch]
+    runs-on: macos-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --no-audit --prefer-offline
+
+      - name: Setup Expo
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Build iOS App
+        run: npx eas build --platform ios --non-interactive --no-wait
+        
+      - name: Wait for build to complete
+        run: |
+          echo "iOS构建在Expo云服务器上运行，无法直接下载"
+          echo "请查看Expo开发者控制台获取构建结果"
+          mkdir -p ./build
+          echo "Expo iOS build placeholder" > ./build/iOS-ExpoCloud-build-info.txt
+
+      - name: Upload iOS build info
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-expo-cloud-info
+          path: ./build/iOS-ExpoCloud-build-info.txt
+          retention-days: 7
+
+  create-release:
+    name: Create Expo Cloud Release
+    needs: [build-android, build-ios, check-branch]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v3
+      
+      - name: Get version from package.json
+        id: package_version
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "检测到package.json版本号: $VERSION"
+        
+      - name: Create build directory
+        run: mkdir -p ./build
+        
+      - name: Download Android artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: android-expo-cloud
+          path: ./build
+          
+      - name: Download iOS info artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ios-expo-cloud-info
+          path: ./build
+        continue-on-error: true
+      
+      - name: Set version tag
+        id: version
+        run: |
+          VERSION="expo-cloud-v${{ steps.package_version.outputs.version }}"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Generate release notes
+        run: |
+          # 获取当前日期和时间
+          BUILD_DATE=$(date +'%Y-%m-%d')
+          BUILD_TIME=$(date +'%Y-%m-%d %H:%M:%S')
+          
+          cat > ./build/RELEASE_NOTES.md << EOF
+          ## NeverMiss Expo云构建版本 v${{ steps.package_version.outputs.version }}
+          
+          ### 版本说明
+          
+          这是 NeverMiss 应用通过Expo EAS云服务构建的版本。
+          
+          ### 下载说明
+          
+          - **Android版本**: NeverMiss-Android-ExpoCloud.apk
+            - 由Expo云服务构建的APK
+            - 签名由Expo托管服务提供
+            - 适用于Android 7.0及以上设备
+          
+          - **iOS版本**:
+            - iOS版本在Expo云服务上构建
+            - 请通过Expo开发者控制台获取构建结果
+            - 或通过TestFlight进行分发测试
+          
+          ### 构建信息
+          
+          - 分支: ${{ github.ref_name }}
+          - 提交: ${{ github.sha }}
+          - 构建时间: ${BUILD_TIME}
+          - 版本号: v${{ steps.package_version.outputs.version }}
+          - 构建日期: ${BUILD_DATE}
+          - 构建服务: Expo EAS Build
+          EOF
+
+      - name: Create Release
+        id: create_release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.version.outputs.version }}
+          name: NeverMiss Expo云构建版本 v${{ steps.package_version.outputs.version }}
+          draft: false
+          prerelease: true
+          body_path: ./build/RELEASE_NOTES.md
+          files: |
+            ./build/NeverMiss-Android-ExpoCloud.apk
+            ./build/iOS-ExpoCloud-build-info.txt
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
