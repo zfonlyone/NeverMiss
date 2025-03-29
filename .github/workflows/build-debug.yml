@@ -2,11 +2,11 @@ name: Build Debug Version
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ main, master, develop, feature/*, release/* ]
     tags:
       - 'v*.*.*'  # 添加版本标签触发条件，如v1.1.0
   pull_request:
-    branches: [ main, develop ]
+    branches: [ main, master, develop ]
   workflow_dispatch:  # 允许手动触发
 
 jobs:
