@@ -51,19 +51,39 @@ jobs:
         with:
           node-version: '18'
 
+      # 添加缓存加速依赖安装
+      - name: Cache node modules
+        uses: actions/cache@v3
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
+
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --no-audit --prefer-offline
 
       - name: Generate native Android files
-        run: npx expo prebuild -p android
+        run: npx expo prebuild -p android --clean
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v2
 
+      # 添加Gradle缓存
+      - name: Cache Gradle packages
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
       - name: Build Debug APK
         run: |
           cd android
-          ./gradlew assembleDebug
+          ./gradlew assembleDebug -PreactNativeDevSupport=false -PreactNativeJsEngine=hermes --no-daemon --max-workers=2
 
       - name: Create build directory
         run: mkdir -p ./build
@@ -90,11 +110,29 @@ jobs:
         with:
           node-version: '18'
 
+      # 添加缓存加速依赖安装
+      - name: Cache node modules
+        uses: actions/cache@v3
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
+
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --no-audit --prefer-offline
 
       - name: Generate native iOS files
-        run: npx expo prebuild -p ios
+        run: npx expo prebuild -p ios --clean
+
+      # 添加CocoaPods缓存
+      - name: Cache Pods
+        uses: actions/cache@v3
+        with:
+          path: ios/Pods
+          key: ${{ runner.os }}-pods-${{ hashFiles('**/Podfile.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-pods-
 
       - name: Install Pods
         run: |
@@ -104,36 +142,21 @@ jobs:
       - name: Build iOS App for Simulator
         run: |
           cd ios
-          xcodebuild -workspace NeverMiss.xcworkspace -scheme NeverMiss -configuration Debug -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone 14' CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" CODE_SIGN_ENTITLEMENTS="" COMPILER_INDEX_STORE_ENABLE=NO build
-      
-      - name: Create build directory
-        run: mkdir -p ./build/ios-simulator
-      
-      - name: Find and copy iOS app
+          xcodebuild -workspace NeverMiss.xcworkspace -scheme NeverMiss -configuration Debug -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone 14' CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" CODE_SIGN_ENTITLEMENTS="" RCT_NO_LAUNCH_PACKAGER=1 NO_FLIPPER=1 COMPILER_INDEX_STORE_ENABLE=NO -quiet build
+
+      - name: Find and prepare iOS app
         run: |
-          # 查找实际的构建输出目录
-          echo "查找iOS构建产物..."
-          find ~/Library/Developer/Xcode/DerivedData -name "*.app" -type d | grep NeverMiss
-          
-          # 尝试几种可能的构建输出路径
-          if [ -d "ios/build/Build/Products/Debug-iphonesimulator/NeverMiss.app" ]; then
-            echo "找到路径: ios/build/Build/Products/Debug-iphonesimulator/NeverMiss.app"
-            cp -r ios/build/Build/Products/Debug-iphonesimulator/NeverMiss.app ./build/ios-simulator/
-          elif [ -d "~/Library/Developer/Xcode/DerivedData/NeverMiss-*/Build/Products/Debug-iphonesimulator/NeverMiss.app" ]; then
-            DERIVED_APP_PATH=$(find ~/Library/Developer/Xcode/DerivedData -name "NeverMiss.app" -type d | grep -v "SourcePackages" | head -n 1)
-            echo "找到路径: $DERIVED_APP_PATH"
+          DERIVED_APP_PATH=$(find ~/Library/Developer/Xcode/DerivedData -name "NeverMiss.app" -type d | grep -v "SourcePackages" | head -n 1)
+          if [ ! -z "$DERIVED_APP_PATH" ]; then
+            mkdir -p ./build/ios-simulator
             cp -r "$DERIVED_APP_PATH" ./build/ios-simulator/
+            cd build
+            zip -r -y NeverMiss-debug-simulator.zip ios-simulator
           else
-            echo "警告: 找不到iOS构建产物，跳过复制步骤。"
-            mkdir -p ./build/ios-simulator/NeverMiss.app
-            echo "This is a placeholder file" > ./build/ios-simulator/NeverMiss.app/placeholder.txt
-            # 不返回错误，让构建继续
+            echo "警告: 找不到iOS构建产物"
+            mkdir -p ./build
+            echo "Placeholder" > ./build/NeverMiss-debug-simulator.zip
           fi
-      
-      - name: Compress iOS simulator app
-        run: |
-          cd build
-          zip -r NeverMiss-debug-simulator.zip ios-simulator
 
       - name: Upload iOS simulator app artifact
         uses: actions/upload-artifact@v4
@@ -159,9 +182,10 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "检测到package.json版本号: $VERSION"
 
-      - name: Create build directory
-        run: mkdir -p ./build
-        
+      - name: Download artifacts
+        run: |
+          mkdir -p ./build
+      
       - name: Download Android Debug artifact
         uses: actions/download-artifact@v4
         with:
@@ -178,12 +202,10 @@ jobs:
       - name: Check iOS simulator file
         id: check_ios_file
         run: |
-          if [ -f "./build/NeverMiss-debug-simulator.zip" ]; then
+          if [ -f "./build/NeverMiss-debug-simulator.zip" ] && [ $(stat -c%s "./build/NeverMiss-debug-simulator.zip") -gt 1000 ]; then
             echo "ios_file_exists=true" >> $GITHUB_OUTPUT
-            echo "iOS模拟器文件存在"
           else
             echo "ios_file_exists=false" >> $GITHUB_OUTPUT
-            echo "警告: iOS模拟器文件不存在，将只发布Android APK"
           fi
 
       - name: Set release tag name
@@ -191,40 +213,33 @@ jobs:
         run: |
           if [[ ${{ github.ref }} == refs/tags/v* ]]; then
             TAG="${{ github.ref_name }}"
-            echo "tag=$TAG" >> $GITHUB_OUTPUT
-            echo "使用版本标签: $TAG"
           else
-            # 使用package.json中的版本号
             TAG="v${{ steps.package_version.outputs.version }}-debug-${{ github.sha }}"
-            echo "tag=$TAG" >> $GITHUB_OUTPUT
-            echo "使用package.json版本: $TAG"
           fi
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
 
       - name: Generate release notes
-        id: release_notes
         run: |
           if [[ ${{ github.ref }} == refs/tags/v* ]]; then
-            echo "## NeverMiss 版本 ${{ steps.set_tag.outputs.tag }} ($(date +'%Y-%m-%d'))" > ./build/RELEASE_NOTES.md
-            echo "" >> ./build/RELEASE_NOTES.md
-            echo "### 版本说明" >> ./build/RELEASE_NOTES.md
-            echo "" >> ./build/RELEASE_NOTES.md
-            echo "这是 NeverMiss 应用的自动构建版本。" >> ./build/RELEASE_NOTES.md
+            TITLE="NeverMiss 版本 ${{ steps.set_tag.outputs.tag }} ($(date +'%Y-%m-%d'))"
+            DESC="这是 NeverMiss 应用的自动构建版本。"
           else
-            echo "## NeverMiss 版本 v${{ steps.package_version.outputs.version }} 调试构建 ($(date +'%Y-%m-%d'))" > ./build/RELEASE_NOTES.md
-            echo "" >> ./build/RELEASE_NOTES.md
-            echo "### 调试版本说明" >> ./build/RELEASE_NOTES.md
-            echo "" >> ./build/RELEASE_NOTES.md
-            echo "此版本为开发调试版本，基于 package.json 中的版本号 v${{ steps.package_version.outputs.version }}，未使用签名密钥构建，仅用于测试。" >> ./build/RELEASE_NOTES.md
+            TITLE="NeverMiss v${{ steps.package_version.outputs.version }} 调试构建"
+            DESC="此版本为开发调试版本，基于 package.json 中的版本号 v${{ steps.package_version.outputs.version }}，未使用签名密钥构建，仅用于测试。"
           fi
-          echo "" >> ./build/RELEASE_NOTES.md
-          echo "- 分支: ${{ github.ref_name }}" >> ./build/RELEASE_NOTES.md
-          echo "- 提交: ${{ github.sha }}" >> ./build/RELEASE_NOTES.md
-          echo "- 构建时间: $(date +'%Y-%m-%d %H:%M:%S')" >> ./build/RELEASE_NOTES.md
-          echo "- package.json 版本: v${{ steps.package_version.outputs.version }}" >> ./build/RELEASE_NOTES.md
           
-          # 检查version.ts版本号
-          TS_VERSION=$(node -e "try { const v = require('./config/version').APP_INFO.VERSION; console.log(v); } catch(e) { console.log('未知'); }")
-          echo "- config/version.ts 版本: v$TS_VERSION" >> ./build/RELEASE_NOTES.md
+          cat > ./build/RELEASE_NOTES.md << EOF
+          ## ${TITLE}
+          
+          ### 版本说明
+          
+          ${DESC}
+          
+          - 分支: ${{ github.ref_name }}
+          - 提交: ${{ github.sha }}
+          - 构建时间: $(date +'%Y-%m-%d %H:%M:%S')
+          - 版本: v${{ steps.package_version.outputs.version }}
+          EOF
 
       - name: Create Debug Release
         uses: softprops/action-gh-release@v1
