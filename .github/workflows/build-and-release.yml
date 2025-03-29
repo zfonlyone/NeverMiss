@@ -11,6 +11,24 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v3
 
+      - name: Get version from package.json
+        id: package_version
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "检测到package.json版本号: $VERSION"
+          
+          # 检查version.ts文件是否已经更新
+          echo "验证config/version.ts中的版本号是否与package.json同步..."
+          TS_VERSION=$(node -e "try { const v = require('./config/version').APP_INFO.VERSION; console.log(v); } catch(e) { console.log('error'); }")
+          echo "config/version.ts中版本号: $TS_VERSION"
+          
+          if [ "$TS_VERSION" != "$VERSION" ] && [ "$TS_VERSION" != "error" ]; then
+            echo "警告: config/version.ts中的版本号($TS_VERSION)与package.json中的版本号($VERSION)不一致"
+            echo "请确保两处版本号一致，以避免app内显示的版本号与实际发布版本不符。"
+            echo "继续构建过程..."
+          fi
+
       - name: Set up JDK
         uses: actions/setup-java@v3
         with:
@@ -158,6 +176,20 @@ jobs:
     needs: [build-android, build-ios]
     runs-on: ubuntu-latest
     steps:
+      - name: Check out repository
+        uses: actions/checkout@v3
+      
+      - name: Get version from package.json
+        id: package_version
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "检测到package.json版本号: $VERSION"
+          
+          # 检查version.ts版本号
+          TS_VERSION=$(node -e "try { const v = require('./config/version').APP_INFO.VERSION; console.log(v); } catch(e) { console.log('未知'); }")
+          echo "config/version.ts版本号: $TS_VERSION"
+
       - name: Create build directory
         run: mkdir -p ./build
         
@@ -177,7 +209,7 @@ jobs:
       - name: Generate version number
         id: version
         run: |
-          VERSION="v$(date +'%Y%m%d%H%M')"
+          VERSION="v${{ steps.package_version.outputs.version }}"
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
       - name: Create Release
@@ -185,7 +217,7 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ steps.version.outputs.version }}
-          name: NeverMiss Release ${{ steps.version.outputs.version }}
+          name: NeverMiss 正式版本 ${{ steps.version.outputs.version }}
           draft: false
           prerelease: false
           files: |
@@ -205,7 +237,9 @@ jobs:
             
             ### 构建信息
             
+            - 版本号: ${{ steps.package_version.outputs.version }}
             - 提交: ${{ github.sha }}
             - 构建时间: $(date +'%Y-%m-%d %H:%M:%S')
+            - config/version.ts 版本: $(node -e "try { const v = require('./config/version').APP_INFO.VERSION; console.log(v); } catch(e) { console.log('未知'); }")
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 

@@ -3,6 +3,8 @@ name: Build Debug Version
 on:
   push:
     branches: [ main, develop ]
+    tags:
+      - 'v*.*.*'  # 添加版本标签触发条件，如v1.1.0
   pull_request:
     branches: [ main, develop ]
   workflow_dispatch:  # 允许手动触发
@@ -14,6 +16,23 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v3
+
+      - name: Get version from package.json
+        id: package_version
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "检测到package.json版本号: $VERSION"
+          
+          # 检查version.ts文件是否已经更新
+          echo "验证config/version.ts中的版本号是否与package.json同步..."
+          TS_VERSION=$(node -e "try { const v = require('./config/version').APP_INFO.VERSION; console.log(v); } catch(e) { console.log('error'); }")
+          echo "config/version.ts中版本号: $TS_VERSION"
+          
+          if [ "$TS_VERSION" != "$VERSION" ] && [ "$TS_VERSION" != "error" ]; then
+            echo "警告: config/version.ts中的版本号($TS_VERSION)与package.json中的版本号($VERSION)不一致"
+            echo "版本文件不同步，但继续构建过程..."
+          fi
 
       - name: Set up JDK
         uses: actions/setup-java@v3
@@ -109,6 +128,16 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')
     steps:
+      - name: Check out repository
+        uses: actions/checkout@v3
+      
+      - name: Get version from package.json
+        id: package_version
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "检测到package.json版本号: $VERSION"
+
       - name: Create build directory
         run: mkdir -p ./build
         
@@ -125,26 +154,53 @@ jobs:
           path: ./build
         continue-on-error: true
 
+      - name: Set release tag name
+        id: set_tag
+        run: |
+          if [[ ${{ github.ref }} == refs/tags/v* ]]; then
+            TAG="${{ github.ref_name }}"
+            echo "tag=$TAG" >> $GITHUB_OUTPUT
+            echo "使用版本标签: $TAG"
+          else
+            # 使用package.json中的版本号
+            TAG="v${{ steps.package_version.outputs.version }}-debug-${{ github.sha }}"
+            echo "tag=$TAG" >> $GITHUB_OUTPUT
+            echo "使用package.json版本: $TAG"
+          fi
+
       - name: Generate release notes
         id: release_notes
         run: |
-          echo "## NeverMiss Debug Build ($(date +'%Y-%m-%d'))" > ./build/RELEASE_NOTES.md
-          echo "" >> ./build/RELEASE_NOTES.md
-          echo "### 调试版本说明" >> ./build/RELEASE_NOTES.md
-          echo "" >> ./build/RELEASE_NOTES.md
-          echo "此版本为开发调试版本，未使用签名密钥构建，仅用于测试。" >> ./build/RELEASE_NOTES.md
+          if [[ ${{ github.ref }} == refs/tags/v* ]]; then
+            echo "## NeverMiss 版本 ${{ steps.set_tag.outputs.tag }} ($(date +'%Y-%m-%d'))" > ./build/RELEASE_NOTES.md
+            echo "" >> ./build/RELEASE_NOTES.md
+            echo "### 版本说明" >> ./build/RELEASE_NOTES.md
+            echo "" >> ./build/RELEASE_NOTES.md
+            echo "这是 NeverMiss 应用的自动构建版本。" >> ./build/RELEASE_NOTES.md
+          else
+            echo "## NeverMiss 版本 v${{ steps.package_version.outputs.version }} 调试构建 ($(date +'%Y-%m-%d'))" > ./build/RELEASE_NOTES.md
+            echo "" >> ./build/RELEASE_NOTES.md
+            echo "### 调试版本说明" >> ./build/RELEASE_NOTES.md
+            echo "" >> ./build/RELEASE_NOTES.md
+            echo "此版本为开发调试版本，基于 package.json 中的版本号 v${{ steps.package_version.outputs.version }}，未使用签名密钥构建，仅用于测试。" >> ./build/RELEASE_NOTES.md
+          fi
           echo "" >> ./build/RELEASE_NOTES.md
           echo "- 分支: ${{ github.ref_name }}" >> ./build/RELEASE_NOTES.md
           echo "- 提交: ${{ github.sha }}" >> ./build/RELEASE_NOTES.md
           echo "- 构建时间: $(date +'%Y-%m-%d %H:%M:%S')" >> ./build/RELEASE_NOTES.md
+          echo "- package.json 版本: v${{ steps.package_version.outputs.version }}" >> ./build/RELEASE_NOTES.md
+          
+          # 检查version.ts版本号
+          TS_VERSION=$(node -e "try { const v = require('./config/version').APP_INFO.VERSION; console.log(v); } catch(e) { console.log('未知'); }")
+          echo "- config/version.ts 版本: v$TS_VERSION" >> ./build/RELEASE_NOTES.md
 
       - name: Create Debug Release
         uses: softprops/action-gh-release@v1
         with:
-          name: Debug Build $(date +'%Y-%m-%d')
-          tag_name: debug-${{ github.sha }}
+          name: ${{ startsWith(github.ref, 'refs/tags/v') && format('NeverMiss {0}', steps.set_tag.outputs.tag) || format('NeverMiss v{0} 调试构建', steps.package_version.outputs.version) }}
+          tag_name: ${{ steps.set_tag.outputs.tag }}
           draft: false
-          prerelease: true
+          prerelease: ${{ !startsWith(github.ref, 'refs/tags/v') }}
           body_path: ./build/RELEASE_NOTES.md
           files: |
             ./build/NeverMiss-debug.apk

@@ -3,10 +3,14 @@
  * 统一管理所有版本相关的配置
  */
 
+// 导入package.json以获取版本号
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const packageJson = require('../package.json');
+
 // 应用信息
 export const APP_INFO = {
-  // 应用版本号
-  VERSION: '1.0.0',
+  // 应用版本号(从package.json自动获取)
+  VERSION: packageJson.version,
   // 数据库版本号
   DATABASE_VERSION: 1,
   // 作者

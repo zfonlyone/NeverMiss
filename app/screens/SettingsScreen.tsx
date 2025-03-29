@@ -461,7 +461,7 @@ const SettingsScreen = () => {
       <Text style={[styles.sectionTitle, { color: colors.text }]}>{t.settings.about}</Text>
       <List.Item
         title={t.settings.appName}
-        description={`${t.settings.version}: ${Constants.expoConfig?.version || '1.0.0'}`}
+        description={`${t.settings.version}: ${getFullVersion()}`}
         left={props => <List.Icon {...props} icon="information" color={colors.text} />}
         titleStyle={{ color: colors.text }}
         descriptionStyle={{ color: colors.subText }}
