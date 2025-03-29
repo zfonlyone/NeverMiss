@@ -3,6 +3,12 @@ name: Build and Release
 on:
   workflow_dispatch:  # 仅允许手动触发，移除自动触发条件
 
+# 添加权限配置
+permissions:
+  contents: write  # 允许工作流写入仓库内容(必须有这个权限才能创建Releases)
+  pull-requests: write  # 可选，如果需要评论PR
+  issues: write  # 可选，如果需要操作Issues
+
 jobs:
   build-android:
     name: Build Android App
@@ -40,14 +46,34 @@ jobs:
         with:
           node-version: '18'
 
+      # 添加缓存加速依赖安装
+      - name: Cache node modules
+        uses: actions/cache@v3
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
+
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --no-audit --prefer-offline
 
       - name: Generate native Android files
-        run: npx expo prebuild -p android
+        run: npx expo prebuild -p android --clean
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v2
+
+      # 添加Gradle缓存
+      - name: Cache Gradle packages
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
 
       - name: Setup signing config
         run: |
@@ -86,19 +112,18 @@ jobs:
       - name: Build Release APK
         run: |
           cd android
-          ./gradlew assembleRelease
-
-      - name: Create build directory
-        run: mkdir -p ./build
+          ./gradlew assembleRelease -PreactNativeDevSupport=false -PreactNativeJsEngine=hermes --no-daemon --max-workers=2
 
       - name: Copy APK to build directory
-        run: cp android/app/build/outputs/apk/release/app-release.apk ./build/NeverMiss.apk
+        run: |
+          mkdir -p ./build
+          cp android/app/build/outputs/apk/release/app-release.apk ./build/NeverMiss-Android-Release.apk
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: android-app
-          path: ./build/NeverMiss.apk
+          path: ./build/NeverMiss-Android-Release.apk
           retention-days: 7
 
   build-ios:
@@ -113,11 +138,29 @@ jobs:
         with:
           node-version: '18'
 
+      # 添加缓存加速依赖安装
+      - name: Cache node modules
+        uses: actions/cache@v3
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
+
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --no-audit --prefer-offline
 
       - name: Generate native iOS files
-        run: npx expo prebuild -p ios
+        run: npx expo prebuild -p ios --clean
+
+      # 添加CocoaPods缓存
+      - name: Cache Pods
+        uses: actions/cache@v3
+        with:
+          path: ios/Pods
+          key: ${{ runner.os }}-pods-${{ hashFiles('**/Podfile.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-pods-
 
       - name: Install Pods
         run: |
@@ -139,7 +182,7 @@ jobs:
       - name: Build iOS App
         run: |
           cd ios
-          xcodebuild -workspace NeverMiss.xcworkspace -scheme NeverMiss archive -archivePath ./build/NeverMiss.xcarchive -allowProvisioningUpdates CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY="${{ secrets.IOS_CERTIFICATE_NAME }}" PROVISIONING_PROFILE="profile.mobileprovision"
+          xcodebuild -workspace NeverMiss.xcworkspace -scheme NeverMiss archive -archivePath ./build/NeverMiss.xcarchive -allowProvisioningUpdates CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY="${{ secrets.IOS_CERTIFICATE_NAME }}" PROVISIONING_PROFILE="profile.mobileprovision" RCT_NO_LAUNCH_PACKAGER=1 NO_FLIPPER=1 COMPILER_INDEX_STORE_ENABLE=NO -quiet
 
       - name: Create exportOptions.plist
         run: |
@@ -160,13 +203,22 @@ jobs:
         run: |
           cd ios
           mkdir -p ../build
-          xcodebuild -exportArchive -archivePath ./build/NeverMiss.xcarchive -exportOptionsPlist exportOptions.plist -exportPath ../build
+          xcodebuild -exportArchive -archivePath ./build/NeverMiss.xcarchive -exportOptionsPlist exportOptions.plist -exportPath ../build -quiet
 
+      - name: Rename and upload IPA artifact
+        run: |
+          if [ -f "./build/NeverMiss.ipa" ]; then
+            mv ./build/NeverMiss.ipa ./build/NeverMiss-iOS-Release.ipa
+          else
+            echo "警告: 找不到IPA文件!"
+            find ./build -type f -name "*.ipa"
+          fi
+          
       - name: Upload IPA artifact
         uses: actions/upload-artifact@v4
         with:
           name: ios-app
-          path: ./build/NeverMiss.ipa
+          path: ./build/NeverMiss-iOS-Release.ipa
           retention-days: 7
 
   create-release:
@@ -188,8 +240,9 @@ jobs:
           TS_VERSION=$(node -e "try { const v = require('./config/version').APP_INFO.VERSION; console.log(v); } catch(e) { console.log('未知'); }")
           echo "config/version.ts版本号: $TS_VERSION"
 
-      - name: Create build directory
-        run: mkdir -p ./build
+      - name: Download artifacts
+        run: |
+          mkdir -p ./build
         
       - name: Download Android artifact
         uses: actions/download-artifact@v4
@@ -204,11 +257,52 @@ jobs:
           path: ./build
         continue-on-error: true
 
+      - name: Check iOS file exists
+        id: check_ios_file
+        run: |
+          if [ -f "./build/NeverMiss-iOS-Release.ipa" ] && [ $(stat -c%s "./build/NeverMiss-iOS-Release.ipa") -gt 1000 ]; then
+            echo "ios_file_exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "ios_file_exists=false" >> $GITHUB_OUTPUT
+          fi
+
       - name: Generate version number
         id: version
         run: |
           VERSION="v${{ steps.package_version.outputs.version }}"
           echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Generate release notes
+        run: |
+          # 获取当前日期
+          BUILD_DATE=$(date +'%Y-%m-%d')
+          
+          cat > ./build/RELEASE_NOTES.md << EOF
+          ## NeverMiss 正式版本 ${{ steps.version.outputs.version }}
+          
+          ### 发布说明
+          
+          这是 NeverMiss 应用的正式发布版本。
+          
+          ### 下载说明
+          
+          - **Android版本**: NeverMiss-Android-Release.apk
+            - 适用于Android 7.0及以上设备
+            - 已签名可直接安装的正式版本
+            - 下载后直接安装即可使用
+          
+          - **iOS版本**: NeverMiss-iOS-Release.ipa
+            - 用于iOS设备的正式版本
+            - 需要通过开发者账号或TestFlight安装
+            - 可使用AltStore等第三方工具安装
+          
+          ### 构建信息
+          
+          - 版本号: ${{ steps.package_version.outputs.version }}
+          - 提交: ${{ github.sha }}
+          - 构建时间: $(date +'%Y-%m-%d %H:%M:%S')
+          - 构建日期: ${BUILD_DATE}
+          EOF
 
       - name: Create Release
         id: create_release
@@ -218,26 +312,9 @@ jobs:
           name: NeverMiss 正式版本 ${{ steps.version.outputs.version }}
           draft: false
           prerelease: false
+          body_path: ./build/RELEASE_NOTES.md
           files: |
-            ./build/NeverMiss.apk
-            ./build/NeverMiss.ipa
-          body: |
-            ## NeverMiss 正式版本 ${{ steps.version.outputs.version }}
-            
-            ### 发布说明
-            
-            这是 NeverMiss 应用的手动构建正式版本。
-            
-            ### 下载
-            
-            - Android: [NeverMiss.apk](https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.version }}/NeverMiss.apk)
-            - iOS: [NeverMiss.ipa](https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.version }}/NeverMiss.ipa) (如果构建成功)
-            
-            ### 构建信息
-            
-            - 版本号: ${{ steps.package_version.outputs.version }}
-            - 提交: ${{ github.sha }}
-            - 构建时间: $(date +'%Y-%m-%d %H:%M:%S')
-            - config/version.ts 版本: $(node -e "try { const v = require('./config/version').APP_INFO.VERSION; console.log(v); } catch(e) { console.log('未知'); }")
+            ./build/NeverMiss-Android-Release.apk
+            ${{ steps.check_ios_file.outputs.ios_file_exists == 'true' && './build/NeverMiss-iOS-Release.ipa' || '' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
