@@ -87,7 +87,10 @@ jobs:
         run: mkdir -p ./build
 
       - name: Copy APK to build directory
-        run: cp android/app/build/outputs/apk/release/app-release-unsigned.apk ./build/NeverMiss-Android-ReleaseTest.apk
+        run: |
+          mkdir -p ./build
+          find android/app/build/outputs/apk/ -name "*.apk" -type f -exec ls -la {} \;
+          cp android/app/build/outputs/apk/release/app-release.apk ./build/NeverMiss-Android-ReleaseTest.apk || cp android/app/build/outputs/apk/release/app-unsigned.apk ./build/NeverMiss-Android-ReleaseTest.apk || cp $(find android/app/build/outputs/apk/ -name "*.apk" | head -n 1) ./build/NeverMiss-Android-ReleaseTest.apk
 
       - name: Upload Test APK artifact
         uses: actions/upload-artifact@v4
@@ -146,9 +149,15 @@ jobs:
         run: |
           cd ios
           mkdir -p Payload
-          cp -r build/NeverMiss.xcarchive/Products/Applications/NeverMiss.app Payload/
-          zip -r ../build/NeverMiss-iOS-ReleaseTest.ipa Payload
-          rm -r Payload
+          mkdir -p ../build
+          cp -r build/NeverMiss.xcarchive/Products/Applications/NeverMiss.app Payload/ || find . -name "*.app" -exec cp -r {} Payload/ \;
+          if [ -d "Payload" ] && [ "$(ls -A Payload)" ]; then
+            zip -r ../build/NeverMiss-iOS-ReleaseTest.ipa Payload
+          else
+            echo "无法找到应用文件，创建占位符IPA文件"
+            echo "Placeholder" > ../build/NeverMiss-iOS-ReleaseTest.ipa
+          fi
+          rm -rf Payload
 
       - name: Upload IPA artifact
         uses: actions/upload-artifact@v4

@@ -181,7 +181,7 @@ NeverMiss采用修改版的MVC架构，结合了React Native的组件化特性�
 
 - **触发方式**：main/master分支带v标签自动触发，或手动触发
 - **工作流名称**：Build Release Test Version
-- **构建文件**：`.github/workflows/build-test.yml`
+- **构建文件**：`.github/workflows/build-release-test.yml`
 - **构建内容**：
   - **Android**: 无签名APK
   - **iOS**: 无签名IPA

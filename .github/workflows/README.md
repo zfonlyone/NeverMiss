@@ -7,7 +7,7 @@
 | 实际工作流名称 | 文件名 | 用途 | 触发方式 |
 | ----- | ----- | ----- | ----- |
 | Build Release (Store Version) | `build-and-release.yml` | 构建商店签名版本用于应用商店发布 | 仅限main/master分支手动触发 |
-| Build Release Test Version | `build-test.yml` | 构建无签名发布测试版本用于上架前测试 | main/master分支版本标签、手动触发 |
+| Build Release Test Version | `build-release-test.yml` | 构建无签名发布测试版本用于上架前测试 | main/master分支版本标签、手动触发 |
 | Build Debug Version | `build-debug.yml` | 构建需PC服务支持的开发调试版本 | dev及开发分支提交、手动触发 |
 | Build Expo Cloud Version | `build-release-eas.yml` | 使用Expo云服务托管构建应用 | 仅限main分支手动触发 |
 | - | `*.bak` | 已暂停使用的构建配置 | 不触发 |
@@ -60,7 +60,7 @@
   4. iOS构建：配置证书、构建IPA
   5. 创建发布：上传文件、生成发布说明
 
-### 2. Build Release Test Version [build-test.yml]
+### 2. Build Release Test Version [build-release-test.yml]
 
 - **触发条件**: main/master分支版本标签推送、手动触发
 - **主要步骤**:
