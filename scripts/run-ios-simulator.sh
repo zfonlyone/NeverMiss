@@ -9,7 +9,7 @@ APP_PATH="$PWD/ios/build/Build/Products/Release-iphonesimulator/NeverMiss.app"
 
 # 检查构建是否存在
 if [ ! -d "$APP_PATH" ]; then
-  echo "错误: 构建不存在，请先运行 ./scripts/build-simulator.sh"
+  echo "错误: 构建不存在，请先运行 ./scripts/build-ios-simulator.sh"
   exit 1
 fi
 

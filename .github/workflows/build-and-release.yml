@@ -1,10 +1,7 @@
 name: Build and Release
 
 on:
-  push:
-    tags:
-      - 'v*'  # 推送标签格式为 v1.0.0 的事件触发工作流
-  workflow_dispatch:  # 允许手动触发
+  workflow_dispatch:  # 仅允许手动触发，移除自动触发条件
 
 jobs:
   build-android:
@@ -14,7 +11,13 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v3
 
-      - name: Set up Node.js
+      - name: Set up JDK
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'zulu'
+          java-version: '11'
+
+      - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
           node-version: '18'
@@ -23,18 +26,57 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Setup Expo
-        uses: expo/expo-github-action@v8
-        with:
-          eas-version: latest
-          token: ${{ secrets.EXPO_TOKEN }}
+      - name: Generate native Android files
+        run: npx expo prebuild -p android
 
-      - name: Build Android App
-        run: npx eas build --platform android --non-interactive --no-wait
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v2
 
-      - name: Download build artifacts
-        run: npx eas build:download --platform android --latest --output=./build/NeverMiss.apk
-        
+      - name: Setup signing config
+        run: |
+          mkdir -p android/app/keystore
+          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > android/app/keystore/nevermiss.keystore
+          echo "KEYSTORE_PASSWORD=${{ secrets.KEYSTORE_PASSWORD }}" >> android/gradle.properties
+          echo "KEY_ALIAS=${{ secrets.KEY_ALIAS }}" >> android/gradle.properties
+          echo "KEY_PASSWORD=${{ secrets.KEY_PASSWORD }}" >> android/gradle.properties
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+
+      - name: Update build.gradle
+        run: |
+          cat << EOF >> android/app/build.gradle
+          
+          android {
+              signingConfigs {
+                  release {
+                      storeFile file('keystore/nevermiss.keystore')
+                      storePassword System.getProperty('KEYSTORE_PASSWORD', KEYSTORE_PASSWORD)
+                      keyAlias System.getProperty('KEY_ALIAS', KEY_ALIAS)
+                      keyPassword System.getProperty('KEY_PASSWORD', KEY_PASSWORD)
+                  }
+              }
+              buildTypes {
+                  release {
+                      signingConfig signingConfigs.release
+                  }
+              }
+          }
+          EOF
+
+      - name: Build Release APK
+        run: |
+          cd android
+          ./gradlew assembleRelease
+
+      - name: Create build directory
+        run: mkdir -p ./build
+
+      - name: Copy APK to build directory
+        run: cp android/app/build/outputs/apk/release/app-release.apk ./build/NeverMiss.apk
+
       - name: Upload APK artifact
         uses: actions/upload-artifact@v3
         with:
@@ -49,7 +91,7 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v3
 
-      - name: Set up Node.js
+      - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
           node-version: '18'
@@ -58,58 +100,112 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Setup Expo
-        uses: expo/expo-github-action@v8
+      - name: Generate native iOS files
+        run: npx expo prebuild -p ios
+
+      - name: Install Pods
+        run: |
+          cd ios
+          pod install
+
+      - name: Install certificate and profile
+        uses: apple-actions/import-codesign-certs@v1
         with:
-          eas-version: latest
-          token: ${{ secrets.EXPO_TOKEN }}
+          p12-file-base64: ${{ secrets.IOS_P12_BASE64 }}
+          p12-password: ${{ secrets.IOS_P12_PASSWORD }}
+          keychain-password: ${{ secrets.KEYCHAIN_PASSWORD }}
+
+      - name: Download provisioning profile
+        run: |
+          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+          echo "${{ secrets.IOS_PROVISION_PROFILE_BASE64 }}" | base64 -d > ~/Library/MobileDevice/Provisioning\ Profiles/profile.mobileprovision
 
       - name: Build iOS App
-        run: npx eas build --platform ios --non-interactive --no-wait
-        
-      - name: Wait for build to complete
         run: |
-          echo "iOS builds run on Expo's servers and cannot be downloaded directly."
-          echo "Please check the Expo dashboard for the completed build."
+          cd ios
+          xcodebuild -workspace NeverMiss.xcworkspace -scheme NeverMiss archive -archivePath ./build/NeverMiss.xcarchive -allowProvisioningUpdates CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY="${{ secrets.IOS_CERTIFICATE_NAME }}" PROVISIONING_PROFILE="profile.mobileprovision"
+
+      - name: Create exportOptions.plist
+        run: |
+          cat << EOF > ios/exportOptions.plist
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>method</key>
+              <string>development</string>
+              <key>teamID</key>
+              <string>${{ secrets.IOS_TEAM_ID }}</string>
+          </dict>
+          </plist>
+          EOF
+
+      - name: Export IPA
+        run: |
+          cd ios
+          mkdir -p ../build
+          xcodebuild -exportArchive -archivePath ./build/NeverMiss.xcarchive -exportOptionsPlist exportOptions.plist -exportPath ../build
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: ios-app
+          path: ./build/NeverMiss.ipa
+          retention-days: 7
 
   create-release:
     name: Create Release
-    needs: [build-android]
+    needs: [build-android, build-ios]
     runs-on: ubuntu-latest
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v3
-        
-      - name: Get version from tag
-        id: get_version
-        uses: battila7/get-version-action@v2
+      - name: Create build directory
+        run: mkdir -p ./build
         
       - name: Download Android artifact
         uses: actions/download-artifact@v3
         with:
           name: android-app
           path: ./build
+          
+      - name: Download iOS artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: ios-app
+          path: ./build
+        continue-on-error: true
+
+      - name: Generate version number
+        id: version
+        run: |
+          VERSION="v$(date +'%Y%m%d%H%M')"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
 
       - name: Create Release
         id: create_release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: ${{ github.ref }}
-          name: NeverMiss ${{ steps.get_version.outputs.version-without-v }}
+          tag_name: ${{ steps.version.outputs.version }}
+          name: NeverMiss Release ${{ steps.version.outputs.version }}
           draft: false
           prerelease: false
           files: |
             ./build/NeverMiss.apk
+            ./build/NeverMiss.ipa
           body: |
-            ## NeverMiss ${{ steps.get_version.outputs.version-without-v }}
+            ## NeverMiss 正式版本 ${{ steps.version.outputs.version }}
             
             ### 发布说明
             
-            这是 NeverMiss 应用的自动化构建版本。
+            这是 NeverMiss 应用的手动构建正式版本。
             
             ### 下载
             
-            - Android: [NeverMiss.apk](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/NeverMiss.apk)
-            - iOS: 请通过 Expo 客户端或 TestFlight 下载
+            - Android: [NeverMiss.apk](https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.version }}/NeverMiss.apk)
+            - iOS: [NeverMiss.ipa](https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.version }}/NeverMiss.ipa) (如果构建成功)
+            
+            ### 构建信息
+            
+            - 提交: ${{ github.sha }}
+            - 构建时间: $(date +'%Y-%m-%d %H:%M:%S')
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 

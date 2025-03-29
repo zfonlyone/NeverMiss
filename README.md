@@ -60,6 +60,10 @@ npm start
 # 或
 expo start
 
+# 使用expo运行
+npx expo run:android
+
+
 # 在模拟器或设备上运行
 # Android
 npm run android
@@ -67,6 +71,16 @@ npm run android
 # iOS
 npm run ios
 ```
+
+使用eas构建 
+# Android APK预览版
+npx eas build --platform android --profile preview --local
+
+# Android生产版
+npx eas build --platform android --profile production --local
+
+# iOS (仅macOS)
+npx eas build --platform ios --profile preview --local
 
 详细的安装和开发指南请参考：
 - [开发指南](docs/DEVELOPMENT_GUIDE.md)
