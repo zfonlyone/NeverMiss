@@ -70,7 +70,7 @@ npm run android
 
 # iOS
 npm run ios
-```
+
 
 使用eas构建 
 # Android APK预览版
@@ -81,7 +81,7 @@ npx eas build --platform android --profile production --local
 
 # iOS (仅macOS)
 npx eas build --platform ios --profile preview --local
-
+```
 详细的安装和开发指南请参考：
 - [开发指南](docs/DEVELOPMENT_GUIDE.md)
 - [贡献指南](docs/CONTRIBUTING.md)
