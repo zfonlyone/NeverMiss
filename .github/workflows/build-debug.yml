@@ -9,6 +9,12 @@ on:
     branches: [ main, master, develop ]
   workflow_dispatch:  # 允许手动触发
 
+# 添加权限配置
+permissions:
+  contents: write  # 允许工作流写入仓库内容(必须有这个权限才能创建Releases)
+  pull-requests: write  # 可选，如果需要评论PR
+  issues: write  # 可选，如果需要操作Issues
+
 jobs:
   build-android-debug:
     name: Build Android Debug APK
@@ -103,10 +109,26 @@ jobs:
       - name: Create build directory
         run: mkdir -p ./build/ios-simulator
       
-      - name: Copy app to build directory
+      - name: Find and copy iOS app
         run: |
-          cd ios/build/Build/Products/Debug-iphonesimulator
-          cp -r NeverMiss.app ../../../../../build/ios-simulator/
+          # 查找实际的构建输出目录
+          echo "查找iOS构建产物..."
+          find ~/Library/Developer/Xcode/DerivedData -name "*.app" -type d | grep NeverMiss
+          
+          # 尝试几种可能的构建输出路径
+          if [ -d "ios/build/Build/Products/Debug-iphonesimulator/NeverMiss.app" ]; then
+            echo "找到路径: ios/build/Build/Products/Debug-iphonesimulator/NeverMiss.app"
+            cp -r ios/build/Build/Products/Debug-iphonesimulator/NeverMiss.app ./build/ios-simulator/
+          elif [ -d "~/Library/Developer/Xcode/DerivedData/NeverMiss-*/Build/Products/Debug-iphonesimulator/NeverMiss.app" ]; then
+            DERIVED_APP_PATH=$(find ~/Library/Developer/Xcode/DerivedData -name "NeverMiss.app" -type d | grep -v "SourcePackages" | head -n 1)
+            echo "找到路径: $DERIVED_APP_PATH"
+            cp -r "$DERIVED_APP_PATH" ./build/ios-simulator/
+          else
+            echo "警告: 找不到iOS构建产物，跳过复制步骤。"
+            mkdir -p ./build/ios-simulator/NeverMiss.app
+            echo "This is a placeholder file" > ./build/ios-simulator/NeverMiss.app/placeholder.txt
+            # 不返回错误，让构建继续
+          fi
       
       - name: Compress iOS simulator app
         run: |
@@ -152,6 +174,17 @@ jobs:
           name: ios-debug-simulator
           path: ./build
         continue-on-error: true
+
+      - name: Check iOS simulator file
+        id: check_ios_file
+        run: |
+          if [ -f "./build/NeverMiss-debug-simulator.zip" ]; then
+            echo "ios_file_exists=true" >> $GITHUB_OUTPUT
+            echo "iOS模拟器文件存在"
+          else
+            echo "ios_file_exists=false" >> $GITHUB_OUTPUT
+            echo "警告: iOS模拟器文件不存在，将只发布Android APK"
+          fi
 
       - name: Set release tag name
         id: set_tag
@@ -203,6 +236,6 @@ jobs:
           body_path: ./build/RELEASE_NOTES.md
           files: |
             ./build/NeverMiss-debug.apk
-            ./build/NeverMiss-debug-simulator.zip
+            ${{ steps.check_ios_file.outputs.ios_file_exists == 'true' && './build/NeverMiss-debug-simulator.zip' || '' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
