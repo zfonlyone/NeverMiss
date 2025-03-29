@@ -67,7 +67,7 @@ jobs:
         run: cp android/app/build/outputs/apk/debug/app-debug.apk ./build/NeverMiss-debug.apk
 
       - name: Upload Debug APK artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: android-debug-app
           path: ./build/NeverMiss-debug.apk
@@ -116,7 +116,7 @@ jobs:
           zip -r NeverMiss-debug-simulator.zip ios-simulator
 
       - name: Upload iOS simulator app artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: ios-debug-simulator
           path: ./build/NeverMiss-debug-simulator.zip
@@ -142,13 +142,13 @@ jobs:
         run: mkdir -p ./build
         
       - name: Download Android Debug artifact
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: android-debug-app
           path: ./build
           
       - name: Download iOS simulator artifact
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: ios-debug-simulator
           path: ./build
