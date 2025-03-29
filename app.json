@@ -6,6 +6,12 @@
     "orientation": "portrait",
     "scheme": "nevermiss",
     "userInterfaceStyle": "automatic",
+    "icon": "./assets/images/icon.png",
+    "splash": {
+      "image": "./assets/images/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
     "assetBundlePatterns": [
       "**/*"
     ],
@@ -18,10 +24,15 @@
     "android": {
       "package": "com.nevermiss.app",
       "jsEngine": "hermes",
-      "newArchEnabled": true
+      "newArchEnabled": true,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/icon.png",
+        "backgroundColor": "#ffffff"
+      }
     },
     "web": {
-      "bundler": "metro"
+      "bundler": "metro",
+      "favicon": "./assets/images/icon.png"
     },
     "plugins": [
       "expo-router",

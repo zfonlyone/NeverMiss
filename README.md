@@ -10,7 +10,7 @@
 </div>
 
 <p align="center">
-  <img src="assets/icon.png" alt="NeverMiss Logo" width="120" height="120">
+  <img src="assets\images\icon.png" alt="NeverMiss Logo" width="120" height="120">
 </p>
 
 <p align="center">
@@ -32,8 +32,7 @@
   <img src="assets/screenshots/main.png" alt="主页" width="200">
   <img src="assets/screenshots/task.png" alt="任务详情" width="200">
   <img src="assets/screenshots/task-edit.png" alt="创建任务" width="200">
-  <img src="assets/screenshots/setting.png" alt="统计" width="200">
-  <img src="assets/screenshots/statistics.png" alt="设置界面" width="200">
+  <img src="assets/screenshots/setting.png" alt="设置界面" width="200">
 </div>
 
 ## 🚀 快速开始
