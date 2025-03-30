@@ -158,4 +158,14 @@ export const requestPermissionsForFeature = async (
       // These features don't require explicit permission requests
       return true;
   }
+};
+
+// 默认导出对象，包含所有导出的函数
+export default {
+  checkPermissionsForFeature,
+  requestPermissionsForFeature,
+  checkNotificationPermission,
+  requestNotificationPermission,
+  checkCalendarPermission,
+  requestCalendarPermission
 }; 

@@ -40,16 +40,15 @@ export function createTaskCycle(
 export function completeTaskCycle(cycle: TaskCycle): TaskCycle {
   return {
     ...cycle,
-    status: 'completed',
-    completedAt: new Date().toISOString(),
+    isCompleted: true,
+    completedDate: new Date().toISOString(),
   };
 }
 
 export function failTaskCycle(cycle: TaskCycle): TaskCycle {
   return {
     ...cycle,
-    status: 'failed',
-    failedAt: new Date().toISOString(),
+    isOverdue: true,
   };
 }
 
@@ -57,4 +56,12 @@ export function getTaskCycleStatus(cycle: TaskCycle): 'completed' | 'overdue' | 
   if (cycle.isCompleted) return 'completed';
   if (cycle.isOverdue) return 'overdue';
   return 'in_progress';
-} 
+}
+
+// 默认导出对象，包含所有导出的函数
+export default {
+  createTaskCycle,
+  completeTaskCycle,
+  failTaskCycle,
+  getTaskCycleStatus
+}; 

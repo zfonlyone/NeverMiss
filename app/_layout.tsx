@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { Stack } from 'expo-router';
+import { Stack, Slot } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { initStorage } from './services/storageService';
 import { LanguageProvider } from './contexts/LanguageContext';
@@ -11,8 +11,41 @@ import Constants from 'expo-constants';
 // 确保启动屏幕保持可见，直到明确隐藏
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
-// 判断是否在ExpoGo中运行
-const isInExpoGo = Constants.appOwnership === 'expo';
+// 错误边界组件
+interface ErrorBoundaryProps {
+  children: React.ReactNode;
+}
+
+interface ErrorBoundaryState {
+  hasError: boolean;
+  error: Error | null;
+}
+
+class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  state: ErrorBoundaryState = { hasError: false, error: null };
+
+  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error("应用错误:", error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorTitle}>出错了</Text>
+          <Text style={styles.errorMessage}>{this.state.error?.message}</Text>
+          <Text style={styles.errorHint}>请尝试重启应用</Text>
+        </View>
+      );
+    }
+
+    return this.props.children;
+  }
+}
 
 export default function AppLayout() {
   const [appIsReady, setAppIsReady] = useState(false);
@@ -59,16 +92,41 @@ export default function AppLayout() {
   }
 
   return (
-    <SafeAreaProvider>
-      <ThemeProvider>
-        <LanguageProvider>
-          <Stack
-            screenOptions={{
-              headerShown: false,
-            }}
-          />
-        </LanguageProvider>
-      </ThemeProvider>
-    </SafeAreaProvider>
+    <ErrorBoundary>
+      <SafeAreaProvider>
+        <ThemeProvider>
+          <LanguageProvider>
+            {/* 使用Slot代替Stack更通用地处理路由 */}
+            <Slot />
+          </LanguageProvider>
+        </ThemeProvider>
+      </SafeAreaProvider>
+    </ErrorBoundary>
   );
 }
+
+const styles = StyleSheet.create({
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+    backgroundColor: '#f8f8f8',
+  },
+  errorTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    marginBottom: 10,
+    color: '#e74c3c',
+  },
+  errorMessage: {
+    fontSize: 16,
+    marginBottom: 20,
+    textAlign: 'center',
+    color: '#333',
+  },
+  errorHint: {
+    fontSize: 14,
+    color: '#7f8c8d',
+  },
+});

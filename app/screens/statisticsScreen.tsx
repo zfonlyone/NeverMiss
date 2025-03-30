@@ -8,7 +8,7 @@ import {
   TouchableOpacity,
   FlatList,
 } from 'react-native';
-import { Stack } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { getTasks } from '../services/storageService';
 import { useLanguage } from '../contexts/LanguageContext';
@@ -19,6 +19,7 @@ import { format } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
 
 export default function StatisticsScreen() {
+  const router = useRouter();
   const [isLoading, setIsLoading] = useState(true);
   const [stats, setStats] = useState({
     totalTasks: 0,
@@ -31,12 +32,13 @@ export default function StatisticsScreen() {
   const [activeTab, setActiveTab] = useState<'completed' | 'overdue'>('completed');
   
   const { t, language } = useLanguage();
-  const { colors } = useTheme();
+  const { colors, isDarkMode } = useTheme();
 
   useEffect(() => {
     loadStatistics();
   }, []);
 
+  
   const loadStatistics = async () => {
     try {
       setIsLoading(true);
@@ -128,7 +130,17 @@ export default function StatisticsScreen() {
         options={{
           title: t.menu.statistics,
           headerShown: true,
-          headerBackTitle: t.menu.home,
+          headerLeft: () => (
+            <TouchableOpacity
+              style={styles.backButton}
+              onPress={() => router.replace('/')}
+            >
+              <Ionicons name="arrow-back" size={24} color={isDarkMode ? colors.text : "#000"} />
+              <Text style={[styles.backButtonText, { color: isDarkMode ? colors.text : "#000" }]}>
+                首页
+              </Text>
+            </TouchableOpacity>
+          ),
           headerStyle: {
             backgroundColor: colors.card,
           },
@@ -514,5 +526,14 @@ const styles = StyleSheet.create({
     fontSize: 16,
     marginTop: 16,
     textAlign: 'center',
+  },
+  backButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 8,
+  },
+  backButtonText: {
+    fontSize: 16,
+    marginLeft: 8,
   },
 }); 

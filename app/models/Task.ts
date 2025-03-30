@@ -233,4 +233,10 @@ export function validateTask(task: Partial<Task>): string[] {
   }
   
   return errors;
-} 
+}
+
+// 默认导出对象，包含所有导出的类型和函数
+export default {
+  createTask,
+  validateTask
+}; 

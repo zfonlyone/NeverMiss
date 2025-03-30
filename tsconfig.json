@@ -24,10 +24,10 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["./*"],
-      "@components/*": ["./components/*"],
-      "@screens/*": ["./screens/*"],
-      "@services/*": ["app/services/*"],
-      "@models/*": ["app/models/*"],
+      "@components/*": ["./app/components/*"],
+      "@screens/*": ["./app/screens/*"],
+      "@services/*": ["./app/services/*"],
+      "@models/*": ["./app/models/*"],
       "@assets/*": ["./assets/*"]
     }
   },

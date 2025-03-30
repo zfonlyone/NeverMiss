@@ -258,7 +258,7 @@ export async function updateSettings(settings: Partial<Settings>): Promise<void>
   }
 }
 
-// Export all functions
+// 默认导出对象，包含所有导出的函数
 export default {
   initDatabase,
   clearDatabase,

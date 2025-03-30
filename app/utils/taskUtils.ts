@@ -1,5 +1,5 @@
-import { Task } from '../app/models/Task';
-import { FilterOptions, SortOption, SortDirection, TaskStatusFilter } from '../app/components/TaskListFilter';
+import { Task } from '../models/Task';
+import { FilterOptions, SortOption, SortDirection, TaskStatusFilter } from '../components/TaskListFilter';
 
 /**
  * 根据筛选条件过滤任务列表
@@ -129,4 +129,11 @@ export function extractAllTags(tasks: Task[]): string[] {
   
   // 去重并排序
   return [...new Set(allTags)].sort();
-} 
+}
+
+// 默认导出对象，包含所有导出的函数
+export default {
+  filterTasks,
+  sortTasks,
+  extractAllTags
+}; 

@@ -459,4 +459,9 @@ export class TaskCycleCalculator implements CycleCalculator {
 }
 
 // 创建全局周期计算器实例
-export const cycleCalculator = new TaskCycleCalculator(); 
+export const cycleCalculator = new TaskCycleCalculator();
+
+// 默认导出对象，包含所有导出的函数和变量
+export default {
+  cycleCalculator
+}; 

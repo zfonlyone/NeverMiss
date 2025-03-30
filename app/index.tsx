@@ -57,7 +57,7 @@ export default function IndexScreen() {
               styles.menuItem,
               { backgroundColor: colors.card }
             ]}
-            onPress={() => router.push('/tasks')}
+            onPress={() => router.push('/screens/TaskListScreen')}
           >
             <View style={[styles.iconContainer, { backgroundColor: '#4caf50' }]}>
               <Ionicons name="list" size={24} color="#ffffff" />
@@ -81,7 +81,7 @@ export default function IndexScreen() {
               styles.menuItem,
               { backgroundColor: colors.card }
             ]}
-            onPress={() => router.push('/statistics')}
+            onPress={() => router.push('/screens/StatisticsScreen')}
           >
             <View style={[styles.iconContainer, { backgroundColor: '#ff9800' }]}>
               <Ionicons name="bar-chart" size={24} color="#ffffff" />
@@ -105,7 +105,7 @@ export default function IndexScreen() {
               styles.menuItem,
               { backgroundColor: colors.card }
             ]}
-            onPress={() => router.push('/settings')}
+            onPress={() => router.push('/screens/SettingsScreen')}
           >
             <View style={[styles.iconContainer, { backgroundColor: '#9c27b0' }]}>
               <Ionicons name="settings" size={24} color="#ffffff" />

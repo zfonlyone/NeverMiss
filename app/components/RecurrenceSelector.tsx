@@ -152,7 +152,7 @@ export default function RecurrenceSelector({
     } else {
       // 基本模式
       const newPattern: RecurrencePattern = {
-        type,
+      type,
         value: recurrenceValue,
         isLunar: isLunar,
       };
@@ -458,10 +458,10 @@ export default function RecurrenceSelector({
     return (
       <View>
         {/* 循环类型选择 */}
-        <View style={styles.section}>
+      <View style={styles.section}>
           <Text style={[styles.title, { color: colors.text }]}>循环类型</Text>
           <View style={styles.typeContainer}>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
               <TouchableOpacity
                 style={[
                   styles.typeButton,
@@ -478,7 +478,7 @@ export default function RecurrenceSelector({
               </TouchableOpacity>
               
               <TouchableOpacity
-                style={[
+                  style={[
                   styles.typeButton,
                   type === 'weekly' && styles.typeButtonActive,
                   type === 'weekly' && { backgroundColor: colors.primary },
@@ -492,8 +492,8 @@ export default function RecurrenceSelector({
                 ]}>周</Text>
               </TouchableOpacity>
               
-              <TouchableOpacity
-                style={[
+            <TouchableOpacity
+              style={[
                   styles.typeButton,
                   type === 'monthly' && styles.typeButtonActive,
                   type === 'monthly' && { backgroundColor: colors.primary },
@@ -520,11 +520,11 @@ export default function RecurrenceSelector({
                   type === 'yearly' && styles.typeTextActive,
                   { color: type === 'yearly' ? '#fff' : colors.text }
                 ]}>年</Text>
-              </TouchableOpacity>
+            </TouchableOpacity>
               
-              <TouchableOpacity
-                style={[
-                  styles.typeButton,
+            <TouchableOpacity
+              style={[
+                styles.typeButton,
                   type === 'weekOfMonth' && styles.typeButtonActive,
                   type === 'weekOfMonth' && { backgroundColor: colors.primary },
                 ]}
@@ -535,7 +535,7 @@ export default function RecurrenceSelector({
                   type === 'weekOfMonth' && styles.typeTextActive,
                   { color: type === 'weekOfMonth' ? '#fff' : colors.text }
                 ]}>月中周</Text>
-              </TouchableOpacity>
+            </TouchableOpacity>
               
               <TouchableOpacity
                 style={[
@@ -553,7 +553,7 @@ export default function RecurrenceSelector({
               </TouchableOpacity>
               
               <TouchableOpacity
-                style={[
+                  style={[
                   styles.typeButton,
                   type === 'composite' && styles.typeButtonActive,
                   type === 'composite' && { backgroundColor: colors.primary },
@@ -568,7 +568,7 @@ export default function RecurrenceSelector({
               </TouchableOpacity>
             </ScrollView>
           </View>
-        </View>
+          </View>
 
         {/* 循环值设置 */}
         {type !== 'weekOfMonth' && type !== 'composite' && (
@@ -582,7 +582,7 @@ export default function RecurrenceSelector({
             </Text>
             
             <View style={styles.valueContainer}>
-              <TextInput
+            <TextInput
                 style={[styles.valueInput, { color: colors.text, borderColor: colors.border }]}
                 value={recurrenceValue.toString()}
                 onChangeText={(text) => setRecurrenceValue(parseInt(text) || 1)}
@@ -619,7 +619,7 @@ export default function RecurrenceSelector({
                 />
               )}
               
-              <Text style={[styles.unitText, { color: colors.text }]}>
+            <Text style={[styles.unitText, { color: colors.text }]}>
                 {type === 'daily' && '天'}
                 {type === 'weekly' && '周'}
                 {type === 'monthly' && '月'}
@@ -629,9 +629,9 @@ export default function RecurrenceSelector({
                   recurrenceUnit === 'weeks' ? '周' :
                   recurrenceUnit === 'months' ? '月' : '年'
                 )}
-              </Text>
-            </View>
+            </Text>
           </View>
+        </View>
         )}
         
         {/* 星期几选择 (仅适用于每周) */}

@@ -1,3 +1,4 @@
+import React from 'react';
 import { startForegroundNotificationService, stopForegroundNotificationService } from '../services/notificationService';
 import { saveNotificationPreference, getNotificationPreference } from '../services/preferenceService';
 
@@ -35,4 +36,13 @@ export const initializePersistentNotification = async () => {
   if (enabled) {
     await startForegroundNotificationService();
   }
-}; 
+};
+
+/**
+ * 这是一个空组件，用于满足Expo Router的要求
+ * 控制器逻辑通过具名导出使用
+ */
+export default function NotificationController() {
+  // 这个组件不渲染任何内容
+  return null;
+} 

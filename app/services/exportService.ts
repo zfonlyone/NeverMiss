@@ -272,4 +272,13 @@ export const verifyExportData = async (exportData: ExportData): Promise<boolean>
     console.error('验证导出数据时出错:', error);
     return false;
   }
+};
+
+// 默认导出对象，包含所有导出的函数
+export default {
+  exportDataToJSON,
+  exportDataToCSV,
+  importDataFromJSON,
+  importDataFromCSV,
+  shareFile
 }; 

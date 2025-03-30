@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, Switch, TouchableOpacity, ScrollView, Platform,
 import { togglePersistentNotification } from '../controllers/NotificationController';
 import { getNotificationPreference } from '../services/preferenceService';
 import { useLanguage } from '../contexts/LanguageContext';
-import { Stack } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { exportDataToJSON, exportDataToCSV, shareFile, importDataFromJSON, importDataFromCSV } from '../services/exportService';
 import { checkPermissionsForFeature, requestPermissionsForFeature, checkNotificationPermission, checkCalendarPermission, requestNotificationPermission, requestCalendarPermission } from '../services/permissionService';
@@ -28,12 +28,10 @@ interface DatabaseInfo {
   };
 }
 
-
-
-
 const SettingsScreen = () => {
   const { t, language, changeLanguage } = useLanguage();
   const { themeMode, setThemeMode, colors, isDarkMode } = useTheme();
+  const router = useRouter();
   const [isPersistentNotificationEnabled, setIsPersistentNotificationEnabled] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [dbInfo, setDbInfo] = useState<DatabaseInfo | null>(null);
@@ -579,14 +577,21 @@ const SettingsScreen = () => {
         options={{
           title: t.settings.title,
           headerShown: true,
-          headerBackTitle: t.menu.home,
+          headerLeft: () => (
+            <TouchableOpacity
+              style={styles.backButton}
+              onPress={() => router.replace('/')}
+            >
+              <Ionicons name="arrow-back" size={24} color={isDarkMode ? colors.text : "#000"} />
+              <Text style={[styles.backButtonText, { color: isDarkMode ? colors.text : "#000" }]}>
+                首页
+              </Text>
+            </TouchableOpacity>
+          ),
           headerStyle: {
             backgroundColor: colors.card,
           },
           headerTintColor: colors.text,
-          headerTitleStyle: {
-            color: colors.text,
-          },
           headerShadowVisible: false,
         }}
       />
@@ -792,6 +797,16 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     marginBottom: 16,
     textAlign: 'center',
+  },
+  backButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+  },
+  backButtonText: {
+    marginLeft: 4,
+    fontSize: 16,
+    fontWeight: '500',
   },
 });
 

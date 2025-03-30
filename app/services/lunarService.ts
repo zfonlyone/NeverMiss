@@ -636,6 +636,7 @@ export function getFullLunarDate(date: Date): LunarDate & {
   }
 }
 
+// 默认导出对象，包含所有导出的函数
 export default {
   solarToLunar,
   lunarToSolar,
@@ -649,12 +650,12 @@ export default {
   convertToSolar,
   formatDate,
   parseLunarDate,
-  getDaysOfMonth,
   getDay,
+  getDaysOfMonth,
   getMonthDays,
   getYearInGanZhi,
   getMonthInChinese,
   getDayInChinese,
-  getFullLunarDate,
-  safeLunarFromDate
+  safeLunarFromDate,
+  getFullLunarDate
 }; 

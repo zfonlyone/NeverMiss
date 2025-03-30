@@ -1857,4 +1857,30 @@ export const recalculateAllTaskDates = async (forceUpdate: boolean = false): Pro
     console.error('重新计算任务日期时出错:', error);
     throw error;
   }
+};
+
+// 默认导出对象，包含所有导出的函数
+export default {
+  calculateStartDate,
+  calculateDueDate,
+  createTask,
+  getLastTaskCycle,
+  createTaskCycle,
+  updateTask,
+  deleteTask,
+  getAllTasks,
+  getTask,
+  getCurrentCycleForTask,
+  completeTaskCycle,
+  skipTaskCycle,
+  checkAndUpdateOverdueTasks,
+  cancelTask,
+  getCompletedTasks,
+  getOverdueTasks,
+  getTaskHistoryByAction,
+  getCompletedTaskHistory,
+  getOverdueTaskHistory,
+  completeTask,
+  createNextCycle,
+  recalculateAllTaskDates,
 }; 

@@ -417,4 +417,20 @@ export const importData = async (jsonData: string): Promise<boolean> => {
     console.error('导入数据时出错:', error);
     throw error;
   }
+};
+
+// 默认导出对象，包含所有导出的函数
+export default {
+  saveTask,
+  getTasks,
+  getTaskById,
+  deleteTask,
+  saveTaskCycle,
+  getTaskCyclesByTaskId,
+  getTaskCycles,
+  saveTaskHistory,
+  getTaskHistory,
+  getTaskHistoryByAction,
+  deleteTaskCyclesByTaskId,
+  deleteTaskHistoryByTaskId
 }; 

@@ -69,4 +69,13 @@ export const saveNotificationPreference = async <T>(key: string, value: T): Prom
  */
 export const getNotificationPreference = async <T>(key: string, defaultValue?: T): Promise<T | undefined> => {
   return getPreference(`notification:${key}`, defaultValue);
+};
+
+// 默认导出对象，包含所有导出的函数
+export default {
+  savePreference,
+  getPreference,
+  removePreference,
+  saveNotificationPreference,
+  getNotificationPreference
 }; 

@@ -289,4 +289,19 @@ export const stopForegroundNotificationService = async () => {
     console.error('停止持久通知失败:', error);
     return false;
   }
+};
+
+// 默认导出对象，包含所有导出的函数
+export default {
+  configureNotifications,
+  scheduleTaskNotification,
+  getAllScheduledNotifications,
+  cancelAllNotifications,
+  cancelNotification,
+  addNotificationListener,
+  addNotificationResponseListener,
+  removeNotificationListener,
+  cleanupNotifications,
+  startForegroundNotificationService,
+  stopForegroundNotificationService
 }; 

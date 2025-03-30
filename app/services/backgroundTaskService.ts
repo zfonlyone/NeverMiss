@@ -191,4 +191,16 @@ export const scheduleOneTimeCheck = async (): Promise<boolean> => {
     console.error('Error scheduling one-time check:', error);
     return false;
   }
+};
+
+// 默认导出对象，包含所有导出的函数
+export default {
+  BACKGROUND_TASK_NAME,
+  setCheckOverdueTasksCallback,
+  isBackgroundFetchAvailable,
+  getBackgroundFetchStatus,
+  registerBackgroundTask,
+  unregisterBackgroundTask,
+  isBackgroundTaskRegistered,
+  scheduleOneTimeCheck
 }; 

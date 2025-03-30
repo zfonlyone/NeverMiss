@@ -70,3 +70,12 @@ export const STORAGE_KEYS = {
   APP_VERSION: 'app_version',
   DB_VERSION: 'db_version',
 } as const; 
+
+// 默认导出对象，包含所有导出的函数和常量
+export default {
+  getItem,
+  setItem,
+  removeItem,
+  clearAll,
+  STORAGE_KEYS
+}; 

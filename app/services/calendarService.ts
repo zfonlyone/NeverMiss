@@ -145,4 +145,11 @@ export async function updateTaskInCalendar(
     console.error('更新日历中的任务时出错:', error);
     throw error;
   }
-} 
+}
+
+// 默认导出对象，包含所有导出的函数
+export default {
+  addTaskToCalendar,
+  removeTaskFromCalendar,
+  updateTaskInCalendar
+}; 
