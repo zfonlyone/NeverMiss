@@ -30,7 +30,8 @@ import {
   RecurrenceType,
   ReminderUnit,
   validateTask,
-  SpecialDate
+  SpecialDate,
+  CompositeRecurrencePattern
 } from '../../models/Task';
 import { createTask as createTaskService, updateTask as updateTaskService, getTask as getTaskById } from '../../services/taskService';
 import RNPickerSelect from 'react-native-picker-select';
@@ -64,7 +65,7 @@ export default function TaskFormScreen({ taskId }: TaskFormScreenProps) {
   
   // 循环设置
   const [isRecurring, setIsRecurring] = useState(false);
-  const [recurrencePattern, setRecurrencePattern] = useState<RecurrencePattern>({
+  const [recurrencePattern, setRecurrencePattern] = useState<RecurrencePattern | CompositeRecurrencePattern>({
     type: 'daily',
     value: 1
   });
@@ -159,66 +160,29 @@ export default function TaskFormScreen({ taskId }: TaskFormScreenProps) {
         let lunarDueDate;
         const { type, value = 1 } = recurrencePattern;
         
-        switch(type) {
-          case 'daily':
-            // 农历天数相加
-            lunarDueDate = lunarStartDateObj.next(value);
-            break;
-          case 'weekly':
-            // 农历周相加 (7天)
-            lunarDueDate = lunarStartDateObj.next(value * 7);
-            break;
-          case 'monthly':
-            // 农历月相加，会自动处理闰月
-            const monthsToAdd = value;
-            lunarDueDate = Lunar.fromYmd(
-              lunarStartDateObj.getYear() + Math.floor(monthsToAdd / 12),
-              ((lunarStartDateObj.getMonth() + monthsToAdd - 1) % 12) + 1,
-              Math.min(lunarService.getDay(lunarStartDateObj), lunarService.getDaysOfMonth(
-                lunarStartDateObj.getYear() + Math.floor((lunarStartDateObj.getMonth() + monthsToAdd - 1) / 12),
-                ((lunarStartDateObj.getMonth() + monthsToAdd - 1) % 12) + 1
-              ))
-            );
-            break;
-          case 'yearly':
-            // 农历年相加
-            lunarDueDate = Lunar.fromYmd(
-              lunarStartDateObj.getYear() + value,
-              lunarStartDateObj.getMonth(),
-              Math.min(lunarService.getDay(lunarStartDateObj), lunarService.getDaysOfMonth(
-                lunarStartDateObj.getYear() + value,
-                lunarStartDateObj.getMonth()
-              ))
-            );
-            break;
-          case 'weekOfMonth':
-            // 对于月中某周某天，默认加一个农历月
-            const nextMonthMonthsToAdd = 1;
-            lunarDueDate = Lunar.fromYmd(
-              lunarStartDateObj.getYear() + Math.floor(nextMonthMonthsToAdd / 12),
-              ((lunarStartDateObj.getMonth() + nextMonthMonthsToAdd - 1) % 12) + 1,
-              Math.min(lunarService.getDay(lunarStartDateObj), lunarService.getDaysOfMonth(
-                lunarStartDateObj.getYear() + Math.floor((lunarStartDateObj.getMonth() + nextMonthMonthsToAdd - 1) / 12),
-                ((lunarStartDateObj.getMonth() + nextMonthMonthsToAdd - 1) % 12) + 1
-              ))
-            );
-            break;
-          case 'custom':
-            if (recurrencePattern.unit === 'days') {
+        if (type === 'composite') {
+          // 复合循环模式处理
+          const compositePattern = recurrencePattern as CompositeRecurrencePattern;
+          lunarDueDate = calculateCompositeLunarDueDate(lunarStartDateObj, compositePattern);
+        } else {
+          switch(type) {
+            case 'daily':
               lunarDueDate = lunarStartDateObj.next(value);
-            } else if (recurrencePattern.unit === 'weeks') {
+              break;
+            case 'weekly':
               lunarDueDate = lunarStartDateObj.next(value * 7);
-            } else if (recurrencePattern.unit === 'months') {
-              const customMonthsToAdd = value;
+              break;
+            case 'monthly':
               lunarDueDate = Lunar.fromYmd(
-                lunarStartDateObj.getYear() + Math.floor(customMonthsToAdd / 12),
-                ((lunarStartDateObj.getMonth() + customMonthsToAdd - 1) % 12) + 1,
+                lunarStartDateObj.getYear() + Math.floor(value / 12),
+                ((lunarStartDateObj.getMonth() + value - 1) % 12) + 1,
                 Math.min(lunarService.getDay(lunarStartDateObj), lunarService.getDaysOfMonth(
-                  lunarStartDateObj.getYear() + Math.floor((lunarStartDateObj.getMonth() + customMonthsToAdd - 1) / 12),
-                  ((lunarStartDateObj.getMonth() + customMonthsToAdd - 1) % 12) + 1
+                  lunarStartDateObj.getYear() + Math.floor((lunarStartDateObj.getMonth() + value - 1) / 12),
+                  ((lunarStartDateObj.getMonth() + value - 1) % 12) + 1
                 ))
               );
-            } else if (recurrencePattern.unit === 'years') {
+              break;
+            case 'yearly':
               lunarDueDate = Lunar.fromYmd(
                 lunarStartDateObj.getYear() + value,
                 lunarStartDateObj.getMonth(),
@@ -227,16 +191,52 @@ export default function TaskFormScreen({ taskId }: TaskFormScreenProps) {
                   lunarStartDateObj.getMonth()
                 ))
               );
-            } else {
+              break;
+            case 'weekOfMonth':
+              const nextMonthMonthsToAdd = 1;
+              lunarDueDate = Lunar.fromYmd(
+                lunarStartDateObj.getYear() + Math.floor(nextMonthMonthsToAdd / 12),
+                ((lunarStartDateObj.getMonth() + nextMonthMonthsToAdd - 1) % 12) + 1,
+                Math.min(lunarService.getDay(lunarStartDateObj), lunarService.getDaysOfMonth(
+                  lunarStartDateObj.getYear() + Math.floor((lunarStartDateObj.getMonth() + nextMonthMonthsToAdd - 1) / 12),
+                  ((lunarStartDateObj.getMonth() + nextMonthMonthsToAdd - 1) % 12) + 1
+                ))
+              );
+              break;
+            case 'custom':
+              if (recurrencePattern.unit === 'days') {
+                lunarDueDate = lunarStartDateObj.next(value);
+              } else if (recurrencePattern.unit === 'weeks') {
+                lunarDueDate = lunarStartDateObj.next(value * 7);
+              } else if (recurrencePattern.unit === 'months') {
+                const customMonthsToAdd = value;
+                lunarDueDate = Lunar.fromYmd(
+                  lunarStartDateObj.getYear() + Math.floor(customMonthsToAdd / 12),
+                  ((lunarStartDateObj.getMonth() + customMonthsToAdd - 1) % 12) + 1,
+                  Math.min(lunarService.getDay(lunarStartDateObj), lunarService.getDaysOfMonth(
+                    lunarStartDateObj.getYear() + Math.floor((lunarStartDateObj.getMonth() + customMonthsToAdd - 1) / 12),
+                    ((lunarStartDateObj.getMonth() + customMonthsToAdd - 1) % 12) + 1
+                  ))
+                );
+              } else if (recurrencePattern.unit === 'years') {
+                lunarDueDate = Lunar.fromYmd(
+                  lunarStartDateObj.getYear() + value,
+                  lunarStartDateObj.getMonth(),
+                  Math.min(lunarService.getDay(lunarStartDateObj), lunarService.getDaysOfMonth(
+                    lunarStartDateObj.getYear() + value,
+                    lunarStartDateObj.getMonth()
+                  ))
+                );
+              } else {
+                lunarDueDate = lunarStartDateObj.next(1);
+              }
+              break;
+            default:
               lunarDueDate = lunarStartDateObj.next(1);
-            }
-            break;
-          default:
-            lunarDueDate = lunarStartDateObj.next(1);
+          }
         }
         
         // 将农历日期转换回公历
-        // 使用正确的方法将农历对象转换为公历对象
         const solarDate = lunarDueDate.getSolar();
         const newSolarDueDate = new Date(
           solarDate.getYear(),
@@ -254,49 +254,181 @@ export default function TaskFormScreen({ taskId }: TaskFormScreenProps) {
         Alert.alert('日期计算错误', '农历日期计算出现错误，请重试。');
       }
     } else {
-      // 原有的公历计算逻辑
-      const newDueDate = new Date(startDate);
-      const { type, value = 1 } = recurrencePattern;
-      let resultDate: Date;
-      
-      switch(type) {
-        case 'daily':
-          resultDate = addDays(newDueDate, value);
-          break;
-        case 'weekly':
-          resultDate = addWeeks(newDueDate, value);
-          break;
-        case 'monthly':
-          resultDate = addMonths(newDueDate, value);
-          break;
-        case 'yearly':
-          resultDate = addYears(newDueDate, value);
-          break;
-        case 'weekOfMonth':
-          // 对于月中某周某天，默认加一个月
-          resultDate = addMonths(newDueDate, 1);
-          break;
-        case 'custom':
-          if (recurrencePattern.unit === 'days') {
-            resultDate = addDays(newDueDate, value);
-          } else if (recurrencePattern.unit === 'weeks') {
-            resultDate = addWeeks(newDueDate, value);
-          } else if (recurrencePattern.unit === 'months') {
-            resultDate = addMonths(newDueDate, value);
-          } else if (recurrencePattern.unit === 'years') {
-            resultDate = addYears(newDueDate, value);
-          } else {
-            resultDate = addDays(newDueDate, 1);
+      // 处理公历日期计算
+      try {
+        const { type, value = 1 } = recurrencePattern;
+        let newDueDate;
+        
+        if (type === 'composite') {
+          // 复合循环模式处理
+          const compositePattern = recurrencePattern as CompositeRecurrencePattern;
+          newDueDate = calculateCompositeDueDate(startDate, compositePattern);
+        } else {
+          switch(type) {
+            case 'daily':
+              newDueDate = addDays(startDate, value);
+              break;
+            case 'weekly':
+              if (recurrencePattern.weekDay !== undefined) {
+                newDueDate = new Date(startDate);
+                const targetDay = recurrencePattern.weekDay;
+                
+                if (newDueDate.getDay() === targetDay) {
+                  newDueDate = addDays(newDueDate, 7);
+                } else {
+                  while (newDueDate.getDay() !== targetDay) {
+                    newDueDate = addDays(newDueDate, 1);
+                  }
+                }
+              } else {
+                newDueDate = addDays(startDate, value * 7);
+              }
+              break;
+            case 'monthly':
+              if (recurrencePattern.monthDay !== undefined) {
+                newDueDate = new Date(startDate);
+                newDueDate.setMonth(newDueDate.getMonth() + 1);
+                newDueDate.setDate(recurrencePattern.monthDay);
+              } else {
+                newDueDate = addMonths(startDate, value);
+              }
+              break;
+            case 'yearly':
+              newDueDate = addYears(startDate, value);
+              break;
+            case 'weekOfMonth':
+              if (recurrencePattern.weekOfMonth !== undefined && recurrencePattern.weekDay !== undefined) {
+                newDueDate = getDateOfWeekDayInMonth(
+                  startDate.getFullYear(),
+                  startDate.getMonth() + 1,
+                  recurrencePattern.weekOfMonth,
+                  recurrencePattern.weekDay
+                );
+              } else {
+                newDueDate = addMonths(startDate, 1);
+              }
+              break;
+            case 'custom':
+              if (recurrencePattern.unit === 'days') {
+                newDueDate = addDays(startDate, value);
+              } else if (recurrencePattern.unit === 'weeks') {
+                newDueDate = addWeeks(startDate, value);
+              } else if (recurrencePattern.unit === 'months') {
+                newDueDate = addMonths(startDate, value);
+              } else if (recurrencePattern.unit === 'years') {
+                newDueDate = addYears(startDate, value);
+              } else {
+                newDueDate = addDays(startDate, value);
+              }
+              break;
+            default:
+              newDueDate = addDays(startDate, 1);
           }
-          break;
-        default:
-          resultDate = addDays(newDueDate, 1);
+        }
+        
+        setDueDate(newDueDate);
+      } catch (error) {
+        console.error('计算截止日期错误:', error);
+      }
+    }
+  };
+
+  // 计算公历复合循环模式的截止日期
+  const calculateCompositeDueDate = (start: Date, pattern: CompositeRecurrencePattern): Date => {
+    const dueDate = new Date(start);
+    
+    if (pattern.yearEnabled && pattern.year) {
+      dueDate.setFullYear(dueDate.getFullYear() + pattern.year);
+    }
+    
+    if (pattern.monthEnabled && pattern.month) {
+      dueDate.setMonth(dueDate.getMonth() + pattern.month);
+    }
+    
+    if (pattern.weekOfMonthEnabled && pattern.weekDayEnabled) {
+      if (pattern.weekOfMonth && pattern.weekDay !== undefined) {
+        const currentMonth = dueDate.getMonth();
+        const currentYear = dueDate.getFullYear();
+        
+        return getDateOfWeekDayInMonth(
+          currentYear,
+          currentMonth,
+          pattern.weekOfMonth,
+          pattern.weekDay
+        );
+      }
+    } else {
+      let daysOffset = 0;
+      
+      if (pattern.yearDayEnabled && pattern.yearDay) {
+        daysOffset = pattern.yearDay;
+      } else if (pattern.monthDayEnabled && pattern.monthDay) {
+        daysOffset = pattern.monthDay;
       }
       
-      // 保持时间部分一致
-      resultDate.setHours(dueDate.getHours(), dueDate.getMinutes(), 0, 0);
-      setDueDate(resultDate);
+      if (daysOffset > 0) {
+        dueDate.setDate(dueDate.getDate() + daysOffset);
+      }
     }
+    
+    return dueDate;
+  };
+  
+  // 计算农历复合循环模式的截止日期
+  const calculateCompositeLunarDueDate = (lunarStart: any, pattern: CompositeRecurrencePattern): any => {
+    let year = lunarStart.getYear();
+    let month = lunarStart.getMonth();
+    let day = lunarService.getDay(lunarStart);
+    
+    if (pattern.yearEnabled && pattern.year) {
+      year += pattern.year;
+    }
+    
+    if (pattern.monthEnabled && pattern.month) {
+      month += pattern.month;
+      year += Math.floor((month - 1) / 12);
+      month = ((month - 1) % 12) + 1;
+    }
+    
+    if (pattern.monthDayEnabled && pattern.monthDay) {
+      day = pattern.monthDay;
+    } else if (pattern.yearDayEnabled && pattern.yearDay) {
+      const solarOfDay = Solar.fromYmd(year, 1, pattern.yearDay);
+      return Lunar.fromDate(solarOfDay.toDate());
+    }
+    
+    const maxDays = lunarService.getDaysOfMonth(year, month);
+    day = Math.min(day, maxDays);
+    
+    return Lunar.fromYmd(year, month, day);
+  };
+
+  // 获取指定月份中第几周的星期几的日期
+  const getDateOfWeekDayInMonth = (year: number, month: number, weekOfMonth: number, weekDay: number): Date => {
+    const firstDayOfMonth = new Date(year, month, 1);
+    const firstDayWeekDay = firstDayOfMonth.getDay();
+    
+    let dayOfMonth = 1 + (7 + weekDay - firstDayWeekDay) % 7;
+    
+    if (weekOfMonth === 1 && dayOfMonth > 7) {
+      dayOfMonth = dayOfMonth - 7;
+    } else {
+      dayOfMonth = dayOfMonth + (weekOfMonth - 1) * 7;
+    }
+    
+    if (weekOfMonth === 5) {
+      const nextMonth = new Date(year, month + 1, 1);
+      
+      const lastDayOfMonth = new Date(nextMonth);
+      lastDayOfMonth.setDate(0);
+      
+      const lastDayWeekDay = lastDayOfMonth.getDay();
+      const daysToSubtract = (lastDayWeekDay - weekDay + 7) % 7;
+      
+      dayOfMonth = lastDayOfMonth.getDate() - daysToSubtract;
+    }
+    
+    return new Date(year, month, dayOfMonth);
   };
 
   // 计算开始日期
@@ -313,81 +445,34 @@ export default function TaskFormScreen({ taskId }: TaskFormScreenProps) {
         let lunarStartDate;
         const { type, value = 1 } = recurrencePattern;
         
-        switch(type) {
-          case 'daily':
-            // 农历天数减少
-            lunarStartDate = lunarDueDateObj.next(-value);
-            break;
-          case 'weekly':
-            // 农历周减少 (7天)
-            lunarStartDate = lunarDueDateObj.next(-value * 7);
-            break;
-          case 'monthly':
-            // 农历月减少，会自动处理闰月
-            const monthsToSub = value;
-            let newMonth = lunarDueDateObj.getMonth() - monthsToSub;
-            let newYear = lunarDueDateObj.getYear();
-            
-            while (newMonth <= 0) {
-              newMonth += 12;
-              newYear--;
-            }
-            
-            lunarStartDate = Lunar.fromYmd(
-              newYear,
-              newMonth,
-              Math.min(lunarService.getDay(lunarDueDateObj), lunarService.getDaysOfMonth(newYear, newMonth))
-            );
-            break;
-          case 'yearly':
-            // 农历年减少
-            lunarStartDate = Lunar.fromYmd(
-              lunarDueDateObj.getYear() - value,
-              lunarDueDateObj.getMonth(),
-              Math.min(lunarService.getDay(lunarDueDateObj), lunarService.getDaysOfMonth(
-                lunarDueDateObj.getYear() - value,
-                lunarDueDateObj.getMonth()
-              ))
-            );
-            break;
-          case 'weekOfMonth':
-            // 对于月中某周某天，默认减一个农历月
-            const prevMonthMonthsToSub = 1;
-            let prevMonth = lunarDueDateObj.getMonth() - prevMonthMonthsToSub;
-            let prevYear = lunarDueDateObj.getYear();
-            
-            if (prevMonth <= 0) {
-              prevMonth += 12;
-              prevYear--;
-            }
-            
-            lunarStartDate = Lunar.fromYmd(
-              prevYear,
-              prevMonth,
-              Math.min(lunarService.getDay(lunarDueDateObj), lunarService.getDaysOfMonth(prevYear, prevMonth))
-            );
-            break;
-          case 'custom':
-            if (recurrencePattern.unit === 'days') {
+        if (type === 'composite') {
+          const compositePattern = recurrencePattern as CompositeRecurrencePattern;
+          lunarStartDate = calculateCompositeLunarStartDate(lunarDueDateObj, compositePattern);
+        } else {
+          switch(type) {
+            case 'daily':
               lunarStartDate = lunarDueDateObj.next(-value);
-            } else if (recurrencePattern.unit === 'weeks') {
+              break;
+            case 'weekly':
               lunarStartDate = lunarDueDateObj.next(-value * 7);
-            } else if (recurrencePattern.unit === 'months') {
-              const customMonthsToSub = value;
-              let customNewMonth = lunarDueDateObj.getMonth() - customMonthsToSub;
-              let customNewYear = lunarDueDateObj.getYear();
+              break;
+            case 'monthly':
+              const monthsToSub = value;
+              let newMonth = lunarDueDateObj.getMonth() - monthsToSub;
+              let newYear = lunarDueDateObj.getYear();
               
-              while (customNewMonth <= 0) {
-                customNewMonth += 12;
-                customNewYear--;
+              while (newMonth <= 0) {
+                newMonth += 12;
+                newYear--;
               }
               
               lunarStartDate = Lunar.fromYmd(
-                customNewYear,
-                customNewMonth,
-                Math.min(lunarService.getDay(lunarDueDateObj), lunarService.getDaysOfMonth(customNewYear, customNewMonth))
+                newYear,
+                newMonth,
+                Math.min(lunarService.getDay(lunarDueDateObj), lunarService.getDaysOfMonth(newYear, newMonth))
               );
-            } else if (recurrencePattern.unit === 'years') {
+              break;
+            case 'yearly':
               lunarStartDate = Lunar.fromYmd(
                 lunarDueDateObj.getYear() - value,
                 lunarDueDateObj.getMonth(),
@@ -396,16 +481,62 @@ export default function TaskFormScreen({ taskId }: TaskFormScreenProps) {
                   lunarDueDateObj.getMonth()
                 ))
               );
-            } else {
+              break;
+            case 'weekOfMonth':
+              const prevMonthMonthsToSub = 1;
+              let prevMonth = lunarDueDateObj.getMonth() - prevMonthMonthsToSub;
+              let prevYear = lunarDueDateObj.getYear();
+              
+              if (prevMonth <= 0) {
+                prevMonth += 12;
+                prevYear--;
+              }
+              
+              lunarStartDate = Lunar.fromYmd(
+                prevYear,
+                prevMonth,
+                Math.min(lunarService.getDay(lunarDueDateObj), lunarService.getDaysOfMonth(prevYear, prevMonth))
+              );
+              break;
+            case 'custom':
+              if (recurrencePattern.unit === 'days') {
+                lunarStartDate = lunarDueDateObj.next(-value);
+              } else if (recurrencePattern.unit === 'weeks') {
+                lunarStartDate = lunarDueDateObj.next(-value * 7);
+              } else if (recurrencePattern.unit === 'months') {
+                const customMonthsToSub = value;
+                let customNewMonth = lunarDueDateObj.getMonth() - customMonthsToSub;
+                let customNewYear = lunarDueDateObj.getYear();
+                
+                while (customNewMonth <= 0) {
+                  customNewMonth += 12;
+                  customNewYear--;
+                }
+                
+                lunarStartDate = Lunar.fromYmd(
+                  customNewYear,
+                  customNewMonth,
+                  Math.min(lunarService.getDay(lunarDueDateObj), lunarService.getDaysOfMonth(customNewYear, customNewMonth))
+                );
+              } else if (recurrencePattern.unit === 'years') {
+                lunarStartDate = Lunar.fromYmd(
+                  lunarDueDateObj.getYear() - value,
+                  lunarDueDateObj.getMonth(),
+                  Math.min(lunarService.getDay(lunarDueDateObj), lunarService.getDaysOfMonth(
+                    lunarDueDateObj.getYear() - value,
+                    lunarDueDateObj.getMonth()
+                  ))
+                );
+              } else {
+                lunarStartDate = lunarDueDateObj.next(-1);
+              }
+              break;
+            default:
               lunarStartDate = lunarDueDateObj.next(-1);
-            }
-            break;
-          default:
-            lunarStartDate = lunarDueDateObj.next(-1);
+          }
         }
         
         // 将农历日期转换回公历
-        // 使用正确的方法将农历对象转换为公历对象
         const solarDate = lunarStartDate.getSolar();
         const newSolarStartDate = new Date(
           solarDate.getYear(),
@@ -423,49 +554,140 @@ export default function TaskFormScreen({ taskId }: TaskFormScreenProps) {
         Alert.alert('日期计算错误', '农历日期计算出现错误，请重试。');
       }
     } else {
-      // 原有的公历计算逻辑
-      const newStartDate = new Date(dueDate);
-      const { type, value = 1 } = recurrencePattern;
-      let resultDate: Date;
-      
-      switch(type) {
-        case 'daily':
-          resultDate = subDays(newStartDate, value);
-          break;
-        case 'weekly':
-          resultDate = subWeeks(newStartDate, value);
-          break;
-        case 'monthly':
-          resultDate = subMonths(newStartDate, value);
-          break;
-        case 'yearly':
-          resultDate = subYears(newStartDate, value);
-          break;
-        case 'weekOfMonth':
-          // 对于月中某周某天，默认减一个月
-          resultDate = subMonths(newStartDate, 1);
-          break;
-        case 'custom':
-          if (recurrencePattern.unit === 'days') {
-            resultDate = subDays(newStartDate, value);
-          } else if (recurrencePattern.unit === 'weeks') {
-            resultDate = subWeeks(newStartDate, value);
-          } else if (recurrencePattern.unit === 'months') {
-            resultDate = subMonths(newStartDate, value);
-          } else if (recurrencePattern.unit === 'years') {
-            resultDate = subYears(newStartDate, value);
-          } else {
-            resultDate = subDays(newStartDate, 1);
+      // 处理公历日期计算
+      try {
+        const { type, value = 1 } = recurrencePattern;
+        let newStartDate;
+        
+        if (type === 'composite') {
+          const compositePattern = recurrencePattern as CompositeRecurrencePattern;
+          newStartDate = calculateCompositeStartDate(dueDate, compositePattern);
+        } else {
+          switch(type) {
+            case 'daily':
+              newStartDate = subDays(dueDate, value);
+              break;
+            case 'weekly':
+              if (recurrencePattern.weekDay !== undefined) {
+                newStartDate = new Date(dueDate);
+                const targetDay = recurrencePattern.weekDay;
+                
+                if (newStartDate.getDay() === targetDay) {
+                  newStartDate = subDays(newStartDate, 7);
+                } else {
+                  while (newStartDate.getDay() !== targetDay) {
+                    newStartDate = subDays(newStartDate, 1);
+                  }
+                }
+              } else {
+                newStartDate = subDays(dueDate, value * 7);
+              }
+              break;
+            case 'monthly':
+              if (recurrencePattern.monthDay !== undefined) {
+                newStartDate = new Date(dueDate);
+                newStartDate.setMonth(newStartDate.getMonth() - 1);
+                newStartDate.setDate(recurrencePattern.monthDay);
+              } else {
+                newStartDate = subMonths(dueDate, value);
+              }
+              break;
+            case 'yearly':
+              newStartDate = subYears(dueDate, value);
+              break;
+            case 'weekOfMonth':
+              if (recurrencePattern.weekOfMonth !== undefined && recurrencePattern.weekDay !== undefined) {
+                newStartDate = new Date(dueDate);
+                newStartDate.setMonth(newStartDate.getMonth() - 1);
+              } else {
+                newStartDate = subMonths(dueDate, 1);
+              }
+              break;
+            case 'custom':
+              if (recurrencePattern.unit === 'days') {
+                newStartDate = subDays(dueDate, value);
+              } else if (recurrencePattern.unit === 'weeks') {
+                newStartDate = subWeeks(dueDate, value);
+              } else if (recurrencePattern.unit === 'months') {
+                newStartDate = subMonths(dueDate, value);
+              } else if (recurrencePattern.unit === 'years') {
+                newStartDate = subYears(dueDate, value);
+              } else {
+                newStartDate = subDays(dueDate, value);
+              }
+              break;
+            default:
+              newStartDate = subDays(dueDate, 1);
           }
-          break;
-        default:
-          resultDate = subDays(newStartDate, 1);
+        }
+        
+        setStartDate(newStartDate);
+      } catch (error) {
+        console.error('计算开始日期错误:', error);
+      }
+    }
+  };
+
+  // 计算公历复合循环模式的开始日期
+  const calculateCompositeStartDate = (due: Date, pattern: CompositeRecurrencePattern): Date => {
+    const startDate = new Date(due);
+    
+    if (pattern.yearEnabled && pattern.year) {
+      startDate.setFullYear(startDate.getFullYear() - pattern.year);
+    }
+    
+    if (pattern.monthEnabled && pattern.month) {
+      startDate.setMonth(startDate.getMonth() - pattern.month);
+    }
+    
+    if (pattern.weekOfMonthEnabled && pattern.weekDayEnabled) {
+      startDate.setMonth(startDate.getMonth() - 1);
+    } else {
+      let daysOffset = 0;
+      
+      if (pattern.yearDayEnabled && pattern.yearDay) {
+        daysOffset = pattern.yearDay;
+      } else if (pattern.monthDayEnabled && pattern.monthDay) {
+        daysOffset = pattern.monthDay;
       }
       
-      // 保持时间部分一致
-      resultDate.setHours(startDate.getHours(), startDate.getMinutes(), 0, 0);
-      setStartDate(resultDate);
+      if (daysOffset > 0) {
+        startDate.setDate(startDate.getDate() - daysOffset);
+      }
     }
+    
+    return startDate;
+  };
+  
+  // 计算农历复合循环模式的开始日期
+  const calculateCompositeLunarStartDate = (lunarDue: any, pattern: CompositeRecurrencePattern): any => {
+    let year = lunarDue.getYear();
+    let month = lunarDue.getMonth();
+    let day = lunarService.getDay(lunarDue);
+    
+    if (pattern.yearEnabled && pattern.year) {
+      year -= pattern.year;
+    }
+    
+    if (pattern.monthEnabled && pattern.month) {
+      month -= pattern.month;
+      if (month <= 0) {
+        year -= Math.ceil(Math.abs(month) / 12);
+        month = ((month - 1) % 12 + 12) % 12 + 1;
+      }
+    }
+    
+    if (pattern.monthDayEnabled && pattern.monthDay) {
+      day = pattern.monthDay;
+    } else if (pattern.yearDayEnabled && pattern.yearDay) {
+      const solarOfDay = Solar.fromYmd(year, 1, pattern.yearDay);
+      return Lunar.fromDate(solarOfDay.toDate());
+    }
+    
+    const maxDays = lunarService.getDaysOfMonth(year, month);
+    day = Math.min(day, maxDays);
+    
+    return Lunar.fromYmd(year, month, day);
   };
 
   const loadTask = async () => {
@@ -999,36 +1221,40 @@ export default function TaskFormScreen({ taskId }: TaskFormScreenProps) {
           </View>
         </View>
         
-        {/* 循环设置选择 */}
+        {/* 循环设置 - 独立卡片 */}
         <View style={[styles.formSection, { backgroundColor: colors.card }]}>
-          <View style={[styles.settingRow]}>
-            <Text style={[styles.settingLabel, { color: colors.text }]}>{t.reminder.recurrenceSettings}</Text>
-            <View style={styles.recurringToggle}>
-              <Text style={[styles.recurringText, { color: colors.text }]}>
-                {isRecurring ? t.common.enabled : t.common.disabled}
-              </Text>
-              <Switch
-                value={isRecurring}
-                onValueChange={handleRecurringToggle}
-                trackColor={{ false: '#767577', true: colors.primary + '80' }}
-                thumbColor={isRecurring ? colors.primary : '#f4f3f4'}
-                ios_backgroundColor="#3e3e3e"
-              />
-            </View>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>{t.reminder.recurrenceSettings}</Text>
+          
+          <View style={styles.settingRow}>
+            <Text style={[styles.settingLabel, { color: colors.text }]}>{t.common.enabled}</Text>
+            <Switch
+              value={isRecurring}
+              onValueChange={setIsRecurring}
+              trackColor={{ false: colors.border, true: colors.primary }}
+              thumbColor={isRecurring ? colors.primary : colors.card}
+            />
           </View>
-        </View>
-        
-        {/* 循环设置部分 */}
-        {isRecurring && (
-          <View style={[styles.section, { backgroundColor: colors.card }]}>
-            <View style={[styles.recurrenceContainer, { backgroundColor: colors.card }]}>
+          
+          {isRecurring && (
+            <>
+              <View style={styles.settingRow}>
+                <Text style={[styles.settingLabel, { color: colors.text }]}>使用截止日期计算</Text>
+                <Switch
+                  value={useDueDateToCalculate}
+                  onValueChange={setUseDueDateToCalculate}
+                  trackColor={{ false: colors.border, true: colors.primary }}
+                  thumbColor={useDueDateToCalculate ? colors.primary : colors.card}
+                />
+              </View>
+              
               <RecurrenceSelector
-                recurrencePattern={recurrencePattern}
-                onRecurrenceChange={setRecurrencePattern}
+                value={recurrencePattern}
+                onChange={setRecurrencePattern}
+                fullScreen={false}
               />
-            </View>
-          </View>
-        )}
+            </>
+          )}
+        </View>
 
         {/* 日期设置部分 */}
         <View style={[styles.formSection, { backgroundColor: colors.card }]}>
@@ -1162,34 +1388,6 @@ export default function TaskFormScreen({ taskId }: TaskFormScreenProps) {
                 <Text style={[styles.calculatedDueDate, { color: colors.text }]}>
                   {formatDate(startDate)} {formatTime(startDate, dateType)}
                 </Text>
-              </View>
-            </>
-          )}
-          
-          {/* 一次性任务只显示截止日期输入框 */}
-          {!isRecurring && (
-            <>
-              <Text style={[styles.dateLabel, { color: colors.text, marginTop: 8 }]}>{t.task.dueDate}</Text>
-              <View style={styles.dateTimeContainer}>
-                <TouchableOpacity 
-                  style={[styles.dateButton, { borderColor: colors.border }]}
-                  onPress={() => setShowDueDatePicker(true)}
-                >
-                  <Text style={[styles.dateButtonText, { color: colors.text }]}>
-                    {formatDate(dueDate)}
-                  </Text>
-                  <Ionicons name="calendar-outline" size={20} color={colors.primary} />
-                </TouchableOpacity>
-                
-                <TouchableOpacity 
-                  style={[styles.timeButton, { borderColor: colors.border }]}
-                  onPress={() => setShowDueTimePicker(true)}
-                >
-                  <Text style={[styles.timeButtonText, { color: colors.text }]}>
-                    {formatTime(dueDate, dateType)}
-                  </Text>
-                  <Ionicons name="time-outline" size={20} color={colors.primary} />
-                </TouchableOpacity>
               </View>
             </>
           )}

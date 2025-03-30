@@ -17,810 +17,928 @@ import {
   RecurrencePattern,
   WeekDay,
   WeekOfMonth,
+  CompositeRecurrencePattern,
 } from '../../models/Task';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../contexts/ThemeContext';
+import RNPickerSelect from 'react-native-picker-select';
 
 interface RecurrenceSelectorProps {
-  recurrencePattern: RecurrencePattern;
-  onRecurrenceChange: (pattern: RecurrencePattern) => void;
+  value: RecurrencePattern;
+  onChange: (pattern: RecurrencePattern) => void;
+  onClose?: () => void;
+  fullScreen?: boolean;
 }
 
 export default function RecurrenceSelector({
-  recurrencePattern,
-  onRecurrenceChange,
+  value,
+  onChange,
+  onClose,
+  fullScreen = false,
 }: RecurrenceSelectorProps) {
   const { t } = useLanguage();
   const { colors, isDarkMode } = useTheme();
-  const [customValue, setCustomValue] = useState(String(recurrencePattern.value || 1));
-  const [isCountFromEnd, setIsCountFromEnd] = useState(false);
-  const [modalVisible, setModalVisible] = useState(false);
   
-  // 循环类型选项
-  const recurrenceTypes = [
-    { type: 'daily', label: t.task.daily, icon: 'sunny-outline' },
-    { type: 'weekly', label: t.task.weekly, icon: 'calendar-outline' },
-    { type: 'monthly', label: t.task.monthly, icon: 'calendar' },
-    { type: 'yearly', label: t.task.yearly, icon: 'calendar-clear-outline' },
-    { type: 'weekOfMonth', label: t.task.weekOfMonth, icon: 'calendar-number-outline' },
-  ];
-
-  // 循环值选项
-  const commonValues = [1, 2, 3, 7, 14, 30];
-
-  // 星期选项
-  const weekDays = [
-    { value: 0, label: t.task.sunday },
-    { value: 1, label: t.task.monday },
-    { value: 2, label: t.task.tuesday },
-    { value: 3, label: t.task.wednesday },
-    { value: 4, label: t.task.thursday },
-    { value: 5, label: t.task.friday },
-    { value: 6, label: t.task.saturday },
-  ];
-
-  // 月份选项
-  const months = Array.from({ length: 12 }, (_, i) => ({
-    value: i + 1,
-    label: t.task[['january', 'february', 'march', 'april', 'may', 'june', 
-                   'july', 'august', 'september', 'october', 'november', 'december'][i]] || `${i + 1}月`,
-  }));
-
-  // 月中周选项
-  const weeksOfMonth = [
-    { value: 1, label: t.task.firstWeek || '第一周' },
-    { value: 2, label: t.task.secondWeek || '第二周' },
-    { value: 3, label: t.task.thirdWeek || '第三周' },
-    { value: 4, label: t.task.fourthWeek || '第四周' },
-    { value: 5, label: t.task.lastWeek || '最后一周' },
-  ];
-
-  // 处理循环类型变更
-  const handleTypeChange = (type: RecurrenceType) => {
-    const newPattern = {
-      ...recurrencePattern,
-      type,
-      value: recurrencePattern.value || 1,
-    };
-
-    if (type !== 'weekly' && type !== 'weekOfMonth') {
-      newPattern.weekDay = undefined;
-    }
-
-    if (type !== 'monthly') {
-      newPattern.monthDay = undefined;
-    }
-
-    if (type !== 'yearly') {
-      newPattern.month = undefined;
-    }
-
-    if (type !== 'weekOfMonth') {
-      newPattern.weekOfMonth = undefined;
-    }
-
-    onRecurrenceChange(newPattern);
-  };
-
-  // 处理循环值变更
-  const handleValueChange = (value: number) => {
-    onRecurrenceChange({
-      ...recurrencePattern,
-      value,
-    });
-    setCustomValue(String(value));
-  };
-
-  // 处理自定义值变更
-  const handleCustomValueChange = (text: string) => {
-    setCustomValue(text);
-    const numValue = parseInt(text);
-    if (!isNaN(numValue) && numValue > 0) {
-      onRecurrenceChange({
-        ...recurrencePattern,
-        value: numValue,
-      });
-    }
-  };
-
-  // 处理星期几选择
-  const handleWeekDayChange = (day: WeekDay) => {
-    onRecurrenceChange({
-      ...recurrencePattern,
-      weekDay: day,
-    });
-  };
-
-  // 处理月中第几天选择
-  const handleMonthDayChange = (day: number) => {
-    onRecurrenceChange({
-      ...recurrencePattern,
-      monthDay: day,
-    });
-  };
-
-  // 处理月份选择
-  const handleMonthChange = (month: number) => {
-    onRecurrenceChange({
-      ...recurrencePattern,
-      month,
-    });
-  };
-
-  // 处理月中第几周选择
-  const handleWeekOfMonthChange = (week: WeekOfMonth) => {
-    onRecurrenceChange({
-      ...recurrencePattern,
-      weekOfMonth: week,
-    });
-  };
-
-  // 处理倒数切换
-  const handleCountFromEndToggle = (value: boolean) => {
-    setIsCountFromEnd(value);
-    
-    // 如果是月模式且正在使用monthDay
-    if (recurrencePattern.type === 'monthly' && recurrencePattern.monthDay) {
-      // 转换为从月底倒数的天数
-      const newMonthDay = value 
-        ? -(30 - recurrencePattern.monthDay) // 转为负数表示倒数
-        : Math.abs(recurrencePattern.monthDay); // 转为正数
-
-      onRecurrenceChange({
-        ...recurrencePattern,
-        monthDay: newMonthDay,
-      });
-    }
-  };
-
-  // 渲染日期选择器 (月中的天)
-  const renderDaySelector = () => {
-    if (recurrencePattern.type !== 'monthly') return null;
-    
-    // 生成日期选项，考虑倒数模式
-    const days = isCountFromEnd
-      ? Array.from({ length: 30 }, (_, i) => ({ value: -(i + 1), label: `倒数第 ${i + 1} 天` }))
-      : Array.from({ length: 31 }, (_, i) => ({ value: i + 1, label: `${i + 1} 号` }));
-
-    return (
-      <View style={styles.section}>
-        <Text style={[styles.sectionTitle, { color: colors.text }]}>
-          {t.task.monthDay || '每月第几天'}
-        </Text>
-        <View style={styles.countToggleContainer}>
-          <Text style={{ color: colors.text }}>从月末倒数:</Text>
-          <Switch
-            value={isCountFromEnd}
-            onValueChange={handleCountFromEndToggle}
-            trackColor={{ false: '#767577', true: colors.primary }}
-          />
-        </View>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          <View style={styles.dayOptions}>
-            {days.slice(0, 10).map((day) => (
-              <TouchableOpacity
-                key={day.value}
-                style={[
-                  styles.dayButton,
-                  recurrencePattern.monthDay === day.value && [
-                    styles.dayButtonActive,
-                    { backgroundColor: colors.primary },
-                  ],
-                ]}
-                onPress={() => handleMonthDayChange(day.value)}
-              >
-                <Text
-                  style={[
-                    styles.dayButtonText,
-                    { color: recurrencePattern.monthDay === day.value ? '#fff' : colors.text },
-                  ]}
-                >
-                  {day.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </ScrollView>
-      </View>
-    );
-  };
-
-  // 渲染月份选择器
-  const renderMonthSelector = () => {
-    if (recurrencePattern.type !== 'yearly' && recurrencePattern.type !== 'weekOfMonth') return null;
-
-    return (
-      <View style={styles.section}>
-        <Text style={[styles.sectionTitle, { color: colors.text }]}>
-          {t.task.month || '月份'}
-        </Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          <View style={styles.monthOptions}>
-            {months.map((month) => (
-              <TouchableOpacity
-                key={month.value}
-                style={[
-                  styles.monthButton,
-                  recurrencePattern.month === month.value && [
-                    styles.monthButtonActive,
-                    { backgroundColor: colors.primary },
-                  ],
-                ]}
-                onPress={() => handleMonthChange(month.value)}
-              >
-                <Text
-                  style={[
-                    styles.monthButtonText,
-                    { color: recurrencePattern.month === month.value ? '#fff' : colors.text },
-                  ]}
-                >
-                  {month.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </ScrollView>
-      </View>
-    );
-  };
-
-  // 渲染月中第几周选择器
-  const renderWeekOfMonthSelector = () => {
-    if (recurrencePattern.type !== 'weekOfMonth') return null;
-
-    return (
-      <View style={styles.section}>
-        <Text style={[styles.sectionTitle, { color: colors.text }]}>
-          {t.task.weekOfMonth || '第几周'}
-        </Text>
-        <View style={styles.weekOfMonthOptions}>
-          {weeksOfMonth.map((week) => (
-            <TouchableOpacity
-              key={week.value}
-              style={[
-                styles.weekOfMonthButton,
-                recurrencePattern.weekOfMonth === week.value && [
-                  styles.weekOfMonthButtonActive,
-                  { backgroundColor: colors.primary },
-                ],
-              ]}
-              onPress={() => handleWeekOfMonthChange(week.value as WeekOfMonth)}
-            >
-              <Text
-                style={[
-                  styles.weekOfMonthButtonText,
-                  { color: recurrencePattern.weekOfMonth === week.value ? '#fff' : colors.text },
-                ]}
-              >
-                {week.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      </View>
-    );
-  };
-
-  // 生成当前选择的描述文本
-  const getRecurrenceDescription = () => {
-    switch (recurrencePattern.type) {
-      case 'daily':
-        return `${t.task.every} ${recurrencePattern.value} ${t.task.days}`;
-        
-      case 'weekly':
-        return `${t.task.every} ${recurrencePattern.value} ${t.task.weeks} ${
-          recurrencePattern.weekDay !== undefined 
-            ? weekDays.find(d => d.value === recurrencePattern.weekDay)?.label 
-            : t.task.weekDay || '(请选择星期几)'
-        }`;
-        
-      case 'monthly':
-        return `${t.task.every} ${recurrencePattern.value} ${t.task.months} ${
-          recurrencePattern.monthDay 
-            ? (recurrencePattern.monthDay > 0 
-                ? `${t.task.day} ${recurrencePattern.monthDay}` 
-                : `${t.task.last || '倒数'} ${Math.abs(recurrencePattern.monthDay)} ${t.task.day}`)
-            : t.task.monthDay || '(请选择日期)'
-        }`;
-        
-      case 'yearly':
-        return `${t.task.every} ${recurrencePattern.value} ${t.task.years} ${
-          recurrencePattern.month 
-            ? months.find(m => m.value === recurrencePattern.month)?.label 
-            : t.task.month || '(请选择月份)'
-        }`;
-        
-      case 'weekOfMonth':
-        return `${t.task.every} ${recurrencePattern.value} ${t.task.months} ${
-          recurrencePattern.month 
-            ? months.find(m => m.value === recurrencePattern.month)?.label 
-            : t.task.month || '(请选择月份)'
-        } ${
-          recurrencePattern.weekOfMonth 
-            ? weeksOfMonth.find(w => w.value === recurrencePattern.weekOfMonth)?.label 
-            : t.task.weekNumber || '(请选择第几周)'
-        } ${
-          recurrencePattern.weekDay !== undefined 
-            ? weekDays.find(d => d.value === recurrencePattern.weekDay)?.label 
-            : t.task.weekDay || '(请选择星期几)'
-        }`;
-        
-      default:
-        return t.task.selectRecurrenceType || '请选择重复类型';
-    }
-  };
+  const [type, setType] = useState<RecurrenceType>(value.type || 'daily');
+  const [recurrenceValue, setRecurrenceValue] = useState<number>(value.value || 1);
+  const [recurrenceUnit, setRecurrenceUnit] = useState<RecurrenceUnit>(value.unit || 'days');
+  const [weekDay, setWeekDay] = useState<WeekDay | undefined>(value.weekDay);
+  const [weekDays, setWeekDays] = useState<WeekDay[]>(value.weekDays || []);
+  const [monthDay, setMonthDay] = useState<number | undefined>(value.monthDay);
+  const [month, setMonth] = useState<number | undefined>(value.month);
+  const [weekOfMonth, setWeekOfMonth] = useState<WeekOfMonth | undefined>(value.weekOfMonth);
+  const [isCompositeMode, setIsCompositeMode] = useState<boolean>(value.type === 'composite');
   
-  // 渲染模态框内容
-  const renderModalContent = () => (
-    <ScrollView style={styles.modalScrollView}>
-      {/* 循环类型选择 */}
-      <View style={styles.section}>
-        <Text style={[styles.sectionTitle, { color: colors.text }]}>
-          {t.task.recurrenceType}
-        </Text>
-        <View style={styles.typeList}>
-          {recurrenceTypes.map((item) => (
-            <TouchableOpacity
-              key={item.type}
-              style={[
-                styles.typeButton,
-                recurrencePattern.type === item.type && [
-                  styles.typeButtonActive,
-                  { backgroundColor: colors.primary },
-                ],
-              ]}
-              onPress={() => handleTypeChange(item.type as RecurrenceType)}
-            >
-              <Ionicons
-                name={item.icon as any}
-                size={22}
-                color={recurrencePattern.type === item.type ? '#fff' : colors.text}
-                style={styles.typeIcon}
-              />
-              <Text
-                style={[
-                  styles.typeText,
-                  { color: recurrencePattern.type === item.type ? '#fff' : colors.text },
-                ]}
-              >
-                {item.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      </View>
-
-      {/* 循环值选择 */}
-      <View style={styles.section}>
-        <Text style={[styles.sectionTitle, { color: colors.text }]}>
-          {t.task.recurrenceValue}
-        </Text>
-        <View style={styles.valueContainer}>
-          <View style={styles.valueBubbles}>
-            {commonValues.map((value) => (
-              <TouchableOpacity
-                key={value}
-                style={[
-                  styles.valueBubble,
-                  recurrencePattern.value === value && [
-                    styles.valueBubbleActive,
-                    { backgroundColor: colors.primary },
-                  ],
-                ]}
-                onPress={() => handleValueChange(value)}
-              >
-                <Text
-                  style={[
-                    styles.valueBubbleText,
-                    { color: recurrencePattern.value === value ? '#fff' : colors.text },
-                  ]}
-                >
-                  {value}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          <View style={styles.customValueContainer}>
-            <Text style={[styles.customValueLabel, { color: colors.text }]}>
-              {t.task.customValue}:
-            </Text>
-            <TextInput
-              style={[
-                styles.customValueInput,
-                { borderColor: colors.border, color: colors.text },
-              ]}
-              value={customValue}
-              onChangeText={handleCustomValueChange}
-              keyboardType="numeric"
-              maxLength={3}
-            />
-            <Text style={[styles.unitText, { color: colors.text }]}>
-              {recurrencePattern.type === 'daily' && t.task.days}
-              {recurrencePattern.type === 'weekly' && t.task.weeks}
-              {recurrencePattern.type === 'monthly' && t.task.months}
-              {recurrencePattern.type === 'yearly' && t.task.years}
-              {recurrencePattern.type === 'weekOfMonth' && t.task.months}
-            </Text>
-          </View>
-        </View>
-      </View>
-
-      {/* 月份选择 - 仅当循环类型为yearly或weekOfMonth时显示 */}
-      {renderMonthSelector()}
-
-      {/* 月中第几周选择 - 仅当循环类型为weekOfMonth时显示 */}
-      {renderWeekOfMonthSelector()}
-
-      {/* 星期选择 - 仅当循环类型为weekly或weekOfMonth时显示 */}
-      {(recurrencePattern.type === 'weekly' || recurrencePattern.type === 'weekOfMonth') && (
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>
-            {t.task.weekDay}
-          </Text>
-          <View style={styles.weekDayList}>
-            {weekDays.map((day) => (
-              <TouchableOpacity
-                key={day.value}
-                style={[
-                  styles.weekDayButton,
-                  recurrencePattern.weekDay === day.value && [
-                    styles.weekDayButtonActive,
-                    { backgroundColor: colors.primary },
-                  ],
-                ]}
-                onPress={() => handleWeekDayChange(day.value as WeekDay)}
-              >
-                <Text
-                  style={[
-                    styles.weekDayText,
-                    { color: recurrencePattern.weekDay === day.value ? '#fff' : colors.text },
-                  ]}
-                >
-                  {day.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-      )}
-
-      {/* 每月第几天选择 - 仅当循环类型为monthly时显示 */}
-      {renderDaySelector()}
-
-      {/* 显示当前选择的组合 */}
-      <View style={[styles.section, styles.summarySection]}>
-        <Text style={[styles.sectionTitle, { color: colors.text }]}>
-          当前选择:
-        </Text>
-        <Text style={[styles.summaryText, { color: colors.text }]}>
-          {getRecurrenceDescription()}
-        </Text>
-      </View>
-      
-      {/* 底部按钮 */}
-      <View style={styles.buttonContainer}>
-        <TouchableOpacity 
-          style={[styles.button, styles.cancelButton, { borderColor: colors.border }]}
-          onPress={() => setModalVisible(false)}
-        >
-          <Text style={{ color: colors.text }}>{t.common?.cancel || '取消'}</Text>
-        </TouchableOpacity>
-        <TouchableOpacity 
-          style={[styles.button, styles.confirmButton, { backgroundColor: colors.primary }]}
-          onPress={() => setModalVisible(false)}
-        >
-          <Text style={{ color: '#FFFFFF' }}>{t.common?.save || '确定'}</Text>
-        </TouchableOpacity>
-      </View>
-    </ScrollView>
+  // 组合模式的状态
+  const [yearEnabled, setYearEnabled] = useState<boolean>(
+    value.type === 'composite' && (value as CompositeRecurrencePattern).yearEnabled || false
+  );
+  const [yearValue, setYearValue] = useState<number>(
+    value.type === 'composite' ? (value as CompositeRecurrencePattern).year || 1 : 1
+  );
+  
+  const [monthEnabled, setMonthEnabled] = useState<boolean>(
+    value.type === 'composite' && (value as CompositeRecurrencePattern).monthEnabled || false
+  );
+  const [monthValue, setMonthValue] = useState<number>(
+    value.type === 'composite' ? (value as CompositeRecurrencePattern).month || 1 : 1
+  );
+  
+  const [weekOfMonthEnabled, setWeekOfMonthEnabled] = useState<boolean>(
+    value.type === 'composite' && (value as CompositeRecurrencePattern).weekOfMonthEnabled || false
+  );
+  const [weekOfMonthValue, setWeekOfMonthValue] = useState<WeekOfMonth>(
+    value.type === 'composite' ? (value as CompositeRecurrencePattern).weekOfMonth || 1 : 1
+  );
+  
+  const [weekDayEnabled, setWeekDayEnabled] = useState<boolean>(
+    value.type === 'composite' && (value as CompositeRecurrencePattern).weekDayEnabled || false
+  );
+  const [weekDayValue, setWeekDayValue] = useState<WeekDay>(
+    value.type === 'composite' ? (value as CompositeRecurrencePattern).weekDay || 1 : 1
+  );
+  
+  const [monthDayEnabled, setMonthDayEnabled] = useState<boolean>(
+    value.type === 'composite' && (value as CompositeRecurrencePattern).monthDayEnabled || false
+  );
+  const [monthDayValue, setMonthDayValue] = useState<number>(
+    value.type === 'composite' ? (value as CompositeRecurrencePattern).monthDay || 1 : 1
+  );
+  
+  const [yearDayEnabled, setYearDayEnabled] = useState<boolean>(
+    value.type === 'composite' && (value as CompositeRecurrencePattern).yearDayEnabled || false
+  );
+  const [yearDayValue, setYearDayValue] = useState<number>(
+    value.type === 'composite' ? (value as CompositeRecurrencePattern).yearDay || 1 : 1
+  );
+  
+  const [isReverse, setIsReverse] = useState<boolean>(
+    value.isReverse || false
   );
 
-  return (
-    <View style={styles.container}>
-      <View style={styles.headerRow}>
-        <Text style={[styles.title, { color: colors.text }]}>
-          {t.task.recurrenceSettings || '重复设置'}
-        </Text>
-        <TouchableOpacity
-          style={[styles.selectButton, { backgroundColor: colors.primary }]}
-          onPress={() => setModalVisible(true)}
-        >
-          <Text style={{ color: '#FFFFFF' }}>{t.common?.edit || '编辑'}</Text>
-        </TouchableOpacity>
-      </View>
+  useEffect(() => {
+    // 更新循环模式
+    if (isCompositeMode) {
+      // 构建组合模式
+      const compositePattern: CompositeRecurrencePattern = {
+        type: 'composite',
+        value: 1, // 组合模式下这个值没有实际意义
+        
+        // 年份设置
+        yearEnabled,
+        year: yearValue,
+        
+        // 月份设置
+        monthEnabled,
+        month: monthValue,
+        
+        // 月中周设置
+        weekOfMonthEnabled,
+        weekOfMonth: weekOfMonthValue,
+        
+        // 星期几设置
+        weekDayEnabled,
+        weekDay: weekDayValue,
+        
+        // 月中日设置
+        monthDayEnabled,
+        monthDay: monthDayValue,
+        
+        // 年中日设置
+        yearDayEnabled,
+        yearDay: yearDayValue,
+        
+        // 是否倒数
+        isReverse
+      };
       
-      <View style={[styles.patternDisplay, { backgroundColor: colors.card, borderColor: colors.border }]}>
-        <View style={styles.patternRow}>
-          <View style={styles.patternIconContainer}>
-            <Ionicons 
-              name={
-                recurrencePattern.type === 'daily' ? 'sunny-outline' :
-                recurrencePattern.type === 'weekly' ? 'calendar-outline' :
-                recurrencePattern.type === 'monthly' ? 'calendar' :
-                recurrencePattern.type === 'yearly' ? 'calendar-clear-outline' :
-                'calendar-number-outline'
-              } 
-              size={24} 
-              color={colors.primary} 
+      onChange(compositePattern);
+    } else {
+      // 基本模式
+      const newPattern: RecurrencePattern = {
+        type,
+        value: recurrenceValue,
+      };
+
+      // 根据不同循环类型添加额外属性
+      switch (type) {
+        case 'custom':
+          newPattern.unit = recurrenceUnit;
+          break;
+          
+        case 'weekly':
+          if (weekDay !== undefined) {
+            newPattern.weekDay = weekDay;
+          }
+          if (weekDays.length > 0) {
+            newPattern.weekDays = weekDays;
+          }
+          break;
+          
+        case 'monthly':
+          if (monthDay !== undefined) {
+            newPattern.monthDay = monthDay;
+          }
+          break;
+          
+        case 'weekOfMonth':
+          newPattern.month = month;
+          newPattern.weekOfMonth = weekOfMonth;
+          newPattern.weekDay = weekDay;
+          break;
+      }
+
+      onChange(newPattern);
+    }
+  }, [
+    type, recurrenceValue, recurrenceUnit, weekDay, weekDays, monthDay, month, weekOfMonth,
+    isCompositeMode, yearEnabled, yearValue, monthEnabled, monthValue, weekOfMonthEnabled,
+    weekOfMonthValue, weekDayEnabled, weekDayValue, monthDayEnabled, monthDayValue,
+    yearDayEnabled, yearDayValue, isReverse
+  ]);
+
+  // 处理类型切换
+  const handleTypeChange = (newType: RecurrenceType) => {
+    setType(newType);
+    
+    // 如果切换到组合模式
+    if (newType === 'composite') {
+      setIsCompositeMode(true);
+    } else {
+      setIsCompositeMode(false);
+    }
+  };
+
+  // 切换星期几选择
+  const toggleWeekDay = (day: WeekDay) => {
+    const newWeekDays = [...weekDays];
+    const index = newWeekDays.indexOf(day);
+    
+    if (index > -1) {
+      newWeekDays.splice(index, 1);
+    } else {
+      newWeekDays.push(day);
+    }
+    
+    setWeekDays(newWeekDays);
+  };
+
+  // 获取星期几名称
+  const getWeekDayName = (day: WeekDay): string => {
+    const days = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+    return days[day];
+  };
+
+  // 获取月份周数名称
+  const getWeekOfMonthName = (week: WeekOfMonth): string => {
+    const weeks = ['第一周', '第二周', '第三周', '第四周', '最后一周'];
+    return weeks[week - 1];
+  };
+
+  // 渲染组合模式选择器
+  const renderCompositeSelector = () => {
+    return (
+      <View style={styles.compositeContainer}>
+        <Text style={[styles.title, { color: colors.text }]}>组合循环设置</Text>
+        
+        {/* 年份设置 */}
+        <View style={styles.compositeSetting}>
+          <View style={styles.switchRow}>
+            <Switch 
+              value={yearEnabled}
+              onValueChange={setYearEnabled}
+              trackColor={{ false: colors.border, true: colors.primary }}
+              thumbColor={yearEnabled ? colors.primaryLight : colors.card}
+            />
+            <Text style={[styles.label, { color: colors.text }]}>每</Text>
+            <TextInput
+              style={[
+                styles.valueInput,
+                { color: colors.text, borderColor: colors.border, backgroundColor: yearEnabled ? colors.card : colors.disabled }
+              ]}
+              value={yearValue.toString()}
+              onChangeText={(text) => setYearValue(parseInt(text) || 1)}
+              keyboardType="number-pad"
+              editable={yearEnabled}
+            />
+            <Text style={[styles.label, { color: colors.text }]}>年</Text>
+          </View>
+        </View>
+        
+        {/* 月份设置 */}
+        <View style={styles.compositeSetting}>
+          <View style={styles.switchRow}>
+            <Switch 
+              value={monthEnabled}
+              onValueChange={setMonthEnabled}
+              trackColor={{ false: colors.border, true: colors.primary }}
+              thumbColor={monthEnabled ? colors.primaryLight : colors.card}
+            />
+            <Text style={[styles.label, { color: colors.text }]}>每</Text>
+            <TextInput
+              style={[
+                styles.valueInput,
+                { color: colors.text, borderColor: colors.border, backgroundColor: monthEnabled ? colors.card : colors.disabled }
+              ]}
+              value={monthValue.toString()}
+              onChangeText={(text) => setMonthValue(parseInt(text) || 1)}
+              keyboardType="number-pad"
+              editable={monthEnabled}
+            />
+            <Text style={[styles.label, { color: colors.text }]}>月</Text>
+          </View>
+        </View>
+        
+        {/* 月中第几周设置 */}
+        <View style={styles.compositeSetting}>
+          <View style={styles.switchRow}>
+            <Switch 
+              value={weekOfMonthEnabled}
+              onValueChange={setWeekOfMonthEnabled}
+              trackColor={{ false: colors.border, true: colors.primary }}
+              thumbColor={weekOfMonthEnabled ? colors.primaryLight : colors.card}
+            />
+            <Text style={[styles.label, { color: colors.text }]}>月中</Text>
+            <RNPickerSelect
+              value={weekOfMonthValue}
+              onValueChange={(value) => value && setWeekOfMonthValue(value as WeekOfMonth)}
+              items={[
+                { label: '第一周', value: 1 },
+                { label: '第二周', value: 2 },
+                { label: '第三周', value: 3 },
+                { label: '第四周', value: 4 },
+                { label: '最后一周', value: 5 }
+              ]}
+              style={{
+                inputIOS: {
+                  color: colors.text,
+                  paddingVertical: 12,
+                  paddingHorizontal: 10,
+                  backgroundColor: weekOfMonthEnabled ? colors.card : colors.disabled,
+                  borderRadius: 8,
+                  width: 100,
+                },
+                inputAndroid: {
+                  color: colors.text,
+                  padding: 10,
+                  backgroundColor: weekOfMonthEnabled ? colors.card : colors.disabled,
+                  borderRadius: 8,
+                  width: 100,
+                },
+              }}
+              disabled={!weekOfMonthEnabled}
             />
           </View>
-          <Text style={[styles.patternText, { color: colors.text }]}>
-            {getRecurrenceDescription()}
+        </View>
+        
+        {/* 星期几设置 */}
+        <View style={styles.compositeSetting}>
+          <View style={styles.switchRow}>
+            <Switch 
+              value={weekDayEnabled}
+              onValueChange={setWeekDayEnabled}
+              trackColor={{ false: colors.border, true: colors.primary }}
+              thumbColor={weekDayEnabled ? colors.primaryLight : colors.card}
+            />
+            <Text style={[styles.label, { color: colors.text }]}>星期</Text>
+            <RNPickerSelect
+              value={weekDayValue}
+              onValueChange={(value) => value !== null && setWeekDayValue(value as WeekDay)}
+              items={[
+                { label: '星期日', value: 0 },
+                { label: '星期一', value: 1 },
+                { label: '星期二', value: 2 },
+                { label: '星期三', value: 3 },
+                { label: '星期四', value: 4 },
+                { label: '星期五', value: 5 },
+                { label: '星期六', value: 6 }
+              ]}
+              style={{
+                inputIOS: {
+                  color: colors.text,
+                  paddingVertical: 12,
+                  paddingHorizontal: 10,
+                  backgroundColor: weekDayEnabled ? colors.card : colors.disabled,
+                  borderRadius: 8,
+                  width: 100,
+                },
+                inputAndroid: {
+                  color: colors.text,
+                  padding: 10,
+                  backgroundColor: weekDayEnabled ? colors.card : colors.disabled,
+                  borderRadius: 8,
+                  width: 100,
+                },
+              }}
+              disabled={!weekDayEnabled}
+            />
+          </View>
+        </View>
+        
+        {/* 月中日设置 */}
+        <View style={styles.compositeSetting}>
+          <View style={styles.switchRow}>
+            <Switch 
+              value={monthDayEnabled}
+              onValueChange={setMonthDayEnabled}
+              trackColor={{ false: colors.border, true: colors.primary }}
+              thumbColor={monthDayEnabled ? colors.primaryLight : colors.card}
+            />
+            <Text style={[styles.label, { color: colors.text }]}>每月</Text>
+            <TextInput
+              style={[
+                styles.valueInput,
+                { color: colors.text, borderColor: colors.border, backgroundColor: monthDayEnabled ? colors.card : colors.disabled }
+              ]}
+              value={monthDayValue.toString()}
+              onChangeText={(text) => setMonthDayValue(parseInt(text) || 1)}
+              keyboardType="number-pad"
+              editable={monthDayEnabled}
+            />
+            <Text style={[styles.label, { color: colors.text }]}>日</Text>
+          </View>
+        </View>
+        
+        {/* 年中日设置 */}
+        <View style={styles.compositeSetting}>
+          <View style={styles.switchRow}>
+            <Switch 
+              value={yearDayEnabled}
+              onValueChange={setYearDayEnabled}
+              trackColor={{ false: colors.border, true: colors.primary }}
+              thumbColor={yearDayEnabled ? colors.primaryLight : colors.card}
+            />
+            <Text style={[styles.label, { color: colors.text }]}>一年中第</Text>
+            <TextInput
+              style={[
+                styles.valueInput,
+                { color: colors.text, borderColor: colors.border, backgroundColor: yearDayEnabled ? colors.card : colors.disabled }
+              ]}
+              value={yearDayValue.toString()}
+              onChangeText={(text) => setYearDayValue(parseInt(text) || 1)}
+              keyboardType="number-pad"
+              editable={yearDayEnabled}
+            />
+            <Text style={[styles.label, { color: colors.text }]}>天</Text>
+          </View>
+        </View>
+        
+        {/* 倒数设置 */}
+        <View style={styles.compositeSetting}>
+          <View style={styles.switchRow}>
+            <Switch 
+              value={isReverse}
+              onValueChange={setIsReverse}
+              trackColor={{ false: colors.border, true: colors.primary }}
+              thumbColor={isReverse ? colors.primaryLight : colors.card}
+            />
+            <Text style={[styles.label, { color: colors.text }]}>使用倒数计算</Text>
+          </View>
+        </View>
+        
+        {/* 当前组合设置的预览 */}
+        <View style={styles.preview}>
+          <Text style={[styles.previewTitle, { color: colors.primary }]}>当前设置:</Text>
+          <Text style={[styles.previewText, { color: colors.text }]}>
+            {[
+              yearEnabled ? `每${yearValue}年` : '',
+              monthEnabled ? `每${monthValue}月` : '',
+              weekOfMonthEnabled ? getWeekOfMonthName(weekOfMonthValue) : '',
+              weekDayEnabled ? getWeekDayName(weekDayValue) : '',
+              monthDayEnabled ? `每月${monthDayValue}日` : '',
+              yearDayEnabled ? `每年第${yearDayValue}天` : '',
+              isReverse ? '(倒数)' : ''
+            ].filter(Boolean).join(' ')}
           </Text>
         </View>
       </View>
+    );
+  };
 
-      <Modal
-        visible={modalVisible}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setModalVisible(false)}
-      >
-        <View style={[styles.modalContainer, { backgroundColor: 'rgba(0,0,0,0.5)' }]}>
-          <View style={[styles.modalContent, { backgroundColor: colors.background }]}>
-            <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: colors.text }]}>
-                {t.task.recurrenceSettings || '重复设置'}
-              </Text>
+  // 渲染基本模式选择器
+  const renderBasicSelector = () => {
+    return (
+      <View>
+        {/* 循环类型选择 */}
+        <View style={styles.section}>
+          <Text style={[styles.title, { color: colors.text }]}>循环类型</Text>
+          <View style={styles.typeContainer}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
               <TouchableOpacity
-                style={styles.closeButton}
-                onPress={() => setModalVisible(false)}
+                style={[
+                  styles.typeButton,
+                  type === 'daily' && styles.typeButtonActive,
+                  type === 'daily' && { backgroundColor: colors.primary },
+                ]}
+                onPress={() => handleTypeChange('daily')}
               >
-                <Ionicons name="close" size={24} color={colors.text} />
+                <Text style={[
+                  styles.typeText,
+                  type === 'daily' && styles.typeTextActive,
+                  { color: type === 'daily' ? '#fff' : colors.text }
+                ]}>天</Text>
               </TouchableOpacity>
-            </View>
-            
-            {renderModalContent()}
+              
+              <TouchableOpacity
+                style={[
+                  styles.typeButton,
+                  type === 'weekly' && styles.typeButtonActive,
+                  type === 'weekly' && { backgroundColor: colors.primary },
+                ]}
+                onPress={() => handleTypeChange('weekly')}
+              >
+                <Text style={[
+                  styles.typeText,
+                  type === 'weekly' && styles.typeTextActive,
+                  { color: type === 'weekly' ? '#fff' : colors.text }
+                ]}>周</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={[
+                  styles.typeButton,
+                  type === 'monthly' && styles.typeButtonActive,
+                  type === 'monthly' && { backgroundColor: colors.primary },
+                ]}
+                onPress={() => handleTypeChange('monthly')}
+              >
+                <Text style={[
+                  styles.typeText,
+                  type === 'monthly' && styles.typeTextActive,
+                  { color: type === 'monthly' ? '#fff' : colors.text }
+                ]}>月</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={[
+                  styles.typeButton,
+                  type === 'yearly' && styles.typeButtonActive,
+                  type === 'yearly' && { backgroundColor: colors.primary },
+                ]}
+                onPress={() => handleTypeChange('yearly')}
+              >
+                <Text style={[
+                  styles.typeText,
+                  type === 'yearly' && styles.typeTextActive,
+                  { color: type === 'yearly' ? '#fff' : colors.text }
+                ]}>年</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={[
+                  styles.typeButton,
+                  type === 'weekOfMonth' && styles.typeButtonActive,
+                  type === 'weekOfMonth' && { backgroundColor: colors.primary },
+                ]}
+                onPress={() => handleTypeChange('weekOfMonth')}
+              >
+                <Text style={[
+                  styles.typeText,
+                  type === 'weekOfMonth' && styles.typeTextActive,
+                  { color: type === 'weekOfMonth' ? '#fff' : colors.text }
+                ]}>月中周</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={[
+                  styles.typeButton,
+                  type === 'custom' && styles.typeButtonActive,
+                  type === 'custom' && { backgroundColor: colors.primary },
+                ]}
+                onPress={() => handleTypeChange('custom')}
+              >
+                <Text style={[
+                  styles.typeText,
+                  type === 'custom' && styles.typeTextActive,
+                  { color: type === 'custom' ? '#fff' : colors.text }
+                ]}>自定义</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={[
+                  styles.typeButton,
+                  type === 'composite' && styles.typeButtonActive,
+                  type === 'composite' && { backgroundColor: colors.primary },
+                ]}
+                onPress={() => handleTypeChange('composite')}
+              >
+                <Text style={[
+                  styles.typeText,
+                  type === 'composite' && styles.typeTextActive,
+                  { color: type === 'composite' ? '#fff' : colors.text }
+                ]}>组合模式</Text>
+              </TouchableOpacity>
+            </ScrollView>
           </View>
         </View>
-      </Modal>
+
+        {/* 循环值设置 */}
+        {type !== 'weekOfMonth' && type !== 'composite' && (
+          <View style={styles.section}>
+            <Text style={[styles.title, { color: colors.text }]}>
+              {type === 'daily' && '间隔天数'}
+              {type === 'weekly' && '间隔周数'}
+              {type === 'monthly' && '间隔月数'}
+              {type === 'yearly' && '间隔年数'}
+              {type === 'custom' && '循环间隔'}
+            </Text>
+            
+            <View style={styles.valueContainer}>
+              <TextInput
+                style={[styles.valueInput, { color: colors.text, borderColor: colors.border }]}
+                value={recurrenceValue.toString()}
+                onChangeText={(text) => setRecurrenceValue(parseInt(text) || 1)}
+                keyboardType="number-pad"
+              />
+              
+              {type === 'custom' && (
+                <RNPickerSelect
+                  value={recurrenceUnit}
+                  onValueChange={(value) => value && setRecurrenceUnit(value as RecurrenceUnit)}
+                  items={[
+                    { label: '天', value: 'days' },
+                    { label: '周', value: 'weeks' },
+                    { label: '月', value: 'months' },
+                    { label: '年', value: 'years' }
+                  ]}
+                  style={{
+                    inputIOS: {
+                      color: colors.text,
+                      paddingVertical: 12,
+                      paddingHorizontal: 10,
+                      backgroundColor: colors.card,
+                      borderRadius: 8,
+                      width: 100,
+                    },
+                    inputAndroid: {
+                      color: colors.text,
+                      padding: 10,
+                      backgroundColor: colors.card,
+                      borderRadius: 8,
+                      width: 100,
+                    },
+                  }}
+                />
+              )}
+              
+              <Text style={[styles.unitText, { color: colors.text }]}>
+                {type === 'daily' && '天'}
+                {type === 'weekly' && '周'}
+                {type === 'monthly' && '月'}
+                {type === 'yearly' && '年'}
+                {type === 'custom' && (
+                  recurrenceUnit === 'days' ? '天' :
+                  recurrenceUnit === 'weeks' ? '周' :
+                  recurrenceUnit === 'months' ? '月' : '年'
+                )}
+              </Text>
+            </View>
+          </View>
+        )}
+        
+        {/* 星期几选择 (仅适用于每周) */}
+        {type === 'weekly' && (
+          <View style={styles.section}>
+            <Text style={[styles.title, { color: colors.text }]}>选择星期几</Text>
+            <View style={styles.weekDaysContainer}>
+              {[0, 1, 2, 3, 4, 5, 6].map((day) => (
+                <TouchableOpacity
+                  key={day}
+                  style={[
+                    styles.weekDayButton,
+                    weekDay === day && styles.weekDayButtonActive,
+                    { borderColor: colors.border, backgroundColor: weekDay === day ? colors.primary : colors.card }
+                  ]}
+                  onPress={() => setWeekDay(day as WeekDay)}
+                >
+                  <Text style={[
+                    styles.weekDayText,
+                    { color: weekDay === day ? '#fff' : colors.text }
+                  ]}>
+                    {['日', '一', '二', '三', '四', '五', '六'][day]}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        )}
+        
+        {/* 每月几号 (仅适用于每月) */}
+        {type === 'monthly' && (
+          <View style={styles.section}>
+            <Text style={[styles.title, { color: colors.text }]}>每月几号</Text>
+            <TextInput
+              style={[styles.valueInput, { color: colors.text, borderColor: colors.border }]}
+              value={monthDay !== undefined ? monthDay.toString() : '1'}
+              onChangeText={(text) => {
+                const day = parseInt(text);
+                setMonthDay(day > 0 && day <= 31 ? day : 1);
+              }}
+              keyboardType="number-pad"
+              placeholder="1-31"
+              placeholderTextColor={colors.subText}
+            />
+          </View>
+        )}
+        
+        {/* 每月第几周的星期几 (仅适用于 weekOfMonth) */}
+        {type === 'weekOfMonth' && (
+          <View>
+            <View style={styles.section}>
+              <Text style={[styles.title, { color: colors.text }]}>月份</Text>
+              <TextInput
+                style={[styles.valueInput, { color: colors.text, borderColor: colors.border }]}
+                value={month !== undefined ? month.toString() : '1'}
+                onChangeText={(text) => {
+                  const m = parseInt(text);
+                  setMonth(m > 0 && m <= 12 ? m : 1);
+                }}
+                keyboardType="number-pad"
+                placeholder="1-12"
+                placeholderTextColor={colors.subText}
+              />
+            </View>
+            
+            <View style={styles.section}>
+              <Text style={[styles.title, { color: colors.text }]}>第几周</Text>
+              <RNPickerSelect
+                value={weekOfMonth}
+                onValueChange={(value) => value && setWeekOfMonth(value as WeekOfMonth)}
+                items={[
+                  { label: '第一周', value: 1 },
+                  { label: '第二周', value: 2 },
+                  { label: '第三周', value: 3 },
+                  { label: '第四周', value: 4 },
+                  { label: '最后一周', value: 5 }
+                ]}
+                style={{
+                  inputIOS: {
+                    color: colors.text,
+                    paddingVertical: 12,
+                    paddingHorizontal: 10,
+                    backgroundColor: colors.card,
+                    borderRadius: 8,
+                    width: 120,
+                  },
+                  inputAndroid: {
+                    color: colors.text,
+                    padding: 10,
+                    backgroundColor: colors.card,
+                    borderRadius: 8,
+                    width: 120,
+                  },
+                }}
+              />
+            </View>
+            
+            <View style={styles.section}>
+              <Text style={[styles.title, { color: colors.text }]}>星期几</Text>
+              <View style={styles.weekDaysContainer}>
+                {[0, 1, 2, 3, 4, 5, 6].map((day) => (
+                  <TouchableOpacity
+                    key={day}
+                    style={[
+                      styles.weekDayButton,
+                      weekDay === day && styles.weekDayButtonActive,
+                      { borderColor: colors.border, backgroundColor: weekDay === day ? colors.primary : colors.card }
+                    ]}
+                    onPress={() => setWeekDay(day as WeekDay)}
+                  >
+                    <Text style={[
+                      styles.weekDayText,
+                      { color: weekDay === day ? '#fff' : colors.text }
+                    ]}>
+                      {['日', '一', '二', '三', '四', '五', '六'][day]}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          </View>
+        )}
+      </View>
+    );
+  };
+
+  return (
+    <View style={[
+      styles.container,
+      fullScreen && styles.fullScreenContainer,
+      { backgroundColor: colors.background }
+    ]}>
+      {onClose && (
+        <TouchableOpacity style={styles.closeButton} onPress={onClose}>
+          <Ionicons name="close" size={24} color={colors.text} />
+        </TouchableOpacity>
+      )}
+      
+      <ScrollView 
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* 切换器 - 基本模式 vs 组合模式 */}
+        <View style={styles.modeSelector}>
+          <TouchableOpacity
+            style={[
+              styles.modeButton,
+              !isCompositeMode && styles.modeButtonActive,
+              { backgroundColor: !isCompositeMode ? colors.primary : colors.card }
+            ]}
+            onPress={() => setIsCompositeMode(false)}
+          >
+            <Text style={[
+              styles.modeButtonText,
+              { color: !isCompositeMode ? '#fff' : colors.text }
+            ]}>基本模式</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity
+            style={[
+              styles.modeButton,
+              isCompositeMode && styles.modeButtonActive,
+              { backgroundColor: isCompositeMode ? colors.primary : colors.card }
+            ]}
+            onPress={() => setIsCompositeMode(true)}
+          >
+            <Text style={[
+              styles.modeButtonText,
+              { color: isCompositeMode ? '#fff' : colors.text }
+            ]}>组合模式</Text>
+          </TouchableOpacity>
+        </View>
+        
+        {isCompositeMode ? renderCompositeSelector() : renderBasicSelector()}
+      </ScrollView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
+    borderRadius: 16,
+    padding: 16,
+    marginTop: 8,
     marginBottom: 16,
   },
-  headerRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
+  fullScreenContainer: {
+    flex: 1,
+    borderRadius: 0,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: 20,
+  },
+  closeButton: {
+    alignSelf: 'flex-end',
+    padding: 8,
+  },
+  section: {
+    marginBottom: 20,
   },
   title: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: 'bold',
+    marginBottom: 12,
   },
-  selectButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 4,
-  },
-  patternDisplay: {
-    borderWidth: 1,
-    borderRadius: 8,
-    padding: 12,
-  },
-  patternRow: {
+  typeContainer: {
     flexDirection: 'row',
-    alignItems: 'center',
-  },
-  patternIconContainer: {
-    marginRight: 12,
-  },
-  patternText: {
-    fontSize: 16,
-    flex: 1,
-  },
-  modalContainer: {
-    flex: 1,
-    justifyContent: 'flex-end',
-  },
-  modalContent: {
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-    maxHeight: '60%',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-  },
-  closeButton: {
-    padding: 4,
-  },
-  modalScrollView: {
-    padding: 12,
-  },
-  section: {
-    marginBottom: 16,
-  },
-  sectionTitle: {
-    fontSize: 15,
-    fontWeight: '600',
     marginBottom: 10,
-  },
-  typeList: {
-    flexDirection: 'column',
   },
   typeButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
     borderRadius: 8,
-    marginBottom: 6,
-    backgroundColor: '#f0f0f0',
-  },
-  typeButtonActive: {
-    borderColor: 'transparent',
-  },
-  typeIcon: {
-    marginRight: 12,
-  },
-  typeText: {
-    fontSize: 16,
-    fontWeight: '500',
-  },
-  valueContainer: {
-    marginTop: 8,
-  },
-  valueBubbles: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginBottom: 16,
-  },
-  valueBubble: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#f0f0f0',
-    marginRight: 10,
-    marginBottom: 10,
-  },
-  valueBubbleActive: {
-    borderColor: 'transparent',
-  },
-  valueBubbleText: {
-    fontSize: 16,
-    fontWeight: '100',
-  },
-  customValueContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  customValueLabel: {
-    fontSize: 16,
     marginRight: 8,
   },
-  customValueInput: {
-    width: 60,
-    height: 40,
+  typeButtonActive: {
+    borderWidth: 0,
+  },
+  typeText: {
+    fontSize: 14,
+  },
+  typeTextActive: {
+    fontWeight: 'bold',
+  },
+  valueContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  valueInput: {
     borderWidth: 1,
     borderRadius: 8,
     paddingHorizontal: 12,
-    marginRight: 8,
+    paddingVertical: 8,
+    fontSize: 16,
+    width: 100,
     textAlign: 'center',
   },
   unitText: {
+    marginLeft: 12,
     fontSize: 16,
   },
-  weekDayList: {
-    marginTop: 8,
-  },
-  weekDayButton: {
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    backgroundColor: '#f0f0f0',
-    borderRadius: 8,
-    marginBottom: 8,
-  },
-  weekDayButtonActive: {
-    borderColor: 'transparent',
-  },
-  weekDayText: {
-    fontSize: 16,
-  },
-  countToggleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-    justifyContent: 'space-between',
-  },
-  dayOptions: {
-    flexDirection: 'row',
-    flexWrap: 'nowrap',
-  },
-  dayButton: {
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    backgroundColor: '#f0f0f0',
-    borderRadius: 8,
-    marginRight: 8,
-    marginBottom: 8,
-  },
-  dayButtonActive: {
-    borderColor: 'transparent',
-  },
-  dayButtonText: {
-    fontSize: 14,
-  },
-  monthOptions: {
-    flexDirection: 'row',
-    flexWrap: 'nowrap',
-  },
-  monthButton: {
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    backgroundColor: '#f0f0f0',
-    borderRadius: 8,
-    marginRight: 8,
-    marginBottom: 8,
-  },
-  monthButtonActive: {
-    borderColor: 'transparent',
-  },
-  monthButtonText: {
-    fontSize: 14,
-  },
-  weekOfMonthOptions: {
+  weekDaysContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
   },
-  weekOfMonthButton: {
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    backgroundColor: '#f0f0f0',
-    borderRadius: 8,
+  weekDayButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    borderWidth: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
     marginRight: 8,
     marginBottom: 8,
   },
-  weekOfMonthButtonActive: {
-    borderColor: 'transparent',
+  weekDayButtonActive: {
+    borderWidth: 0,
   },
-  weekOfMonthButtonText: {
+  weekDayText: {
     fontSize: 14,
   },
-  summarySection: {
-    backgroundColor: '#f8f8f8',
+  previewContainer: {
+    marginTop: 16,
     padding: 12,
     borderRadius: 8,
-    marginTop: 6,
-    marginBottom: 10,
   },
-  summaryText: {
+  previewTitle: {
+    fontSize: 14,
+    marginBottom: 4,
+  },
+  previewText: {
     fontSize: 16,
-    lineHeight: 24,
   },
-  buttonContainer: {
+  // 组合模式样式
+  modeSelector: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: 16,
-    marginBottom: 12,
+    marginBottom: 16,
   },
-  button: {
+  modeButton: {
     flex: 1,
     paddingVertical: 12,
-    borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
+    borderRadius: 8,
+    marginHorizontal: 4,
   },
-  cancelButton: {
-    marginRight: 8,
-    borderWidth: 1,
+  modeButtonActive: {
+    fontWeight: 'bold',
   },
-  confirmButton: {
-    marginLeft: 8,
+  modeButtonText: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  compositeContainer: {
+    marginTop: 8,
+  },
+  compositeSetting: {
+    marginBottom: 16,
+  },
+  switchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  label: {
+    fontSize: 16,
+    marginHorizontal: 8,
+  },
+  preview: {
+    marginTop: 16,
+    padding: 12,
+    borderRadius: 8,
+    backgroundColor: 'rgba(0,0,0,0.05)',
+  },
+  previewTitle: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    marginBottom: 4,
+  },
+  previewText: {
+    fontSize: 16,
   },
 }); 

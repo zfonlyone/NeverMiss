@@ -1,6 +1,6 @@
 import { v4 as uuidv4 } from 'uuid';
 
-export type RecurrenceType = 'daily' | 'weekly' | 'monthly' | 'yearly' | 'weekOfMonth' | 'custom';
+export type RecurrenceType = 'daily' | 'weekly' | 'monthly' | 'yearly' | 'weekOfMonth' | 'custom' | 'composite';
 export type RecurrenceUnit = 'minutes' | 'hours' | 'days' | 'weeks' | 'months' | 'years';
 export type ReminderUnit = 'minutes' | 'hours' | 'days';
 export type TaskStatus = 'active' | 'inactive';
@@ -9,7 +9,15 @@ export type DateType = 'solar' | 'lunar';
 export type WeekDay = 0 | 1 | 2 | 3 | 4 | 5 | 6; // 0 = Sunday, 6 = Saturday
 export type WeekType = 'big' | 'small'; // 大周/小周
 export type WeekOfMonth = 1 | 2 | 3 | 4 | 5; // 1 = first week, 5 = last week
-export type SpecialDateType = 'holiday' | 'solarTerm' | 'custom';
+export type SpecialDateType = 'holiday' | 'solarTerm' | 'custom' | 'weekend' | 'workday';
+
+// 枚举特殊日期类型
+export enum SpecialDateEnum {
+  WEEKEND = 'weekend',     // 周末
+  WORKDAY = 'workday',     // 工作日
+  HOLIDAY = 'holiday',     // 法定节假日
+  SOLAR_TERM = 'solarTerm' // 节气日
+}
 
 export interface SpecialDate {
   id: string;
@@ -33,6 +41,33 @@ export interface RecurrencePattern {
   weekOfMonth?: WeekOfMonth; // 第几周
   isLeapMonth?: boolean; // 农历闰月
   specialDate?: SpecialDate; // 特殊日期如节假日、节气
+  isReverse?: boolean; // 是否倒数计算
+}
+
+// 组合循环模式接口
+export interface CompositeRecurrencePattern extends RecurrencePattern {
+  type: 'composite';
+  
+  // 组合模式参数
+  year?: number;         // 年份循环值
+  yearEnabled?: boolean; // 是否启用年份
+  
+  month?: number;         // 月份循环值
+  monthEnabled?: boolean; // 是否启用月份
+  
+  weekOfMonth?: WeekOfMonth; // 月中第几周
+  weekOfMonthEnabled?: boolean; // 是否启用月中周
+  
+  weekDay?: WeekDay;       // 星期几
+  weekDayEnabled?: boolean; // 是否启用星期几
+  
+  monthDay?: number;        // 月中天数
+  monthDayEnabled?: boolean; // 是否启用月中天
+  
+  yearDay?: number;         // 年中天数
+  yearDayEnabled?: boolean; // 是否启用年中天
+  
+  isReverse?: boolean;      // 是否倒数
 }
 
 export interface TaskCycle {
@@ -77,6 +112,7 @@ export interface Task {
   tags?: string[];
   backgroundColor?: string;
   specialDate?: SpecialDate; // 特殊日期
+  useDueDateToCalculate?: boolean; // 是否使用截止日期计算开始日期
 }
 
 export interface TaskWithCycles extends Task {
