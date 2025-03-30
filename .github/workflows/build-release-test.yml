@@ -81,22 +81,56 @@ jobs:
       - name: Build Release APK (unsigned)
         run: |
           cd android
-          ./gradlew assembleRelease -PreactNativeDevSupport=false -PreactNativeJsEngine=hermes --no-daemon --max-workers=2
+          # 构建标准旧架构版本（使用 JavaScriptCore）
+          ./gradlew assembleRelease \
+            -PreactNativeDevSupport=false \
+            -PreactNativeJsEngine=jsc \
+            -PnewArchEnabled=false \
+            --no-daemon \
+            --max-workers=2 \
+            --build-cache \
+            --parallel
+
+          # 构建标准新架构版本（使用 JavaScriptCore）
+          ./gradlew assembleRelease \
+            -PreactNativeDevSupport=false \
+            -PreactNativeJsEngine=jsc \
+            -PnewArchEnabled=true \
+            --no-daemon \
+            --max-workers=2 \
+            --build-cache \
+            --parallel
+
+          # 构建 Hermes 版本
+          ./gradlew assembleRelease \
+            -PreactNativeDevSupport=false \
+            -PreactNativeJsEngine=hermes \
+            -PnewArchEnabled=false \
+            --no-daemon \
+            --max-workers=2 \
+            --build-cache \
+            --parallel
 
       - name: Create build directory
         run: mkdir -p ./build
 
       - name: Copy APK to build directory
         run: |
-          mkdir -p ./build
-          find android/app/build/outputs/apk/ -name "*.apk" -type f -exec ls -la {} \;
-          cp android/app/build/outputs/apk/release/app-release.apk ./build/NeverMiss-Android-ReleaseTest.apk || cp android/app/build/outputs/apk/release/app-unsigned.apk ./build/NeverMiss-Android-ReleaseTest.apk || cp $(find android/app/build/outputs/apk/ -name "*.apk" | head -n 1) ./build/NeverMiss-Android-ReleaseTest.apk
+          # 复制标准旧架构版本APK
+          cp android/app/build/outputs/apk/release/app-release.apk ./build/NeverMiss-Android-ReleaseTest.apk
+          # 复制标准新架构版本APK
+          cp android/app/build/outputs/apk/release/app-release-newarch.apk ./build/NeverMiss-Android-ReleaseTest-newarch.apk
+          # 复制Hermes版本APK
+          cp android/app/build/outputs/apk/release/app-release-hermes.apk ./build/NeverMiss-Android-ReleaseTest-hermes.apk
 
       - name: Upload Test APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: android-release-test-app
-          path: ./build/NeverMiss-Android-ReleaseTest.apk
+          path: |
+            ./build/NeverMiss-Android-ReleaseTest.apk
+            ./build/NeverMiss-Android-ReleaseTest-newarch.apk
+            ./build/NeverMiss-Android-ReleaseTest-hermes.apk
           retention-days: 7
 
   build-ios-test:
@@ -143,13 +177,26 @@ jobs:
       - name: Build iOS App (without signing)
         run: |
           cd ios
+          # 构建真机版本
           xcodebuild -workspace NeverMiss.xcworkspace -scheme NeverMiss -configuration Release -archivePath ./build/NeverMiss.xcarchive CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" CODE_SIGN_ENTITLEMENTS="" RCT_NO_LAUNCH_PACKAGER=1 NO_FLIPPER=1 COMPILER_INDEX_STORE_ENABLE=NO -quiet archive
+          
+          # 构建多个模拟器版本
+          # iPhone 14
+          xcodebuild -workspace NeverMiss.xcworkspace -scheme NeverMiss -configuration Release -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone 14' CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" CODE_SIGN_ENTITLEMENTS="" RCT_NO_LAUNCH_PACKAGER=1 NO_FLIPPER=1 COMPILER_INDEX_STORE_ENABLE=NO RCT_ENABLE_DEV=0 RCT_ENABLE_INSPECTOR=0 -quiet build
+          # iPhone 15 Pro
+          xcodebuild -workspace NeverMiss.xcworkspace -scheme NeverMiss -configuration Release -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone 15 Pro' CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" CODE_SIGN_ENTITLEMENTS="" RCT_NO_LAUNCH_PACKAGER=1 NO_FLIPPER=1 COMPILER_INDEX_STORE_ENABLE=NO RCT_ENABLE_DEV=0 RCT_ENABLE_INSPECTOR=0 -quiet build
+          # iPhone SE (3rd generation)
+          xcodebuild -workspace NeverMiss.xcworkspace -scheme NeverMiss -configuration Release -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone SE (3rd generation)' CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" CODE_SIGN_ENTITLEMENTS="" RCT_NO_LAUNCH_PACKAGER=1 NO_FLIPPER=1 COMPILER_INDEX_STORE_ENABLE=NO RCT_ENABLE_DEV=0 RCT_ENABLE_INSPECTOR=0 -quiet build
+          # iPhone 15 Pro Max
+          xcodebuild -workspace NeverMiss.xcworkspace -scheme NeverMiss -configuration Release -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone 15 Pro Max' CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" CODE_SIGN_ENTITLEMENTS="" RCT_NO_LAUNCH_PACKAGER=1 NO_FLIPPER=1 COMPILER_INDEX_STORE_ENABLE=NO RCT_ENABLE_DEV=0 RCT_ENABLE_INSPECTOR=0 -quiet build
 
-      - name: Create unsigned IPA
+      - name: Create unsigned IPA and Simulator App
         run: |
           cd ios
           mkdir -p Payload
           mkdir -p ../build
+          
+          # 创建真机 IPA
           cp -r build/NeverMiss.xcarchive/Products/Applications/NeverMiss.app Payload/ || find . -name "*.app" -exec cp -r {} Payload/ \;
           if [ -d "Payload" ] && [ "$(ls -A Payload)" ]; then
             zip -r ../build/NeverMiss-iOS-ReleaseTest.ipa Payload
@@ -158,12 +205,48 @@ jobs:
             echo "Placeholder" > ../build/NeverMiss-iOS-ReleaseTest.ipa
           fi
           rm -rf Payload
+          
+          # 创建模拟器版本
+          mkdir -p ../build/ios-simulator-release
+          
+          # 查找并复制 iPhone 14 版本
+          IPHONE14_APP_PATH=$(find ~/Library/Developer/Xcode/DerivedData -name "NeverMiss.app" -type d | grep -v "SourcePackages" | head -n 1)
+          if [ ! -z "$IPHONE14_APP_PATH" ]; then
+            mkdir -p ../build/ios-simulator-release/iphone14
+            cp -r "$IPHONE14_APP_PATH" ../build/ios-simulator-release/iphone14/
+          fi
+          
+          # 查找并复制 iPhone 15 Pro 版本
+          IPHONE15PRO_APP_PATH=$(find ~/Library/Developer/Xcode/DerivedData -name "NeverMiss.app" -type d | grep -v "SourcePackages" | tail -n 3 | head -n 1)
+          if [ ! -z "$IPHONE15PRO_APP_PATH" ]; then
+            mkdir -p ../build/ios-simulator-release/iphone15pro
+            cp -r "$IPHONE15PRO_APP_PATH" ../build/ios-simulator-release/iphone15pro/
+          fi
+          
+          # 查找并复制 iPhone SE 版本
+          IPHONESE_APP_PATH=$(find ~/Library/Developer/Xcode/DerivedData -name "NeverMiss.app" -type d | grep -v "SourcePackages" | tail -n 2 | head -n 1)
+          if [ ! -z "$IPHONESE_APP_PATH" ]; then
+            mkdir -p ../build/ios-simulator-release/iphonese
+            cp -r "$IPHONESE_APP_PATH" ../build/ios-simulator-release/iphonese/
+          fi
+          
+          # 查找并复制 iPhone 15 Pro Max 版本
+          IPHONE15PROMAX_APP_PATH=$(find ~/Library/Developer/Xcode/DerivedData -name "NeverMiss.app" -type d | grep -v "SourcePackages" | tail -n 1)
+          if [ ! -z "$IPHONE15PROMAX_APP_PATH" ]; then
+            mkdir -p ../build/ios-simulator-release/iphone15promax
+            cp -r "$IPHONE15PROMAX_APP_PATH" ../build/ios-simulator-release/iphone15promax/
+          fi
+          
+          cd ../build
+          zip -r -y NeverMiss-iOS-Simulator-Release.zip ios-simulator-release
 
-      - name: Upload IPA artifact
+      - name: Upload IPA and Simulator artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: ios-release-test-app
-          path: ./build/NeverMiss-iOS-ReleaseTest.ipa
+          name: ios-release-test-artifacts
+          path: |
+            ./build/NeverMiss-iOS-ReleaseTest.ipa
+            ./build/NeverMiss-iOS-Simulator-Release.zip
           retention-days: 7
 
   create-test-release:
@@ -193,7 +276,7 @@ jobs:
       - name: Download iOS Test artifact
         uses: actions/download-artifact@v4
         with:
-          name: ios-release-test-app
+          name: ios-release-test-artifacts
           path: ./build
         continue-on-error: true
 
@@ -239,15 +322,52 @@ jobs:
           
           ### 下载说明
           
-          - **Android版本**: NeverMiss-Android-ReleaseTest.apk
+          - **Android 标准发布版本**: NeverMiss-Android-ReleaseTest.apk
             - 适用于Android 7.0及以上设备
             - 无签名版本，安装时需要允许未知来源应用
+            - 使用 JavaScriptCore 引擎
+            - 使用旧架构（Old Architecture）
             - 用于上架前功能测试和验证
+            - 兼容性最好，第三方库支持最完善
+          
+          - **Android 新架构发布版本**: NeverMiss-Android-ReleaseTest-newarch.apk
+            - 使用新架构（New Architecture）
+            - 使用 JavaScriptCore 引擎
+            - 相比旧架构的优势：
+              - 性能更好
+              - 内存管理更优
+              - 启动速度更快
+            - 需要注意：
+              - 部分第三方库可能不兼容
+              - 需要原生模块适配
+            - 适合测试新架构性能
+          
+          - **Android Hermes发布版本**: NeverMiss-Android-ReleaseTest-hermes.apk
+            - 使用 Hermes JavaScript 引擎
+            - 使用旧架构（Old Architecture）
+            - 相比标准版本的优势：
+              - 内存占用更少（约减少 30-50%）
+              - 启动速度更快
+              - 应用性能更好
+              - 更适合低端设备
+            - 第三方库兼容性好
+            - 适合性能测试和低端设备测试
           
           - **iOS版本**: NeverMiss-iOS-ReleaseTest.ipa
             - 无签名版本，需要使用开发工具安装
             - 可通过AltStore、Sideloadly等工具安装到测试设备
             - 用于上架前功能测试和验证
+          
+          - **iOS模拟器版本**: NeverMiss-iOS-Simulator-Release.zip
+            - 不依赖开发服务器的发布版本
+            - 包含以下设备版本：
+              - iPhone 14
+              - iPhone 15 Pro
+              - iPhone SE (3rd generation)
+              - iPhone 15 Pro Max
+            - 仅适用于macOS上的iOS模拟器
+            - 解压后，将对应设备版本的.app文件拖拽到相应的模拟器中即可安装
+            - 用于快速验证发布版本在不同设备上的表现
           
           ### 构建信息
           
@@ -269,5 +389,6 @@ jobs:
           files: |
             ./build/NeverMiss-Android-ReleaseTest.apk
             ${{ steps.check_ios_file.outputs.ios_file_exists == 'true' && './build/NeverMiss-iOS-ReleaseTest.ipa' || '' }}
+            ${{ steps.check_ios_file.outputs.ios_file_exists == 'true' && './build/NeverMiss-iOS-Simulator-Release.zip' || '' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 

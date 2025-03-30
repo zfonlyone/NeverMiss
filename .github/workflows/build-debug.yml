@@ -79,19 +79,56 @@ jobs:
       - name: Build Debug APK
         run: |
           cd android
-          ./gradlew assembleDebug -PreactNativeDevSupport=false -PreactNativeJsEngine=hermes --no-daemon --max-workers=2
+          # 构建标准旧架构版本（使用 JavaScriptCore）
+          ./gradlew assembleDebug \
+            -PreactNativeDevSupport=true \
+            -PreactNativeJsEngine=jsc \
+            -PnewArchEnabled=false \
+            --no-daemon \
+            --max-workers=2 \
+            --build-cache \
+            --parallel
+
+          # 构建标准新架构版本（使用 JavaScriptCore）
+          ./gradlew assembleDebug \
+            -PreactNativeDevSupport=true \
+            -PreactNativeJsEngine=jsc \
+            -PnewArchEnabled=true \
+            --no-daemon \
+            --max-workers=2 \
+            --build-cache \
+            --parallel
+
+          # 构建 Hermes 版本
+          ./gradlew assembleDebug \
+            -PreactNativeDevSupport=true \
+            -PreactNativeJsEngine=hermes \
+            -PnewArchEnabled=false \
+            --no-daemon \
+            --max-workers=2 \
+            --build-cache \
+            --parallel
 
       - name: Create build directory
         run: mkdir -p ./build
 
       - name: Copy APK to build directory
-        run: cp android/app/build/outputs/apk/debug/app-debug.apk ./build/NeverMiss-Android-debug.apk
+        run: |
+          # 复制标准旧架构版本APK
+          cp android/app/build/outputs/apk/debug/app-debug.apk ./build/NeverMiss-Android-debug.apk
+          # 复制标准新架构版本APK
+          cp android/app/build/outputs/apk/debug/app-debug-newarch.apk ./build/NeverMiss-Android-debug-newarch.apk
+          # 复制Hermes版本APK
+          cp android/app/build/outputs/apk/debug/app-debug-hermes.apk ./build/NeverMiss-Android-debug-hermes.apk
 
       - name: Upload Debug APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: android-debug-app
-          path: ./build/NeverMiss-Android-debug.apk
+          path: |
+            ./build/NeverMiss-Android-debug.apk
+            ./build/NeverMiss-Android-debug-newarch.apk
+            ./build/NeverMiss-Android-debug-hermes.apk
           retention-days: 7
 
   build-ios-debug:
@@ -138,21 +175,49 @@ jobs:
       - name: Build iOS App for Simulator
         run: |
           cd ios
+          # 构建 iPhone 14
           xcodebuild -workspace NeverMiss.xcworkspace -scheme NeverMiss -configuration Debug -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone 14' CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" CODE_SIGN_ENTITLEMENTS="" RCT_NO_LAUNCH_PACKAGER=1 NO_FLIPPER=1 COMPILER_INDEX_STORE_ENABLE=NO -quiet build
+          # 构建 iPhone 15 Pro
+          xcodebuild -workspace NeverMiss.xcworkspace -scheme NeverMiss -configuration Debug -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone 15 Pro' CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" CODE_SIGN_ENTITLEMENTS="" RCT_NO_LAUNCH_PACKAGER=1 NO_FLIPPER=1 COMPILER_INDEX_STORE_ENABLE=NO -quiet build
+          # 构建 iPhone SE (3rd generation)
+          xcodebuild -workspace NeverMiss.xcworkspace -scheme NeverMiss -configuration Debug -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone SE (3rd generation)' CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" CODE_SIGN_ENTITLEMENTS="" RCT_NO_LAUNCH_PACKAGER=1 NO_FLIPPER=1 COMPILER_INDEX_STORE_ENABLE=NO -quiet build
+          # 构建 iPhone 15 Pro Max
+          xcodebuild -workspace NeverMiss.xcworkspace -scheme NeverMiss -configuration Debug -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone 15 Pro Max' CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" CODE_SIGN_ENTITLEMENTS="" RCT_NO_LAUNCH_PACKAGER=1 NO_FLIPPER=1 COMPILER_INDEX_STORE_ENABLE=NO -quiet build
 
-      - name: Find and prepare iOS app
+      - name: Find and prepare iOS apps
         run: |
-          DERIVED_APP_PATH=$(find ~/Library/Developer/Xcode/DerivedData -name "NeverMiss.app" -type d | grep -v "SourcePackages" | head -n 1)
-          if [ ! -z "$DERIVED_APP_PATH" ]; then
-            mkdir -p ./build/ios-simulator
-            cp -r "$DERIVED_APP_PATH" ./build/ios-simulator/
-            cd build
-            zip -r -y NeverMiss-iOS-Simulator-debug.zip ios-simulator
-          else
-            echo "警告: 找不到iOS构建产物"
-            mkdir -p ./build
-            echo "Placeholder" > ./build/NeverMiss-iOS-Simulator-debug.zip
+          mkdir -p ./build/ios-simulator
+          
+          # 查找并复制 iPhone 14 版本
+          IPHONE14_APP_PATH=$(find ~/Library/Developer/Xcode/DerivedData -name "NeverMiss.app" -type d | grep -v "SourcePackages" | head -n 1)
+          if [ ! -z "$IPHONE14_APP_PATH" ]; then
+            mkdir -p ./build/ios-simulator/iphone14
+            cp -r "$IPHONE14_APP_PATH" ./build/ios-simulator/iphone14/
           fi
+          
+          # 查找并复制 iPhone 15 Pro 版本
+          IPHONE15PRO_APP_PATH=$(find ~/Library/Developer/Xcode/DerivedData -name "NeverMiss.app" -type d | grep -v "SourcePackages" | tail -n 3 | head -n 1)
+          if [ ! -z "$IPHONE15PRO_APP_PATH" ]; then
+            mkdir -p ./build/ios-simulator/iphone15pro
+            cp -r "$IPHONE15PRO_APP_PATH" ./build/ios-simulator/iphone15pro/
+          fi
+          
+          # 查找并复制 iPhone SE 版本
+          IPHONESE_APP_PATH=$(find ~/Library/Developer/Xcode/DerivedData -name "NeverMiss.app" -type d | grep -v "SourcePackages" | tail -n 2 | head -n 1)
+          if [ ! -z "$IPHONESE_APP_PATH" ]; then
+            mkdir -p ./build/ios-simulator/iphonese
+            cp -r "$IPHONESE_APP_PATH" ./build/ios-simulator/iphonese/
+          fi
+          
+          # 查找并复制 iPhone 15 Pro Max 版本
+          IPHONE15PROMAX_APP_PATH=$(find ~/Library/Developer/Xcode/DerivedData -name "NeverMiss.app" -type d | grep -v "SourcePackages" | tail -n 1)
+          if [ ! -z "$IPHONE15PROMAX_APP_PATH" ]; then
+            mkdir -p ./build/ios-simulator/iphone15promax
+            cp -r "$IPHONE15PROMAX_APP_PATH" ./build/ios-simulator/iphone15promax/
+          fi
+          
+          cd build
+          zip -r -y NeverMiss-iOS-Simulator-debug.zip ios-simulator
 
       - name: Upload iOS simulator app artifact
         uses: actions/upload-artifact@v4
@@ -240,16 +305,53 @@ jobs:
           
           ### 下载说明
           
-          - **Android 调试版本**: NeverMiss-Android-debug.apk
+          - **Android 标准调试版本**: NeverMiss-Android-debug.apk
             - 适用于Android 7.0及以上设备
             - 需连接开发环境运行
             - 开发调试版本，需要PC运行相关服务使用
+            - 使用 JavaScriptCore 引擎
+            - 使用旧架构（Old Architecture）
+            - 支持热重载和调试功能
+            - 包含开发服务器支持
+            - 适合日常开发调试使用
+            - 兼容性最好，第三方库支持最完善
+          
+          - **Android 新架构调试版本**: NeverMiss-Android-debug-newarch.apk
+            - 使用新架构（New Architecture）
+            - 使用 JavaScriptCore 引擎
+            - 相比旧架构的优势：
+              - 性能更好
+              - 内存管理更优
+              - 启动速度更快
+            - 需要注意：
+              - 部分第三方库可能不兼容
+              - 需要原生模块适配
+              - 调试工具支持有限
+            - 适合测试新架构性能
+          
+          - **Android Hermes调试版本**: NeverMiss-Android-debug-hermes.apk
+            - 使用 Hermes JavaScript 引擎
+            - 使用旧架构（Old Architecture）
+            - 相比标准版本的优势：
+              - 内存占用更少（约减少 30-50%）
+              - 启动速度更快
+              - 应用性能更好
+              - 更适合低端设备
+            - 同样需要开发服务器支持
+            - 适合性能测试和低端设备测试
+            - 第三方库兼容性好
           
           - **iOS模拟器调试版本**: NeverMiss-iOS-Simulator-debug.zip
+            - 包含以下设备版本：
+              - iPhone 14
+              - iPhone 15 Pro
+              - iPhone SE (3rd generation)
+              - iPhone 15 Pro Max
             - 仅适用于macOS上的iOS模拟器
             - 需要Xcode和iOS模拟器环境
-            - 需要PC运行相关服务使用
-            - 解压后，拖拽.app文件到模拟器中安装
+            - 需要PC运行开发服务器
+            - 解压后，将对应设备版本的.app文件拖拽到相应的模拟器中即可安装
+            - 用于开发调试和功能测试
           
           ### 构建信息
           
@@ -271,6 +373,8 @@ jobs:
           body_path: ./build/RELEASE_NOTES.md
           files: |
             ./build/NeverMiss-Android-debug.apk
+            ./build/NeverMiss-Android-debug-newarch.apk
+            ./build/NeverMiss-Android-debug-hermes.apk
             ${{ steps.check_ios_file.outputs.ios_file_exists == 'true' && './build/NeverMiss-iOS-Simulator-debug.zip' || '' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 

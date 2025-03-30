@@ -1,0 +1,29 @@
+  - name: Build iOS App for Simulator (Release)
+    run: |
+      cd ios
+      # 为模拟器构建发布版本
+      xcodebuild -workspace NeverMiss.xcworkspace \
+        -scheme NeverMiss \
+        -configuration Release \
+        -sdk iphonesimulator \
+        -destination 'platform=iOS Simulator,name=iPhone 14' \
+        CODE_SIGNING_ALLOWED=NO \
+        CODE_SIGNING_REQUIRED=NO \
+        CODE_SIGN_IDENTITY="" \
+        CODE_SIGN_ENTITLEMENTS="" \
+        RCT_NO_LAUNCH_PACKAGER=1 \
+        NO_FLIPPER=1 \
+        COMPILER_INDEX_STORE_ENABLE=NO \
+        RCT_ENABLE_DEV=0 \
+        RCT_ENABLE_INSPECTOR=0 \
+        -quiet build
+
+  - name: Package Simulator App
+    run: |
+      DERIVED_APP_PATH=$(find ~/Library/Developer/Xcode/DerivedData -name "NeverMiss.app" -type d | grep -v "SourcePackages" | head -n 1)
+      if [ ! -z "$DERIVED_APP_PATH" ]; then
+        mkdir -p ./build/ios-simulator-release
+        cp -r "$DERIVED_APP_PATH" ./build/ios-simulator-release/
+        cd build
+        zip -r -y NeverMiss-iOS-Simulator-Release.zip ios-simulator-release
+      fi 
