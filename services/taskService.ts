@@ -1189,10 +1189,29 @@ export const cancelTask = async (taskId: number): Promise<void> => {
  */
 export const getCompletedTasks = async (): Promise<Task[]> => {
   try {
+    // 方法1：检查当前周期是否完成
     const allTasks = await getAllTasks(true, true);
-    return allTasks.filter(task => 
+    const tasksWithCompletedCurrentCycle = allTasks.filter(task => 
       task.currentCycle && task.currentCycle.isCompleted
     );
+    
+    // 方法2：使用任务历史记录查找已完成的任务
+    const completedHistory = await getHistoryByAction('completed');
+    const completedTaskIds = new Set(completedHistory.map(history => history.taskId));
+    
+    // 从所有任务中查找历史记录中标记为已完成的任务
+    const tasksWithCompletedHistory = allTasks.filter(task => 
+      completedTaskIds.has(task.id)
+    );
+    
+    // 合并两种方法找到的任务，去重
+    const completedTasksSet = new Set([
+      ...tasksWithCompletedCurrentCycle.map(task => task.id),
+      ...tasksWithCompletedHistory.map(task => task.id)
+    ]);
+    
+    // 返回所有已完成的任务
+    return allTasks.filter(task => completedTasksSet.has(task.id));
   } catch (error) {
     console.error('获取已完成任务时出错:', error);
     throw error;
@@ -1250,7 +1269,8 @@ export const getTaskHistoryByAction = async (action: string): Promise<Array<{ ta
  */
 export const getCompletedTaskHistory = async (): Promise<Array<{ task: Task; history: TaskHistory }>> => {
   try {
-    const history = await getTaskHistoryByAction('complete');
+    // 将'complete'改为'completed'以匹配completeTask中的动作类型
+    const history = await getTaskHistoryByAction('completed');
     return history;
   } catch (error) {
     console.error('获取已完成任务历史时出错:', error);
