@@ -171,7 +171,7 @@ export default function TaskFormScreen({ taskId }: TaskFormScreenProps) {
             lunarDueDate = Lunar.fromYmd(
               lunarStartDateObj.getYear() + Math.floor(monthsToAdd / 12),
               ((lunarStartDateObj.getMonth() + monthsToAdd - 1) % 12) + 1,
-              Math.min(lunarStartDateObj.getDay(), Lunar.getDaysOfMonth(
+              Math.min(lunarService.getDay(lunarStartDateObj), lunarService.getDaysOfMonth(
                 lunarStartDateObj.getYear() + Math.floor((lunarStartDateObj.getMonth() + monthsToAdd - 1) / 12),
                 ((lunarStartDateObj.getMonth() + monthsToAdd - 1) % 12) + 1
               ))
@@ -182,7 +182,7 @@ export default function TaskFormScreen({ taskId }: TaskFormScreenProps) {
             lunarDueDate = Lunar.fromYmd(
               lunarStartDateObj.getYear() + value,
               lunarStartDateObj.getMonth(),
-              Math.min(lunarStartDateObj.getDay(), Lunar.getDaysOfMonth(
+              Math.min(lunarService.getDay(lunarStartDateObj), lunarService.getDaysOfMonth(
                 lunarStartDateObj.getYear() + value,
                 lunarStartDateObj.getMonth()
               ))
@@ -194,7 +194,7 @@ export default function TaskFormScreen({ taskId }: TaskFormScreenProps) {
             lunarDueDate = Lunar.fromYmd(
               lunarStartDateObj.getYear() + Math.floor(nextMonthMonthsToAdd / 12),
               ((lunarStartDateObj.getMonth() + nextMonthMonthsToAdd - 1) % 12) + 1,
-              Math.min(lunarStartDateObj.getDay(), Lunar.getDaysOfMonth(
+              Math.min(lunarService.getDay(lunarStartDateObj), lunarService.getDaysOfMonth(
                 lunarStartDateObj.getYear() + Math.floor((lunarStartDateObj.getMonth() + nextMonthMonthsToAdd - 1) / 12),
                 ((lunarStartDateObj.getMonth() + nextMonthMonthsToAdd - 1) % 12) + 1
               ))
@@ -210,7 +210,7 @@ export default function TaskFormScreen({ taskId }: TaskFormScreenProps) {
               lunarDueDate = Lunar.fromYmd(
                 lunarStartDateObj.getYear() + Math.floor(customMonthsToAdd / 12),
                 ((lunarStartDateObj.getMonth() + customMonthsToAdd - 1) % 12) + 1,
-                Math.min(lunarStartDateObj.getDay(), Lunar.getDaysOfMonth(
+                Math.min(lunarService.getDay(lunarStartDateObj), lunarService.getDaysOfMonth(
                   lunarStartDateObj.getYear() + Math.floor((lunarStartDateObj.getMonth() + customMonthsToAdd - 1) / 12),
                   ((lunarStartDateObj.getMonth() + customMonthsToAdd - 1) % 12) + 1
                 ))
@@ -219,7 +219,7 @@ export default function TaskFormScreen({ taskId }: TaskFormScreenProps) {
               lunarDueDate = Lunar.fromYmd(
                 lunarStartDateObj.getYear() + value,
                 lunarStartDateObj.getMonth(),
-                Math.min(lunarStartDateObj.getDay(), Lunar.getDaysOfMonth(
+                Math.min(lunarService.getDay(lunarStartDateObj), lunarService.getDaysOfMonth(
                   lunarStartDateObj.getYear() + value,
                   lunarStartDateObj.getMonth()
                 ))
@@ -333,7 +333,7 @@ export default function TaskFormScreen({ taskId }: TaskFormScreenProps) {
             lunarStartDate = Lunar.fromYmd(
               newYear,
               newMonth,
-              Math.min(lunarDueDateObj.getDay(), Lunar.getDaysOfMonth(newYear, newMonth))
+              Math.min(lunarService.getDay(lunarDueDateObj), lunarService.getDaysOfMonth(newYear, newMonth))
             );
             break;
           case 'yearly':
@@ -341,7 +341,7 @@ export default function TaskFormScreen({ taskId }: TaskFormScreenProps) {
             lunarStartDate = Lunar.fromYmd(
               lunarDueDateObj.getYear() - value,
               lunarDueDateObj.getMonth(),
-              Math.min(lunarDueDateObj.getDay(), Lunar.getDaysOfMonth(
+              Math.min(lunarService.getDay(lunarDueDateObj), lunarService.getDaysOfMonth(
                 lunarDueDateObj.getYear() - value,
                 lunarDueDateObj.getMonth()
               ))
@@ -361,7 +361,7 @@ export default function TaskFormScreen({ taskId }: TaskFormScreenProps) {
             lunarStartDate = Lunar.fromYmd(
               prevYear,
               prevMonth,
-              Math.min(lunarDueDateObj.getDay(), Lunar.getDaysOfMonth(prevYear, prevMonth))
+              Math.min(lunarService.getDay(lunarDueDateObj), lunarService.getDaysOfMonth(prevYear, prevMonth))
             );
             break;
           case 'custom':
@@ -382,13 +382,13 @@ export default function TaskFormScreen({ taskId }: TaskFormScreenProps) {
               lunarStartDate = Lunar.fromYmd(
                 customNewYear,
                 customNewMonth,
-                Math.min(lunarDueDateObj.getDay(), Lunar.getDaysOfMonth(customNewYear, customNewMonth))
+                Math.min(lunarService.getDay(lunarDueDateObj), lunarService.getDaysOfMonth(customNewYear, customNewMonth))
               );
             } else if (recurrencePattern.unit === 'years') {
               lunarStartDate = Lunar.fromYmd(
                 lunarDueDateObj.getYear() - value,
                 lunarDueDateObj.getMonth(),
-                Math.min(lunarDueDateObj.getDay(), Lunar.getDaysOfMonth(
+                Math.min(lunarService.getDay(lunarDueDateObj), lunarService.getDaysOfMonth(
                   lunarDueDateObj.getYear() - value,
                   lunarDueDateObj.getMonth()
                 ))
@@ -651,18 +651,31 @@ export default function TaskFormScreen({ taskId }: TaskFormScreenProps) {
     
     if (dateType === 'lunar') {
       try {
-        // 使用农历显示日期
-        const lunar = Lunar.fromDate(date);
-        return `${lunar.getYearInGanZhi()}年(${lunar.getYearShengXiao()})${lunar.getMonthInChinese()}月${lunar.getDayInChinese()}`;
+        // 使用农历显示日期（完全使用lunarService处理）
+        const lunarInfo = lunarService.getFullLunarDate(date);
+        
+        // 检查是否获取到所有需要的农历信息
+        if (lunarInfo.yearInGanZhi === '未知' || lunarInfo.monthInChinese === '未知' || lunarInfo.dayInChinese === '未知') {
+          console.warn('农历信息不完整，降级使用公历显示');
+          return date.toLocaleDateString(undefined, { 
+            year: 'numeric', 
+            month: 'short', 
+            day: 'numeric' 
+          }) + ' (农历转换失败)';
+        }
+        
+        return `${lunarInfo.yearInGanZhi}年(${lunarInfo.zodiac})${lunarInfo.monthInChinese}月${lunarInfo.dayInChinese}`;
       } catch (error) {
         console.error('农历日期格式化错误:', error);
+        // 降级为公历显示，添加提示信息
         return date.toLocaleDateString(undefined, { 
           year: 'numeric', 
           month: 'short', 
           day: 'numeric' 
-        });
+        }) + ' (农历转换失败)';
       }
     }
+    
     // 公历显示不变
     return date.toLocaleDateString(undefined, { 
       year: 'numeric', 
@@ -695,9 +708,6 @@ export default function TaskFormScreen({ taskId }: TaskFormScreenProps) {
     
     if (dateType === 'lunar' && date instanceof Date) {
       try {
-        // 创建一个新的农历对象
-        const lunar = Lunar.fromDate(date);
-        
         // 获取时辰名称 (采用农历的时辰表示)
         const timeIndex = Math.floor(hour / 2);
         
@@ -716,12 +726,62 @@ export default function TaskFormScreen({ taskId }: TaskFormScreenProps) {
     return timeString;
   };
 
+  // 农历日期处理兜底函数
+  const safeLunarHandling = () => {
+    try {
+      // 检查农历库API是否正常
+      const testLunar = lunarService.safeLunarFromDate(new Date());
+      
+      if (!testLunar) {
+        // 如果无法创建lunar对象，尝试使用公历模式并通知用户
+        console.warn('农历库API可能有问题，切换到公历模式');
+        if (dateType === 'lunar') {
+          Alert.alert(
+            '农历模式暂不可用', 
+            '系统无法正确加载农历日期库，已临时切换到公历模式。',
+            [{ text: '确定', onPress: () => setDateType('solar') }]
+          );
+          return false;
+        }
+      }
+      return true;
+    } catch (error) {
+      console.error('农历功能检查失败:', error);
+      if (dateType === 'lunar') {
+        Alert.alert(
+          '农历模式暂不可用', 
+          '系统无法正确加载农历日期库，已临时切换到公历模式。',
+          [{ text: '确定', onPress: () => setDateType('solar') }]
+        );
+      }
+      return false;
+    }
+  };
+  
+  // 初始化时检查一次农历库
+  useEffect(() => {
+    if (dateType === 'lunar') {
+      safeLunarHandling();
+    }
+  }, [dateType]);
+
   const handleCancel = () => {
     router.back();
   };
 
   const handleDateTypeToggle = () => {
     const newDateType = dateType === 'solar' ? 'lunar' : 'solar';
+    
+    // 如果切换到农历，先检查农历库是否可用
+    if (newDateType === 'lunar') {
+      const lunarAvailable = safeLunarHandling();
+      if (!lunarAvailable) {
+        // 如果农历库不可用，保持在公历模式
+        console.warn('农历库不可用，保持在公历模式');
+        return;
+      }
+    }
+    
     setDateType(newDateType);
     setIsLunar(newDateType === 'lunar');
   };

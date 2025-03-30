@@ -12,6 +12,9 @@ export interface LunarDate {
   day: number;
   isLeap: boolean;
   zodiac: string;
+  yearInGanZhi?: string;
+  monthInChinese?: string;
+  dayInChinese?: string;
 }
 
 /**
@@ -181,6 +184,276 @@ export function parseLunarDate(lunarDateString: string): { year: number; month: 
   return { year, month, day, isLeap };
 }
 
+/**
+ * 获取农历对象的日期
+ * @param lunar 农历对象
+ * @returns 日期数字
+ */
+export function getDay(lunar: any): number {
+  if (!lunar) return 1;
+  // 检查lunar对象是否有效并且有getDay方法
+  if (typeof lunar.getDay === 'function') {
+    return lunar.getDay();
+  }
+  // 如果没有getDay方法，尝试获取day属性
+  if (lunar.day !== undefined) {
+    return lunar.day;
+  }
+  // 兜底返回1
+  return 1;
+}
+
+/**
+ * 获取农历月份的天数
+ * @param year 农历年
+ * @param month 农历月
+ * @returns 该月天数
+ */
+export function getDaysOfMonth(year: number, month: number): number {
+  try {
+    // 创建该月初一的农历对象
+    const lunar = Lunar.fromYmd(year, month, 1);
+    // 获取该月的天数
+    if (typeof lunar.getDaysOfMonth === 'function') {
+      return lunar.getDaysOfMonth();
+    }
+    // 兜底方案，使用LunarMonth获取月天数
+    const LunarMonth = require('lunar-javascript').LunarMonth;
+    const lunarMonth = LunarMonth.fromYm(year, month);
+    return lunarMonth ? lunarMonth.getDayCount() : 30;
+  } catch (error) {
+    console.error('获取农历月天数出错:', error);
+    // 兜底返回30天
+    return 30;
+  }
+}
+
+/**
+ * 获取指定农历对象所在月的天数
+ * @param lunar 农历对象
+ * @returns 月天数
+ */
+export function getMonthDays(lunar: any): number {
+  if (!lunar) return 30;
+  
+  try {
+    // 优先使用对象自身的getDaysOfMonth方法
+    if (typeof lunar.getDaysOfMonth === 'function') {
+      return lunar.getDaysOfMonth();
+    }
+    
+    // 退化方案：使用年月获取
+    if (lunar.getYear && lunar.getMonth) {
+      return getDaysOfMonth(lunar.getYear(), lunar.getMonth());
+    }
+    
+    // 最后兜底
+    return 30;
+  } catch (error) {
+    console.error('获取农历月天数出错:', error);
+    return 30;
+  }
+}
+
+/**
+ * 获取年干支表示
+ * @param lunar 农历对象或年份
+ * @returns 干支纪年
+ */
+export function getYearInGanZhi(lunar: any): string {
+  try {
+    // 如果是一个Lunar对象
+    if (typeof lunar.getYearInGanZhi === 'function') {
+      return lunar.getYearInGanZhi();
+    }
+    
+    // 如果是一个数字年份
+    if (typeof lunar === 'number') {
+      const lunarObj = Lunar.fromYmd(lunar, 1, 1);
+      return lunarObj.getYearInGanZhi();
+    }
+    
+    // 如果是一个包含年份的对象
+    if (lunar && lunar.year) {
+      const lunarObj = Lunar.fromYmd(lunar.year, 1, 1);
+      return lunarObj.getYearInGanZhi();
+    }
+    
+    // 默认返回当前年份的干支
+    const currentYear = new Date().getFullYear();
+    const lunarObj = Lunar.fromYmd(currentYear, 1, 1);
+    return lunarObj.getYearInGanZhi();
+  } catch (error) {
+    console.error('获取年干支出错:', error);
+    return '未知';
+  }
+}
+
+/**
+ * 获取月份中文表示
+ * @param lunar 农历对象或月份
+ * @returns 中文月份名称
+ */
+export function getMonthInChinese(lunar: any): string {
+  try {
+    // 如果是一个Lunar对象
+    if (typeof lunar.getMonthInChinese === 'function') {
+      return lunar.getMonthInChinese();
+    }
+    
+    // 如果是一个数字月份
+    if (typeof lunar === 'number' && lunar >= 1 && lunar <= 12) {
+      const lunarObj = Lunar.fromYmd(2024, lunar, 1);
+      return lunarObj.getMonthInChinese();
+    }
+    
+    // 如果是一个包含月份的对象
+    if (lunar && lunar.month && lunar.month >= 1 && lunar.month <= 12) {
+      const year = lunar.year || 2024;
+      const lunarObj = Lunar.fromYmd(year, lunar.month, 1);
+      return lunarObj.getMonthInChinese();
+    }
+    
+    // 默认返回
+    return '未知';
+  } catch (error) {
+    console.error('获取月份中文表示出错:', error);
+    return '未知';
+  }
+}
+
+/**
+ * 获取日期中文表示
+ * @param lunar 农历对象或日期
+ * @returns 中文日期名称
+ */
+export function getDayInChinese(lunar: any): string {
+  try {
+    // 如果是一个Lunar对象
+    if (typeof lunar.getDayInChinese === 'function') {
+      return lunar.getDayInChinese();
+    }
+    
+    // 如果是一个数字日期
+    if (typeof lunar === 'number' && lunar >= 1 && lunar <= 30) {
+      const lunarObj = Lunar.fromYmd(2024, 1, lunar);
+      return lunarObj.getDayInChinese();
+    }
+    
+    // 如果是一个包含日期的对象
+    if (lunar && lunar.day && lunar.day >= 1 && lunar.day <= 30) {
+      const year = lunar.year || 2024;
+      const month = lunar.month || 1;
+      const lunarObj = Lunar.fromYmd(year, month, lunar.day);
+      return lunarObj.getDayInChinese();
+    }
+    
+    // 默认返回
+    return '未知';
+  } catch (error) {
+    console.error('获取日期中文表示出错:', error);
+    return '未知';
+  }
+}
+
+/**
+ * 直接从公历日期创建Lunar对象的安全方法
+ * @param date 公历日期
+ * @returns Lunar对象或null
+ */
+export function safeLunarFromDate(date: Date): any {
+  try {
+    // 先尝试标准路径：Solar.fromDate(date).getLunar()
+    const solar = Solar.fromDate(date);
+    if (solar && typeof solar.getLunar === 'function') {
+      const lunar = solar.getLunar();
+      if (lunar) return lunar;
+    }
+    
+    // 如果失败，尝试直接使用Lunar.fromDate
+    if (typeof Lunar.fromDate === 'function') {
+      return Lunar.fromDate(date);
+    }
+    
+    // 如果仍然失败，尝试手动创建
+    const year = date.getFullYear();
+    const month = date.getMonth() + 1;
+    const day = date.getDate();
+    
+    // 使用Solar创建，然后转换
+    const manualSolar = Solar.fromYmd(year, month, day);
+    if (manualSolar && typeof manualSolar.getLunar === 'function') {
+      return manualSolar.getLunar();
+    }
+    
+    console.warn('无法创建Lunar对象，将返回null');
+    return null;
+  } catch (error) {
+    console.error('创建Lunar对象出错:', error);
+    return null;
+  }
+}
+
+/**
+ * 获取完整的农历日期信息
+ * @param date 公历日期
+ * @returns 包含多种表示方法的农历日期信息
+ */
+export function getFullLunarDate(date: Date): LunarDate & {
+  yearInGanZhi: string;
+  monthInChinese: string;
+  dayInChinese: string;
+} {
+  try {
+    // 使用安全方法获取lunar对象
+    const lunar = safeLunarFromDate(date);
+    
+    // 检查获取的lunar对象是否有效
+    if (!lunar) {
+      throw new Error('Could not create lunar object');
+    }
+    
+    // 创建安全获取函数，防止方法不存在导致错误
+    const safeGet = (obj: any, funcName: string, defaultValue: any) => {
+      if (obj && typeof obj[funcName] === 'function') {
+        try {
+          return obj[funcName]();
+        } catch (e) {
+          console.warn(`Error calling ${funcName}:`, e);
+          return defaultValue;
+        }
+      }
+      return defaultValue;
+    };
+    
+    // 使用安全方法获取各项属性
+    return {
+      year: safeGet(lunar, 'getYear', new Date().getFullYear()),
+      month: safeGet(lunar, 'getMonth', new Date().getMonth() + 1),
+      day: safeGet(lunar, 'getDay', new Date().getDate()),
+      isLeap: safeGet(lunar, 'isLeap', false),
+      zodiac: safeGet(lunar, 'getYearShengXiao', '未知'),
+      yearInGanZhi: safeGet(lunar, 'getYearInGanZhi', '未知'),
+      monthInChinese: safeGet(lunar, 'getMonthInChinese', '未知'),
+      dayInChinese: safeGet(lunar, 'getDayInChinese', '未知')
+    };
+  } catch (error) {
+    console.error('获取完整农历日期信息出错:', error);
+    // 返回默认值 - 使用当前日期
+    const now = new Date();
+    return {
+      year: now.getFullYear(),
+      month: now.getMonth() + 1,
+      day: now.getDate(),
+      isLeap: false,
+      zodiac: '未知',
+      yearInGanZhi: '未知',
+      monthInChinese: '未知',
+      dayInChinese: '未知'
+    };
+  }
+}
+
 export default {
   solarToLunar,
   lunarToSolar,
@@ -193,5 +466,13 @@ export default {
   convertToLunar,
   convertToSolar,
   formatDate,
-  parseLunarDate
+  parseLunarDate,
+  getDaysOfMonth,
+  getDay,
+  getMonthDays,
+  getYearInGanZhi,
+  getMonthInChinese,
+  getDayInChinese,
+  getFullLunarDate,
+  safeLunarFromDate
 }; 
