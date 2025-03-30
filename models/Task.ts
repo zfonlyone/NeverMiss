@@ -101,6 +101,7 @@ export interface CreateTaskInput {
   syncToCalendar?: boolean;
   startDate: string;
   dueDate: string;
+  useDueDateToCalculate?: boolean; // 是否使用截止日期来计算开始日期
   tags?: string[];
   backgroundColor?: string;
   specialDate?: SpecialDate;
@@ -124,6 +125,7 @@ export interface UpdateTaskInput {
   syncToCalendar?: boolean;
   startDate?: string;
   dueDate?: string;
+  useDueDateToCalculate?: boolean; // 是否使用截止日期来计算开始日期
   tags?: string[];
   backgroundColor?: string;
   specialDate?: SpecialDate;

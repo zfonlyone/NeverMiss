@@ -70,7 +70,10 @@ export default function TaskFormScreen({ taskId }: TaskFormScreenProps) {
   });
   
   // 日期输入类型（开始日期或截止日期）
-  const [dateInputType, setDateInputType] = useState<DateInputType>('dueDate');
+  const [dateInputType, setDateInputType] = useState<DateInputType>('startDate');
+  
+  // 是否使用截止日期计算开始日期
+  const [useDueDateToCalculate, setUseDueDateToCalculate] = useState(false);
   
   // 时间设置
   const [startDate, setStartDate] = useState(new Date());
@@ -130,21 +133,21 @@ export default function TaskFormScreen({ taskId }: TaskFormScreenProps) {
 
   // 根据开始日期和循环设置自动计算截止日期
   useEffect(() => {
-    if (isRecurring && dateInputType === 'startDate') {
+    if (isRecurring && !useDueDateToCalculate) {
       calculateDueDate();
     }
-  }, [startDate, recurrencePattern, isRecurring, dateInputType]);
+  }, [startDate, recurrencePattern, isRecurring, useDueDateToCalculate]);
 
   // 根据截止日期和循环设置自动计算开始日期
   useEffect(() => {
-    if (isRecurring && dateInputType === 'dueDate') {
+    if (isRecurring && useDueDateToCalculate) {
       calculateStartDate();
     }
-  }, [dueDate, recurrencePattern, isRecurring, dateInputType]);
+  }, [dueDate, recurrencePattern, isRecurring, useDueDateToCalculate]);
 
   // 计算截止日期
   const calculateDueDate = () => {
-    if (!isRecurring || dateInputType !== 'startDate') return;
+    if (!isRecurring || useDueDateToCalculate) return;
 
     if (dateType === 'lunar') {
       // 处理农历日期计算
@@ -298,7 +301,7 @@ export default function TaskFormScreen({ taskId }: TaskFormScreenProps) {
 
   // 计算开始日期
   const calculateStartDate = () => {
-    if (!isRecurring || dateInputType !== 'dueDate') return;
+    if (!isRecurring || !useDueDateToCalculate) return;
 
     if (dateType === 'lunar') {
       // 处理农历日期计算
@@ -517,7 +520,11 @@ export default function TaskFormScreen({ taskId }: TaskFormScreenProps) {
         );
         return;
       }
-
+      
+      setIsLoading(true);
+      
+      console.log(`保存任务: 使用计算方式 = ${useDueDateToCalculate ? "截止日期计算开始日期" : "开始日期计算截止日期"}`);
+      
       const taskData: CreateTaskInput = {
         title,
         description,
@@ -538,27 +545,21 @@ export default function TaskFormScreen({ taskId }: TaskFormScreenProps) {
         syncToCalendar,
         tags,
         backgroundColor,
+        useDueDateToCalculate,
         specialDate: specialDate || undefined,
       };
-
-      const errors = validateTask(taskData);
+      
+      const errors = validateTask(taskData as any);
       if (errors.length > 0) {
         Alert.alert('验证错误', errors.join('\n'));
+        setIsLoading(false);
         return;
       }
-
-      setIsLoading(true);
-
+      
       if (isEditMode) {
         await updateTaskService(taskId!, taskData as any);
       } else {
-        const createInput: CreateTaskInput = {
-          ...taskData as any,
-          startDate: startDate.toISOString(),
-          dueDate: dueDate.toISOString()
-        };
-
-        await createTaskService(createInput);
+        await createTaskService(taskData);
       }
 
       // 创建完任务后，返回任务列表页面并触发刷新
@@ -872,6 +873,18 @@ export default function TaskFormScreen({ taskId }: TaskFormScreenProps) {
     },
   });
 
+  // 处理日期计算方式切换
+  const handleDateCalculationToggle = () => {
+    setUseDueDateToCalculate(!useDueDateToCalculate);
+    if (!useDueDateToCalculate) {
+      // 切换到使用截止日期计算
+      calculateStartDate();
+    } else {
+      // 切换到使用开始日期计算
+      calculateDueDate();
+    }
+  };
+
   return (
     <KeyboardAvoidingView
       style={[styles.container, { backgroundColor: colors.background }]}
@@ -1058,6 +1071,24 @@ export default function TaskFormScreen({ taskId }: TaskFormScreenProps) {
                   >
                     输入截止日期
                   </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+          
+          {/* 日期计算方式选择 */}
+          {isRecurring && (
+            <View style={styles.dateInputTypeContainer}>
+              <Text style={[styles.dateLabel, { color: colors.text }]}>日期计算方式：</Text>
+              <View style={styles.settingRow}>
+                <Text style={[styles.settingLabel, { color: colors.text }]}>
+                  {useDueDateToCalculate ? "用截止日期计算开始日期" : "用开始日期计算截止日期"}
+                </Text>
+                <TouchableOpacity 
+                  style={[styles.switchButton, { backgroundColor: colors.primary }]}
+                  onPress={handleDateCalculationToggle}
+                >
+                  <Text style={styles.switchButtonText}>切换</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -1658,5 +1689,14 @@ const styles = StyleSheet.create({
   dateTypeText: {
     fontSize: 16,
     marginRight: 8,
+  },
+  switchButton: {
+    padding: 8,
+    borderRadius: 8,
+  },
+  switchButtonText: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: 'white',
   },
 }); 

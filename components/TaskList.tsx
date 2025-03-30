@@ -10,7 +10,7 @@ import {
   Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Task } from '../models/Task';
+import { Task, RecurrencePattern } from '../models/Task';
 import { format } from 'date-fns';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useTheme } from '../contexts/ThemeContext';
@@ -24,6 +24,35 @@ interface TaskListProps {
   onTaskDelete?: (task: Task) => void;
   isLoading?: boolean;
 }
+
+// 获取循环单位文本
+const getRecurrenceUnitText = (pattern: RecurrencePattern): string => {
+  switch (pattern.type) {
+    case 'daily':
+      return '天';
+    case 'weekly':
+      return '周';
+    case 'monthly':
+      return '月';
+    case 'yearly':
+      return '年';
+    case 'custom':
+      switch (pattern.unit) {
+        case 'days':
+          return '天';
+        case 'weeks':
+          return '周';
+        case 'months':
+          return '月';
+        case 'years':
+          return '年';
+        default:
+          return '';
+      }
+    default:
+      return '';
+  }
+};
 
 export default function TaskList({ 
   tasks, 
@@ -77,79 +106,61 @@ export default function TaskList({
   };
 
   const renderItem = ({ item }: { item: Task }) => {
-    // 计算剩余天数
-    const daysLeft = item.currentCycle 
-      ? Math.ceil((new Date(item.currentCycle.dueDate).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))
-      : 0;
+    const dueDate = new Date(item.currentCycle?.dueDate || '');
+    const isOverdue = dueDate < new Date() && !item.currentCycle?.isCompleted;
     
-    // 获取状态文本
-    const getStatusText = () => {
-      if (!item.currentCycle) return '';
-      if (item.currentCycle.isCompleted) return t.task.statusCompleted;
-      if (item.currentCycle.isOverdue) return t.task.statusOverdue;
-      if (!item.isActive) return t.task.taskDisabled;
-      return daysLeft <= 0 ? t.task.statusOverdue : t.task.daysLeft.replace('{days}', daysLeft.toString());
-    };
-
-    // 获取状态徽章样式
-    const getStatusBadgeStyle = () => {
-      if (!item.currentCycle) return styles.disabledBadge;
-      if (item.currentCycle.isCompleted) return styles.completedBadge;
-      if (item.currentCycle.isOverdue) return styles.overdueBadge;
-      if (!item.isActive) return styles.disabledBadge;
-      return daysLeft <= 3 ? styles.warningBadge : styles.pendingBadge;
-    };
-
-    // 使用标准的TouchableOpacity而不是Swipeable组件
+    // 计算剩余天数
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const daysLeft = Math.ceil((dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+    
     return (
-      <View style={styles.taskItemContainer}>
-        {/* 只有在任务未完成时才显示完成按钮 */}
-        {onTaskComplete && !item.currentCycle?.isCompleted && (
-          <TouchableOpacity
-            style={styles.completeButtonContainer}
-            onPress={() => handleTaskComplete(item)}
-          >
-            <View style={styles.actionButton}>
-              <Ionicons name="checkmark-circle-outline" size={24} color="#4CAF50" />
-            </View>
-          </TouchableOpacity>
-        )}
-        
+      <View style={styles.itemContainer}>
         <TouchableOpacity
-          style={[
-            styles.taskItem,
-            {
-              backgroundColor: colors.card,
-            },
-          ]}
-          onPress={() => onTaskPress(item)}
-          activeOpacity={0.7}
+          style={styles.completeButton}
+          onPress={() => handleTaskComplete(item)}
         >
-          <View style={styles.taskHeader}>
-            <Text
-              style={[
-                styles.taskTitle,
-                { color: colors.text },
-              ]}
-              numberOfLines={1}
-            >
+          <Ionicons name="checkmark-circle-outline" size={28} color={colors.primary} />
+        </TouchableOpacity>
+        
+        <TouchableOpacity 
+          style={[
+            styles.itemContent, 
+            { backgroundColor: colors.card }
+          ]} 
+          onPress={() => onTaskPress(item)}
+        >
+          {/* 任务标题和状态 */}
+          <View style={styles.titleRow}>
+            <Text style={[
+              styles.itemTitle, 
+              { color: colors.text },
+              isOverdue && styles.overdueBadge
+            ]}>
               {item.title}
             </Text>
+            
+            {/* 状态标签 */}
             <View style={[
               styles.statusBadge,
-              getStatusBadgeStyle()
+              isOverdue ? styles.overdueBadge : 
+              (daysLeft <= 3 && daysLeft > 0) ? styles.warningBadge : 
+              styles.normalBadge
             ]}>
               <Text style={styles.statusText}>
-                {getStatusText()}
+                {isOverdue ? '已逾期' : 
+                 daysLeft === 0 ? '今天到期' : 
+                 `剩${daysLeft}天`}
               </Text>
             </View>
           </View>
           
+          {/* 任务描述 */}
           {item.description && (
-            <Text
+            <Text 
               style={[
-                styles.taskDescription,
-                { color: colors.subText },
+                styles.itemDescription,
+                { color: colors.subText }
               ]}
               numberOfLines={2}
             >
@@ -157,78 +168,71 @@ export default function TaskList({
             </Text>
           )}
           
-          <View style={styles.taskFooter}>
-            {item.currentCycle && (
-              <View style={styles.taskDateContainer}>
+          {/* 任务信息行 */}
+          <View style={styles.infoRow}>
+            {/* 截止日期 */}
+            <View style={styles.infoItem}>
+              <Ionicons 
+                name="calendar" 
+                size={14} 
+                color={isOverdue ? colors.error : colors.primary} 
+              />
+              <Text 
+                style={[
+                  styles.infoText, 
+                  { color: isOverdue ? colors.error : colors.subText }
+                ]}
+              >
+                {format(dueDate, 'yyyy-MM-dd')}
+              </Text>
+            </View>
+            
+            {/* 循环周期 */}
+            {item.isRecurring && (
+              <View style={styles.infoItem}>
                 <Ionicons 
-                  name="calendar" 
+                  name="reload" 
                   size={14} 
-                  color={colors.subText} 
+                  color={colors.primary} 
                 />
                 <Text 
                   style={[
-                    styles.taskDate,
+                    styles.infoText,
                     { color: colors.subText }
                   ]}
                 >
-                  {t.task.dueDate}: {format(new Date(item.currentCycle.dueDate), 'yyyy-MM-dd')}
+                  {item.recurrencePattern.type === 'custom' 
+                    ? `${item.recurrencePattern.value}${getRecurrenceUnitText(item.recurrencePattern)}`
+                    : `${item.recurrencePattern.type}`}
                 </Text>
               </View>
             )}
             
-            <View style={styles.taskDateContainer}>
+            {/* 提醒时间 */}
+            <View style={styles.infoItem}>
               <Ionicons 
                 name="alarm" 
                 size={14} 
-                color={colors.subText} 
+                color={colors.primary} 
               />
               <Text 
                 style={[
-                  styles.taskDate,
+                  styles.infoText,
                   { color: colors.subText }
                 ]}
               >
                 {`${item.reminderTime.hour.toString().padStart(2, '0')}:${item.reminderTime.minute.toString().padStart(2, '0')}`}
               </Text>
             </View>
-            
-            {item.lastCompletedDate && (
-              <View style={styles.taskDateContainer}>
-                <Ionicons 
-                  name="checkmark-circle" 
-                  size={14} 
-                  color={colors.subText} 
-                />
-                <Text 
-                  style={[
-                    styles.taskDate,
-                    { color: colors.subText }
-                  ]}
-                >
-                  {format(new Date(item.lastCompletedDate), 'MM-dd')}
-                </Text>
-              </View>
-            )}
-            
-            <Ionicons 
-              name="chevron-forward" 
-              size={20} 
-              color={colors.subText} 
-            />
           </View>
         </TouchableOpacity>
         
-        {/* 删除按钮 */}
-        {onTaskDelete && (
-          <TouchableOpacity
-            style={styles.deleteButtonContainer}
-            onPress={() => handleTaskDelete(item)}
-          >
-            <View style={styles.actionButton}>
-              <Ionicons name="trash-outline" size={24} color="#F44336" />
-            </View>
-          </TouchableOpacity>
-        )}
+        <TouchableOpacity
+          style={styles.deleteButton}
+          onPress={() => handleTaskDelete(item)}
+        >
+          <Ionicons name="trash-outline" size={24} color={colors.error} />
+        </TouchableOpacity>
       </View>
     );
   };
@@ -315,29 +319,19 @@ const styles = StyleSheet.create({
   listContent: {
     padding: 16,
   },
-  taskItemContainer: {
+  itemContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 12,
   },
-  completeButtonContainer: {
+  completeButton: {
     marginRight: 8,
   },
-  deleteButtonContainer: {
+  deleteButton: {
     marginLeft: 8,
   },
-  actionButton: {
-    padding: 8,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.9)',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 1.5,
-    elevation: 2,
-  },
-  taskItem: {
+  itemContent: {
     flex: 1,
     borderRadius: 12,
     padding: 16,
@@ -347,16 +341,17 @@ const styles = StyleSheet.create({
     shadowRadius: 2,
     elevation: 2,
   },
-  taskHeader: {
+  titleRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 8,
   },
-  taskTitle: {
-    fontSize: 18,
+  itemTitle: {
+    fontSize: 16,
     fontWeight: 'bold',
     flex: 1,
+    flexWrap: 'wrap',
   },
   statusBadge: {
     paddingHorizontal: 8,
@@ -364,11 +359,8 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     marginLeft: 8,
   },
-  completedBadge: {
+  normalBadge: {
     backgroundColor: '#4CAF50',
-  },
-  pendingBadge: {
-    backgroundColor: '#2196F3',
   },
   warningBadge: {
     backgroundColor: '#FF9800',
@@ -376,29 +368,28 @@ const styles = StyleSheet.create({
   overdueBadge: {
     backgroundColor: '#F44336',
   },
-  disabledBadge: {
-    backgroundColor: '#999999',
-  },
   statusText: {
-    color: '#ffffff',
+    color: '#fff',
     fontSize: 12,
     fontWeight: 'bold',
   },
-  taskDescription: {
+  itemDescription: {
     fontSize: 14,
     marginBottom: 12,
+    lineHeight: 20,
   },
-  taskFooter: {
+  infoRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    flexWrap: 'wrap',
     alignItems: 'center',
   },
-  taskDateContainer: {
+  infoItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginRight: 10,
+    marginRight: 12,
+    marginBottom: 4,
   },
-  taskDate: {
+  infoText: {
     fontSize: 12,
     marginLeft: 4,
   },

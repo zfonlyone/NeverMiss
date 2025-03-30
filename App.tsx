@@ -14,6 +14,7 @@ import { LanguageProvider } from './contexts/LanguageContext';
 import { initializePersistentNotification } from './controllers/NotificationController';
 import { configureNotifications } from './services/notificationService';
 import { initializeSpecialDates } from './services/specialDateService';
+import { recalculateAllTaskDates } from './services/taskService';
 
 export default function App() {
   useEffect(() => {
@@ -26,6 +27,8 @@ export default function App() {
         await initializePersistentNotification();
         // 初始化特殊日期数据
         await initializeSpecialDates();
+        // 重新计算所有任务日期
+        await recalculateAllTaskDates(true);
         
         console.log('应用初始化完成');
       } catch (error) {
