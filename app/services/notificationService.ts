@@ -13,10 +13,22 @@ import { TaskCycle } from '../models/TaskCycle';
 import { registerBackgroundTask, unregisterBackgroundTask } from './backgroundTaskService';
 import { checkNotificationPermission, requestNotificationPermission } from './permissionService';
 import * as TaskManager from 'expo-task-manager';
+import Constants from 'expo-constants';
+
+// 判断是否在开发构建中
+const isDevBuild = Constants.appOwnership !== 'expo';
 
 // Configure notifications
 export async function configureNotifications(): Promise<boolean> {
   try {
+    // 警告用户Expo Go中的通知限制
+    if (!isDevBuild) {
+      console.warn(
+        'NeverMiss 提醒: 在 Expo Go 中通知功能受限。' +
+        '为获得完整的通知功能，请使用开发构建版本。'
+      );
+    }
+    
     // 请求通知权限
     const permissionResult = await requestNotificationPermission();
     
@@ -57,8 +69,12 @@ export async function configureNotifications(): Promise<boolean> {
       });
     }
     
-    // Register background tasks
-    await registerBackgroundTask();
+    // 只在开发构建中注册后台任务
+    if (isDevBuild) {
+      await registerBackgroundTask();
+    } else {
+      console.log('在Expo Go中跳过后台任务注册');
+    }
     
     return true;
   } catch (error) {
@@ -103,30 +119,32 @@ export async function scheduleTaskNotification(
       return null;
     }
     
-    // Calculate seconds from now
-    const secondsFromNow = Math.max(
-      1,
-      Math.floor((notificationDate.getTime() - Date.now()) / 1000)
-    );
+    // 准备通知内容
+    const notificationContent: Notifications.NotificationContentInput = {
+      title: `⚠️ 提醒: ${task.title}`,
+      body: task.description || '您的任务即将到期！',
+      data: { taskId: task.id, cycleId: cycle.id },
+      sound: true,
+      priority: Notifications.AndroidNotificationPriority.MAX,
+      color: '#FF0000',
+      badge: 1,
+    };
     
-    // Schedule notification
+    // Android特定设置
+    if (Platform.OS === 'android') {
+      notificationContent.channelId = 'reminders';
+      notificationContent.vibrate = [0, 500, 200, 500, 200, 500];
+    }
+    
+    // 计算触发时间
+    const triggerDate = notificationDate;
+    
+    // 使用日期触发器
     const notificationId = await Notifications.scheduleNotificationAsync({
-      content: {
-        title: `⚠️ 提醒: ${task.title}`,
-        body: task.description || '您的任务即将到期！',
-        data: { taskId: task.id, cycleId: cycle.id },
-        sound: true,
-        priority: Notifications.AndroidNotificationPriority.MAX,
-        color: '#FF0000',
-        badge: 1,
-        ...(Platform.OS === 'android' && { 
-          channelId: 'reminders',
-          vibrate: [0, 500, 200, 500, 200, 500],
-          lights: true,
-          lightColor: '#FF0000',
-        }),
+      content: notificationContent,
+      trigger: {
+        date: triggerDate,
       },
-      trigger: { type: 'timeInterval', seconds: secondsFromNow },
     });
     
     console.log(`已为任务 "${task.title}" 安排通知，ID: ${notificationId}, 时间: ${notificationDate.toLocaleString()}`);
@@ -215,6 +233,12 @@ const FOREGROUND_NOTIFICATION_ID = 'foreground-notification-id';
  */
 export const startForegroundNotificationService = async () => {
   try {
+    // 在Expo Go中跳过前台服务通知
+    if (!isDevBuild) {
+      console.log('在Expo Go中跳过前台服务通知');
+      return true;
+    }
+    
     // 创建通知频道 (仅Android需要)
     if (Platform.OS === 'android') {
       await Notifications.setNotificationChannelAsync('foreground-service', {
@@ -225,19 +249,23 @@ export const startForegroundNotificationService = async () => {
       });
     }
 
-    // 使用普通通知替代前台服务通知
+    // 准备通知内容
+    const notificationContent: Notifications.NotificationContentInput = {
+      title: 'NeverMiss 运行中',
+      body: '应用正在后台运行以确保不错过任何任务',
+      data: {},
+    };
+    
+    // Android特定设置
+    if (Platform.OS === 'android') {
+      notificationContent.channelId = 'foreground-service';
+      notificationContent.autoCancel = false;
+    }
+
+    // 使用即时触发器
     const notificationId = await Notifications.scheduleNotificationAsync({
-      content: {
-        title: 'NeverMiss 运行中',
-        body: '应用正在后台运行以确保不错过任何任务',
-        data: {},
-        ...(Platform.OS === 'android' && { 
-          channelId: 'foreground-service',
-          autoCancel: false,
-          ongoing: true
-        }),
-      },
-      trigger: null
+      content: notificationContent,
+      trigger: null,
     });
     
     console.log(`持久通知已启动，ID: ${notificationId}`);

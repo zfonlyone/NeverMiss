@@ -10,11 +10,10 @@ import React, { useEffect } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import MainNavigator from './app/navigation/MainNavigator';
-import { LanguageProvider } from './contexts/LanguageContext';
-import { initializePersistentNotification } from './controllers/NotificationController';
-import { configureNotifications } from './services/notificationService';
-import { initializeSpecialDates } from './services/specialDateService';
-import { recalculateAllTaskDates } from './services/taskService';
+import { LanguageProvider } from './app/contexts/LanguageContext';
+import { initializePersistentNotification } from './app/controllers/NotificationController';
+import { configureNotifications } from './app/services/notificationService';
+import { recalculateAllTaskDates } from './app/services/taskService';
 
 export default function App() {
   useEffect(() => {
@@ -25,8 +24,6 @@ export default function App() {
         await configureNotifications();
         // 初始化通知栏常驻
         await initializePersistentNotification();
-        // 初始化特殊日期数据
-        await initializeSpecialDates();
         // 重新计算所有任务日期
         await recalculateAllTaskDates(true);
         

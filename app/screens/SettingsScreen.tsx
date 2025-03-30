@@ -1,18 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Switch, TouchableOpacity, ScrollView, Platform, Alert, ActivityIndicator, Linking, Modal } from 'react-native';
-import { togglePersistentNotification } from '../../controllers/NotificationController';
-import { getNotificationPreference } from '../../services/preferenceService';
-import { useLanguage, Language } from '../../contexts/LanguageContext';
+import { togglePersistentNotification } from '../controllers/NotificationController';
+import { getNotificationPreference } from '../services/preferenceService';
+import { useLanguage } from '../contexts/LanguageContext';
 import { Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { exportDataToJSON, exportDataToCSV, shareFile, importDataFromJSON, importDataFromCSV } from '../../services/exportService';
-import { checkPermissionsForFeature, requestPermissionsForFeature, checkNotificationPermission, checkCalendarPermission, requestNotificationPermission, requestCalendarPermission } from '../../services/permissionService';
-import { getDatabaseInfo as getDatabaseInfoService, resetDatabase } from '../../services/database';
-import { APP_INFO, getFullVersion } from '../../config/version';
+import { exportDataToJSON, exportDataToCSV, shareFile, importDataFromJSON, importDataFromCSV } from '../services/exportService';
+import { checkPermissionsForFeature, requestPermissionsForFeature, checkNotificationPermission, checkCalendarPermission, requestNotificationPermission, requestCalendarPermission } from '../services/permissionService';
+import { getDatabaseInfo as getDatabaseInfoService, resetDatabase } from '../services/database';
+import { APP_INFO, getFullVersion } from '../utils/version';
 import * as DocumentPicker from 'expo-document-picker';
 import { List } from 'react-native-paper';
 import Constants from 'expo-constants';
-import { useTheme, ThemeMode } from '../../contexts/ThemeContext';
+import { useTheme, ThemeMode } from '../contexts/ThemeContext';
+
+type Language = 'en' | 'zh';
 
 interface DatabaseInfo {
   version: number;
@@ -20,7 +22,14 @@ interface DatabaseInfo {
   tasksCount: number;
   cyclesCount: number;
   historyCount: number;
+  settings?: {
+    appVersion: string;
+    useLunarCalendar: boolean;
+  };
 }
+
+
+
 
 const SettingsScreen = () => {
   const { t, language, changeLanguage } = useLanguage();

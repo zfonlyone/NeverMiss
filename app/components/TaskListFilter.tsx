@@ -10,8 +10,8 @@ import {
   Switch
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useLanguage } from '../../contexts/LanguageContext';
-import { useTheme } from '../../contexts/ThemeContext';
+import { useLanguage } from '../contexts/LanguageContext';
+import { useTheme } from '../contexts/ThemeContext';
 
 export type SortOption = 'title' | 'dueDate' | 'startDate' | 'createdAt' | 'lastUpdated';
 export type SortDirection = 'asc' | 'desc';

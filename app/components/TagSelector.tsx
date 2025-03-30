@@ -9,8 +9,8 @@ import {
   Modal
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useLanguage } from '../../contexts/LanguageContext';
-import { useTheme } from '../../contexts/ThemeContext';
+import { useLanguage } from '../contexts/LanguageContext';
+import { useTheme } from '../contexts/ThemeContext';
 
 // 预定义的标签颜色
 const TAG_COLORS = [

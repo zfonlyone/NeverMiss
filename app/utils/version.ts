@@ -5,7 +5,7 @@
 
 // 导入package.json以获取版本号
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-const packageJson = require('../package.json');
+const packageJson = require('../../package.json');
 
 // 应用信息
 export const APP_INFO = {

@@ -9,8 +9,9 @@ import {
   Switch,
   Modal,
   FlatList,
+  ActivityIndicator,
 } from 'react-native';
-import { useLanguage } from '../../contexts/LanguageContext';
+import { useLanguage } from '../contexts/LanguageContext';
 import {
   RecurrenceType,
   RecurrenceUnit,
@@ -18,10 +19,14 @@ import {
   WeekDay,
   WeekOfMonth,
   CompositeRecurrencePattern,
-} from '../../models/Task';
+
+} from '../models/Task';
 import { Ionicons } from '@expo/vector-icons';
-import { useTheme } from '../../contexts/ThemeContext';
+import { useTheme } from '../contexts/ThemeContext';
 import RNPickerSelect from 'react-native-picker-select';
+
+
+
 
 interface RecurrenceSelectorProps {
   value: RecurrencePattern;
@@ -48,6 +53,9 @@ export default function RecurrenceSelector({
   const [month, setMonth] = useState<number | undefined>(value.month);
   const [weekOfMonth, setWeekOfMonth] = useState<WeekOfMonth | undefined>(value.weekOfMonth);
   const [isCompositeMode, setIsCompositeMode] = useState<boolean>(value.type === 'composite');
+
+  
+ 
   
   // 组合模式的状态
   const [yearEnabled, setYearEnabled] = useState<boolean>(
@@ -95,6 +103,14 @@ export default function RecurrenceSelector({
   const [isReverse, setIsReverse] = useState<boolean>(
     value.isReverse || false
   );
+  
+  const [isLunar, setIsLunar] = useState<boolean>(
+    value.isLunar || false
+  );
+  
+
+  
+
 
   useEffect(() => {
     // 更新循环模式
@@ -138,6 +154,7 @@ export default function RecurrenceSelector({
       const newPattern: RecurrencePattern = {
         type,
         value: recurrenceValue,
+        isLunar: isLunar,
       };
 
       // 根据不同循环类型添加额外属性
@@ -166,6 +183,7 @@ export default function RecurrenceSelector({
           newPattern.weekOfMonth = weekOfMonth;
           newPattern.weekDay = weekDay;
           break;
+          
       }
 
       onChange(newPattern);
@@ -174,7 +192,7 @@ export default function RecurrenceSelector({
     type, recurrenceValue, recurrenceUnit, weekDay, weekDays, monthDay, month, weekOfMonth,
     isCompositeMode, yearEnabled, yearValue, monthEnabled, monthValue, weekOfMonthEnabled,
     weekOfMonthValue, weekDayEnabled, weekDayValue, monthDayEnabled, monthDayValue,
-    yearDayEnabled, yearDayValue, isReverse
+    yearDayEnabled, yearDayValue, isReverse, isLunar,
   ]);
 
   // 处理类型切换
@@ -314,7 +332,7 @@ export default function RecurrenceSelector({
         {/* 星期几设置 */}
         <View style={styles.compositeSetting}>
           <View style={styles.switchRow}>
-            <Switch 
+          <Switch
               value={weekDayEnabled}
               onValueChange={setWeekDayEnabled}
               trackColor={{ false: colors.border, true: colors.primary }}
@@ -351,8 +369,8 @@ export default function RecurrenceSelector({
                 },
               }}
               disabled={!weekDayEnabled}
-            />
-          </View>
+          />
+        </View>
         </View>
         
         {/* 月中日设置 */}
@@ -366,7 +384,7 @@ export default function RecurrenceSelector({
             />
             <Text style={[styles.label, { color: colors.text }]}>每月</Text>
             <TextInput
-              style={[
+                style={[
                 styles.valueInput,
                 { color: colors.text, borderColor: colors.border, backgroundColor: monthDayEnabled ? colors.card : colors.disabled }
               ]}
@@ -390,7 +408,7 @@ export default function RecurrenceSelector({
             />
             <Text style={[styles.label, { color: colors.text }]}>一年中第</Text>
             <TextInput
-              style={[
+                  style={[
                 styles.valueInput,
                 { color: colors.text, borderColor: colors.border, backgroundColor: yearDayEnabled ? colors.card : colors.disabled }
               ]}
@@ -429,8 +447,8 @@ export default function RecurrenceSelector({
               yearDayEnabled ? `每年第${yearDayValue}天` : '',
               isReverse ? '(倒数)' : ''
             ].filter(Boolean).join(' ')}
-          </Text>
-        </View>
+                </Text>
+          </View>
       </View>
     );
   };
@@ -618,14 +636,14 @@ export default function RecurrenceSelector({
         
         {/* 星期几选择 (仅适用于每周) */}
         {type === 'weekly' && (
-          <View style={styles.section}>
+        <View style={styles.section}>
             <Text style={[styles.title, { color: colors.text }]}>选择星期几</Text>
             <View style={styles.weekDaysContainer}>
               {[0, 1, 2, 3, 4, 5, 6].map((day) => (
-                <TouchableOpacity
+              <TouchableOpacity
                   key={day}
-                  style={[
-                    styles.weekDayButton,
+                style={[
+                  styles.weekDayButton,
                     weekDay === day && styles.weekDayButtonActive,
                     { borderColor: colors.border, backgroundColor: weekDay === day ? colors.primary : colors.card }
                   ]}
@@ -636,13 +654,13 @@ export default function RecurrenceSelector({
                     { color: weekDay === day ? '#fff' : colors.text }
                   ]}>
                     {['日', '一', '二', '三', '四', '五', '六'][day]}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
+                </Text>
+              </TouchableOpacity>
+            ))}
           </View>
-        )}
-        
+        </View>
+      )}
+
         {/* 每月几号 (仅适用于每月) */}
         {type === 'monthly' && (
           <View style={styles.section}>
@@ -677,8 +695,8 @@ export default function RecurrenceSelector({
                 placeholder="1-12"
                 placeholderTextColor={colors.subText}
               />
-            </View>
-            
+      </View>
+      
             <View style={styles.section}>
               <Text style={[styles.title, { color: colors.text }]}>第几周</Text>
               <RNPickerSelect
@@ -709,13 +727,13 @@ export default function RecurrenceSelector({
                   },
                 }}
               />
-            </View>
+      </View>
             
             <View style={styles.section}>
               <Text style={[styles.title, { color: colors.text }]}>星期几</Text>
               <View style={styles.weekDaysContainer}>
                 {[0, 1, 2, 3, 4, 5, 6].map((day) => (
-                  <TouchableOpacity
+        <TouchableOpacity
                     key={day}
                     style={[
                       styles.weekDayButton,
@@ -730,11 +748,11 @@ export default function RecurrenceSelector({
                     ]}>
                       {['日', '一', '二', '三', '四', '五', '六'][day]}
                     </Text>
-                  </TouchableOpacity>
+        </TouchableOpacity>
                 ))}
-              </View>
-            </View>
+      </View>
           </View>
+        </View>
         )}
       </View>
     );
@@ -759,7 +777,7 @@ export default function RecurrenceSelector({
       >
         {/* 切换器 - 基本模式 vs 组合模式 */}
         <View style={styles.modeSelector}>
-          <TouchableOpacity
+              <TouchableOpacity
             style={[
               styles.modeButton,
               !isCompositeMode && styles.modeButtonActive,
@@ -785,11 +803,14 @@ export default function RecurrenceSelector({
               styles.modeButtonText,
               { color: isCompositeMode ? '#fff' : colors.text }
             ]}>组合模式</Text>
-          </TouchableOpacity>
-        </View>
-        
+              </TouchableOpacity>
+            </View>
+            
         {isCompositeMode ? renderCompositeSelector() : renderBasicSelector()}
       </ScrollView>
+      
+      
+      
     </View>
   );
 }
@@ -879,18 +900,6 @@ const styles = StyleSheet.create({
   weekDayText: {
     fontSize: 14,
   },
-  previewContainer: {
-    marginTop: 16,
-    padding: 12,
-    borderRadius: 8,
-  },
-  previewTitle: {
-    fontSize: 14,
-    marginBottom: 4,
-  },
-  previewText: {
-    fontSize: 16,
-  },
   // 组合模式样式
   modeSelector: {
     flexDirection: 'row',
@@ -906,7 +915,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 4,
   },
   modeButtonActive: {
-    fontWeight: 'bold',
+    borderWidth: 0,
   },
   modeButtonText: {
     fontSize: 14,
@@ -939,6 +948,136 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   previewText: {
+    fontSize: 16,
+  },
+  // 特殊日期选择器样式
+  specialDateContainer: {
+    marginVertical: 12,
+  },
+  specialDateHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  specialDateButtonGroup: {
+    flexDirection: 'row',
+  },
+  specialDateClearButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+    borderWidth: 1,
+    marginRight: 8,
+  },
+  specialDateSelectButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  selectedSpecialDateContainer: {
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  selectedSpecialDateName: {
+    fontSize: 16,
+    fontWeight: '500',
+    marginBottom: 4,
+  },
+  selectedSpecialDateInfo: {
+    fontSize: 14,
+  },
+  noSpecialDateContainer: {
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  noSpecialDateText: {
+    fontSize: 14,
+  },
+  specialDateModalContainer: {
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
+  specialDateModalContent: {
+    height: '60%',
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    padding: 16,
+  },
+  specialDateModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  specialDateModalTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    marginBottom: 16,
+  },
+  searchInput: {
+    flex: 1,
+    marginLeft: 8,
+    fontSize: 16,
+  },
+  tabContainer: {
+    flexDirection: 'row',
+    marginBottom: 16,
+  },
+  tab: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+    marginRight: 8,
+  },
+  activeTab: {
+    backgroundColor: '#007AFF',
+  },
+  tabText: {
+    fontWeight: '500',
+  },
+  dateList: {
+    paddingBottom: 20,
+  },
+  specialDateItem: {
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  specialDateName: {
+    fontSize: 16,
+    fontWeight: '500',
+    marginBottom: 4,
+  },
+  specialDateInfo: {
+    fontSize: 14,
+  },
+  emptyContainer: {
+    padding: 20,
+    alignItems: 'center',
+  },
+  emptyText: {
+    fontSize: 16,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 12,
     fontSize: 16,
   },
 }); 

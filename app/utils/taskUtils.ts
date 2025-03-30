@@ -1,4 +1,4 @@
-import { Task } from '../models/Task';
+import { Task } from '../app/models/Task';
 import { FilterOptions, SortOption, SortDirection, TaskStatusFilter } from '../app/components/TaskListFilter';
 
 /**

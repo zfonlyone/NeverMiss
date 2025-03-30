@@ -13,12 +13,11 @@ import {
   ActivityIndicator
 } from 'react-native';
 import { useRouter, useLocalSearchParams, Stack } from 'expo-router';
-import { useLanguage } from '../../contexts/LanguageContext';
-import { useTheme } from '../../contexts/ThemeContext';
+import { useLanguage } from '../contexts/LanguageContext';
+import { useTheme } from '../contexts/ThemeContext';
 import RecurrenceSelector from '../components/RecurrenceSelector';
 import TagSelector from '../components/TagSelector';
 import ColorSelector from '../components/ColorSelector';
-import SpecialDateSelector from '../components/SpecialDateSelector';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
@@ -30,14 +29,13 @@ import {
   RecurrenceType,
   ReminderUnit,
   validateTask,
-  SpecialDate,
   CompositeRecurrencePattern
-} from '../../models/Task';
-import { createTask as createTaskService, updateTask as updateTaskService, getTask as getTaskById } from '../../services/taskService';
+} from '../models/Task';
+import { createTask as createTaskService, updateTask as updateTaskService, getTask as getTaskById } from '../services/taskService';
 import RNPickerSelect from 'react-native-picker-select';
 import { addDays, addWeeks, addMonths, addYears, subDays, subWeeks, subMonths, subYears } from 'date-fns';
 import * as lunarLib from 'lunar-javascript';
-import * as lunarService from '../../services/lunarService';
+import * as lunarService from '../services/lunarService';
 
 // 获取农历库中的具体类
 const { Lunar, Solar, LunarHour } = lunarLib;
@@ -101,8 +99,7 @@ export default function TaskFormScreen({ taskId }: TaskFormScreenProps) {
   const [tags, setTags] = useState<string[]>([]);
   const [backgroundColor, setBackgroundColor] = useState('#FFFFFF');
   
-  // 特殊日期设置
-  const [specialDate, setSpecialDate] = useState<SpecialDate | null>(null);
+
 
   useEffect(() => {
     if (taskId) {
@@ -715,7 +712,6 @@ export default function TaskFormScreen({ taskId }: TaskFormScreenProps) {
         setSyncToCalendar(task.syncToCalendar);
         setTags(task.tags || []);
         setBackgroundColor(task.backgroundColor || '#FFFFFF');
-        setSpecialDate(task.specialDate || null);
         
         if (task.currentCycle) {
           setStartDate(new Date(task.currentCycle.startDate));
@@ -768,7 +764,6 @@ export default function TaskFormScreen({ taskId }: TaskFormScreenProps) {
         tags,
         backgroundColor,
         useDueDateToCalculate,
-        specialDate: specialDate || undefined,
       };
       
       const errors = validateTask(taskData as any);
@@ -1430,14 +1425,7 @@ export default function TaskFormScreen({ taskId }: TaskFormScreenProps) {
           )}
         </View>
 
-        {/* 特殊日期选择 - 放在日期设置部分下面 */}
-        <View style={[styles.formSection, { backgroundColor: colors.card }]}>
-          <SpecialDateSelector
-            selectedDate={specialDate}
-            onDateSelect={setSpecialDate}
-            isLunarCalendar={isLunar}
-          />
-        </View>
+        
 
         {/* 提醒设置部分 */}
         <View style={[styles.formSection, { backgroundColor: colors.card }]}>

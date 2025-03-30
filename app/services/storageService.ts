@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Task } from '../models/Task';
 import { TaskCycle } from '../models/TaskCycle';
 import { TaskHistory } from '../models/TaskHistory';
-import APP_INFO, { getFullVersion } from '../config/version';
+import APP_INFO, { getFullVersion } from '../utils/version';
 
 // 存储键
 const STORAGE_KEYS = {
@@ -12,11 +12,17 @@ const STORAGE_KEYS = {
   DATABASE_VERSION: 'nevermiss_db_version'
 };
 
-// 数据库版本
-const DATABASE_VERSION = APP_INFO.DATABASE_VERSION;
+// 防止重复初始化标志
+let isInitialized = false;
 
 // 初始化存储
 export const initStorage = async (): Promise<void> => {
+  // 如果已经初始化，则退出
+  if (isInitialized) {
+    console.log('存储已经初始化，跳过');
+    return;
+  }
+
   try {
     // 检查是否已初始化
     const version = await AsyncStorage.getItem(STORAGE_KEYS.DATABASE_VERSION);
@@ -42,6 +48,8 @@ export const initStorage = async (): Promise<void> => {
         console.log(`数据库版本已更新至 ${APP_INFO.DATABASE_VERSION}`);
       }
     }
+    // 设置初始化标志
+    isInitialized = true;
   } catch (error) {
     console.error('初始化存储时出错:', error);
     throw error;

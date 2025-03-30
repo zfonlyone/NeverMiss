@@ -6,8 +6,8 @@ import {
   TouchableOpacity,
   ScrollView
 } from 'react-native';
-import { useLanguage } from '../../contexts/LanguageContext';
-import { useTheme } from '../../contexts/ThemeContext';
+import { useLanguage } from '../contexts/LanguageContext';
+import { useTheme } from '../contexts/ThemeContext';
 
 // 预定义的背景颜色
 const BACKGROUND_COLORS = [

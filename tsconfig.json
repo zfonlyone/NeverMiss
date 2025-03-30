@@ -26,8 +26,8 @@
       "@/*": ["./*"],
       "@components/*": ["./components/*"],
       "@screens/*": ["./screens/*"],
-      "@services/*": ["./services/*"],
-      "@models/*": ["./models/*"],
+      "@services/*": ["app/services/*"],
+      "@models/*": ["app/models/*"],
       "@assets/*": ["./assets/*"]
     }
   },

@@ -11,18 +11,18 @@ import {
   BackHandler
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import { useLanguage } from '../../contexts/LanguageContext';
-import { useTheme } from '../../contexts/ThemeContext';
+import { useLanguage } from '../contexts/LanguageContext';
+import { useTheme } from '../contexts/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
-import * as TaskService from '../../services/taskService';
-import { Task } from '../../models/Task';
+import * as TaskService from '../services/taskService';
+import { Task } from '../models/Task';
 import TaskListFilter, { FilterOptions } from '../components/TaskListFilter';
-import { filterTasks, sortTasks, extractAllTags } from '../../utils/taskUtils';
+import { filterTasks, sortTasks, extractAllTags } from '../utils/taskUtils';
 import { useRouter, useLocalSearchParams, Stack } from 'expo-router';
 import { differenceInDays, format } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
-import TaskList from '../../components/TaskList';
+import TaskList from '../components/TaskList';
 
 export default function TaskListScreen() {
   const { t } = useLanguage();

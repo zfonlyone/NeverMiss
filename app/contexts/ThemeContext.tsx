@@ -17,9 +17,11 @@ interface ThemeContextType {
     subText: string;
     border: string;
     primary: string;
+    primaryLight: string;
     accent: string;
     error: string;
     success: string;
+    disabled: string;
   };
 }
 
@@ -35,9 +37,11 @@ const ThemeContext = createContext<ThemeContextType>({
     subText: '#666666',
     border: '#dddddd',
     primary: '#2196F3',
+    primaryLight: '#CCE5FF',
     accent: '#FF9800',
     error: '#F44336',
     success: '#4CAF50',
+    disabled: '#E9ECEF',
   },
 });
 
@@ -103,9 +107,11 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     subText: isDarkMode ? '#aaaaaa' : '#666666',
     border: isDarkMode ? '#444444' : '#dddddd',
     primary: '#2196F3',
+    primaryLight: '#CCE5FF',
     accent: '#FF9800',
     error: '#F44336',
     success: '#4CAF50',
+    disabled: '#E9ECEF',
   };
 
   return (

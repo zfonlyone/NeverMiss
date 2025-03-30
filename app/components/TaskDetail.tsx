@@ -145,7 +145,7 @@ export default function TaskDetail({
 
     try {
       setIsProcessing(true);
-      await completeTaskCycle(task.id, task.currentCycle.id);
+      await completeTaskCycle(task, task.currentCycle);
       Alert.alert(t.common.success, t.task.completeSuccess);
       onClose(); // Close detail view and return to task list
     } catch (error) {
@@ -738,10 +738,10 @@ const styles = StyleSheet.create({
     shadowRadius: 1.5,
   },
   primaryButton: {
-    backgroundColor: colors.primary,
+    backgroundColor: '#007AFF',
   },
   secondaryButton: {
-    backgroundColor: colors.secondary,
+    backgroundColor: '#f0f0f0',
   },
   actionButtonText: {
     color: 'white',

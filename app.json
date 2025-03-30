@@ -24,7 +24,7 @@
     "android": {
       "package": "com.nevermiss.app",
       "jsEngine": "hermes",
-      "newArchEnabled": true,
+      "newArchEnabled": false,
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/icon.png",
         "backgroundColor": "#ffffff"
@@ -41,7 +41,8 @@
         "expo-build-properties",
         {
           "android": {
-            "newArchEnabled": true
+            "newArchEnabled": false,
+            "kotlinVersion": "1.6.10"
           },
           "ios": {
             "newArchEnabled": true

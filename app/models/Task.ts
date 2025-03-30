@@ -1,6 +1,13 @@
 import { v4 as uuidv4 } from 'uuid';
 
-export type RecurrenceType = 'daily' | 'weekly' | 'monthly' | 'yearly' | 'weekOfMonth' | 'custom' | 'composite';
+export type RecurrenceType = 
+  | 'daily'
+  | 'weekly'
+  | 'monthly'
+  | 'yearly'
+  | 'weekOfMonth'
+  | 'composite'
+  | 'custom';
 export type RecurrenceUnit = 'minutes' | 'hours' | 'days' | 'weeks' | 'months' | 'years';
 export type ReminderUnit = 'minutes' | 'hours' | 'days';
 export type TaskStatus = 'active' | 'inactive';
@@ -9,24 +16,6 @@ export type DateType = 'solar' | 'lunar';
 export type WeekDay = 0 | 1 | 2 | 3 | 4 | 5 | 6; // 0 = Sunday, 6 = Saturday
 export type WeekType = 'big' | 'small'; // 大周/小周
 export type WeekOfMonth = 1 | 2 | 3 | 4 | 5; // 1 = first week, 5 = last week
-export type SpecialDateType = 'holiday' | 'solarTerm' | 'custom' | 'weekend' | 'workday';
-
-// 枚举特殊日期类型
-export enum SpecialDateEnum {
-  WEEKEND = 'weekend',     // 周末
-  WORKDAY = 'workday',     // 工作日
-  HOLIDAY = 'holiday',     // 法定节假日
-  SOLAR_TERM = 'solarTerm' // 节气日
-}
-
-export interface SpecialDate {
-  id: string;
-  name: string;
-  type: SpecialDateType;
-  month: number;
-  day: number;
-  isLunar?: boolean;
-}
 
 export interface RecurrencePattern {
   type: RecurrenceType;
@@ -40,8 +29,8 @@ export interface RecurrencePattern {
   month?: number; // 指定月份 (1-12)
   weekOfMonth?: WeekOfMonth; // 第几周
   isLeapMonth?: boolean; // 农历闰月
-  specialDate?: SpecialDate; // 特殊日期如节假日、节气
   isReverse?: boolean; // 是否倒数计算
+  isLunar?: boolean; // 是否使用农历
 }
 
 // 组合循环模式接口
@@ -111,7 +100,6 @@ export interface Task {
   lastCompletedDate?: string;
   tags?: string[];
   backgroundColor?: string;
-  specialDate?: SpecialDate; // 特殊日期
   useDueDateToCalculate?: boolean; // 是否使用截止日期计算开始日期
 }
 
@@ -140,7 +128,6 @@ export interface CreateTaskInput {
   useDueDateToCalculate?: boolean; // 是否使用截止日期来计算开始日期
   tags?: string[];
   backgroundColor?: string;
-  specialDate?: SpecialDate;
 }
 
 export interface UpdateTaskInput {
@@ -164,7 +151,6 @@ export interface UpdateTaskInput {
   useDueDateToCalculate?: boolean; // 是否使用截止日期来计算开始日期
   tags?: string[];
   backgroundColor?: string;
-  specialDate?: SpecialDate;
 }
 
 export function createTask(
@@ -188,14 +174,14 @@ export function createTask(
     recurrencePattern: {
       type: recurrenceType,
       value: recurrenceValue,
-      unit: recurrenceType === 'custom' ? recurrenceUnit : undefined,
+      unit: recurrenceUnit,
     },
     reminderOffset,
     reminderUnit,
     reminderTime,
     dateType,
     isLunar: dateType === 'lunar',
-    isRecurring: recurrenceType !== 'custom' || (recurrenceType === 'custom' && recurrenceValue > 0),
+    isRecurring: recurrenceValue > 0,
     reminderDays: reminderUnit === 'days' ? reminderOffset : 0,
     reminderHours: reminderUnit === 'hours' ? reminderOffset : 0,
     reminderMinutes: reminderUnit === 'minutes' ? reminderOffset : 0,
@@ -225,8 +211,8 @@ export function validateTask(task: Partial<Task>): string[] {
     errors.push('重复值必须大于0');
   }
   
-  if (task.recurrencePattern.type === 'custom' && !task.recurrencePattern.unit) {
-    errors.push('自定义重复类型必须指定重复单位');
+  if (!task.recurrencePattern.type) {
+    errors.push('必须指定重复类型');
   }
   
   if (task.reminderOffset === undefined || task.reminderOffset < 0) {
