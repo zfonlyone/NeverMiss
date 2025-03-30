@@ -25,7 +25,9 @@ import {
   getTaskCycles,
   saveTaskHistory,
   getTaskHistory,
-  getTaskHistoryByAction as getHistoryByAction
+  getTaskHistoryByAction as getHistoryByAction,
+  deleteTaskCyclesByTaskId,
+  deleteTaskHistoryByTaskId
 } from './storageService';
 import { format, addDays, addWeeks, addMonths, addYears } from 'date-fns';
 import lunarService from './lunarService';
@@ -604,11 +606,20 @@ export const getLastTaskCycle = async (taskId: number): Promise<TaskCycle | null
  */
 export async function createTaskCycle(task: Task): Promise<TaskCycle> {
   try {
-    if (task.recurrencePattern.type === 'weekOfMonth' && 
-        (task.recurrencePattern.month === undefined || 
-         task.recurrencePattern.weekOfMonth === undefined || 
-         task.recurrencePattern.weekDay === undefined)) {
-      throw new Error('weekOfMonth 类型必须指定 month、weekOfMonth 和 weekDay');
+    // 处理 weekOfMonth 类型
+    if (task.recurrencePattern.type === 'weekOfMonth') {
+      const startDate = new Date().toISOString();
+      try {
+        // 计算截止日期
+        const dueDate = calculateWeekOfMonthDueDate(new Date(), task.recurrencePattern);
+        return createTaskCycleWithDates(task, startDate, dueDate);
+      } catch (error) {
+        console.error(`计算 weekOfMonth 类型截止日期时出错: ${error}`);
+        // 使用默认日期
+        const defaultDueDate = new Date();
+        defaultDueDate.setDate(defaultDueDate.getDate() + 7);
+        return createTaskCycleWithDates(task, startDate, defaultDueDate.toISOString());
+      }
     }
     
     const lastCycle = await getLastTaskCycle(task.id);
@@ -658,39 +669,54 @@ export async function createTaskCycle(task: Task): Promise<TaskCycle> {
       console.error('计算日期时出错，使用默认日期:', error);
       // 使用当前日期加一天作为回退方案
       const fallbackDate = new Date();
-      fallbackDate.setDate(fallbackDate.getDate() + 1);
+      fallbackDate.setDate(fallbackDate.getDate() + 7);
       dueDate = fallbackDate.toISOString();
     }
     
-    // 创建新的任务周期
-    const cycle: TaskCycle = {
-      id: Date.now(),
-      taskId: task.id,
-      startDate: startDate,
-      dueDate: dueDate,
-      dateType: task.dateType,
-      isCompleted: false,
-      isOverdue: false,
-      createdAt: new Date().toISOString()
-    };
-    
-    // 保存新的任务周期
-    await saveTaskCycle(cycle);
-    
-    // 安排提醒
-    try {
-      await scheduleTaskNotification(task, cycle);
-    } catch (notificationError) {
-      console.error('设置通知时出错:', notificationError);
-      // 继续执行，不中断周期创建
-    }
-    
-    console.log(`已为任务 ID ${task.id} 创建新周期 ID ${cycle.id}, 开始日期=${cycle.startDate}, 截止日期=${cycle.dueDate}`);
-    return cycle;
+    return createTaskCycleWithDates(task, startDate, dueDate);
   } catch (error) {
-    console.error('Error creating task cycle:', error);
+    console.error('创建任务周期时出错:', error);
     throw error;
   }
+}
+
+/**
+ * 创建任务周期（辅助函数）
+ * @param task 任务
+ * @param startDate 开始日期
+ * @param dueDate 截止日期
+ * @returns 创建的任务周期
+ */
+async function createTaskCycleWithDates(
+  task: Task,
+  startDate: string,
+  dueDate: string
+): Promise<TaskCycle> {
+  // 创建新的周期
+  const newCycle: TaskCycle = {
+    id: 0, // 将由saveTaskCycle分配
+    taskId: task.id,
+    startDate: startDate,
+    dueDate: dueDate,
+    dateType: task.dateType,
+    isCompleted: false,
+    isOverdue: false,
+    createdAt: new Date().toISOString()
+  };
+  
+  // 保存新周期
+  const savedCycle = await saveTaskCycle(newCycle);
+  console.log(`为任务 ${task.id} 创建了新周期: ${savedCycle.id}, 开始: ${startDate}, 截止: ${dueDate}`);
+  
+  // 安排通知
+  try {
+    await scheduleTaskNotification(task, savedCycle);
+  } catch (notificationError) {
+    console.error('设置通知时出错:', notificationError);
+    // 继续执行，不中断周期创建
+  }
+  
+  return savedCycle;
 }
 
 /**
@@ -790,13 +816,50 @@ export const updateTask = async (id: number, input: UpdateTaskInput): Promise<Ta
 };
 
 /**
- * Delete a task and all its cycles
- * @param taskId The task ID to delete
+ * 修改删除任务的函数，改为软删除（标记为删除）而不是实际删除
+ * 这样可以在统计分析中保留已完成任务的历史记录
+ * @param id 任务ID
  */
 export const deleteTask = async (id: number): Promise<boolean> => {
   try {
-    return await deleteTaskFromStorage(id);
-    } catch (error) {
+    // 首先检查任务是否存在
+    const task = await getTaskById(id);
+    if (!task) {
+      console.log(`任务ID ${id} 不存在，无法删除`);
+      return false;
+    }
+    
+    // 检查任务是否有已完成的历史记录
+    const history = await getTaskHistoryByAction('completed');
+    const hasCompletedHistory = history.some(item => item.history.taskId === id);
+    
+    if (hasCompletedHistory) {
+      console.log(`任务ID ${id} 有已完成的历史记录，执行软删除`);
+      
+      // 执行软删除：标记任务为已删除状态，但保留数据
+      const updatedTask: Task = {
+        ...task,
+        isActive: false,
+        title: `[已删除] ${task.title}`,
+        updatedAt: new Date().toISOString()
+      };
+      
+      await saveTask(updatedTask);
+      console.log(`任务ID ${id} 已标记为删除状态`);
+      return true;
+    } else {
+      // 无已完成历史记录，可以安全删除
+      console.log(`任务ID ${id} 无已完成历史记录，执行硬删除`);
+      
+      // 从存储中删除任务及其相关数据
+      await deleteTaskCyclesByTaskId(id);
+      await deleteTaskHistoryByTaskId(id);
+      
+      // 最后删除任务本身
+      const result = await deleteTaskFromStorage(id);
+      return result;
+    }
+  } catch (error) {
     console.error(`删除任务 ID ${id} 时出错:`, error);
     throw error;
   }
@@ -810,34 +873,97 @@ export const deleteTask = async (id: number): Promise<boolean> => {
  */
 export const getAllTasks = async (includeCompleted: boolean = false, includeOverdue: boolean = false): Promise<Task[]> => {
   try {
+    console.log('获取任务列表，includeCompleted=', includeCompleted, 'includeOverdue=', includeOverdue);
     const tasks = await getTasks();
+    console.log(`从存储获取到${tasks.length}个任务`);
     
     // 为每个任务加载当前周期
+    const tasksWithCycles: Task[] = [];
     for (const task of tasks) {
       const cycles = await getTaskCyclesByTaskId(task.id);
+      console.log(`任务ID ${task.id} "${task.title}" 有 ${cycles.length} 个周期`);
+      
       if (cycles.length > 0) {
-        // 找到最新的周期作为当前周期
-        const currentCycle = cycles.sort((a, b) => 
-          new Date(b.dueDate).getTime() - new Date(a.dueDate).getTime()
-        )[0];
-        task.currentCycle = currentCycle;
+        // 找到未完成的周期作为当前周期，如果没有则使用最新的周期
+        const incompleteCycles = cycles.filter(c => !c.isCompleted);
+        
+        if (incompleteCycles.length > 0) {
+          // 使用未完成的周期中最新的
+          const currentCycle = incompleteCycles.sort((a, b) => 
+            new Date(b.dueDate).getTime() - new Date(a.dueDate).getTime()
+          )[0];
+          task.currentCycle = currentCycle;
+          console.log(`任务ID ${task.id} 使用未完成周期: ${currentCycle.id}`);
+        } else {
+          // 所有周期都已完成，但是这是一个活跃的周期性任务，我们需要创建一个新周期
+          if (task.isActive && task.isRecurring && task.autoRestart) {
+            try {
+              console.log(`任务ID ${task.id} 所有周期都已完成，尝试创建新周期`);
+              const newCycle = await createTaskCycle(task);
+              task.currentCycle = newCycle;
+              await saveTask({
+                ...task,
+                currentCycle: newCycle
+              });
+              console.log(`任务ID ${task.id} 已创建新周期: ${newCycle.id}`);
+            } catch (cycleError) {
+              console.error(`为任务ID ${task.id} 创建新周期时出错:`, cycleError);
+              // 如果无法创建新周期，则使用最新的已完成周期
+              const latestCycle = cycles.sort((a, b) => 
+                new Date(b.dueDate).getTime() - new Date(a.dueDate).getTime()
+              )[0];
+              task.currentCycle = latestCycle;
+              console.log(`任务ID ${task.id} 使用最新已完成周期: ${latestCycle.id}`);
+            }
+          } else {
+            // 非活跃或非重复任务，使用最新的周期
+            const latestCycle = cycles.sort((a, b) => 
+              new Date(b.dueDate).getTime() - new Date(a.dueDate).getTime()
+            )[0];
+            task.currentCycle = latestCycle;
+            console.log(`任务ID ${task.id} 使用最新周期: ${latestCycle.id}`);
+          }
+        }
+      } else {
+        console.log(`任务ID ${task.id} 没有周期`);
       }
+      
+      tasksWithCycles.push(task);
     }
     
     // 根据参数过滤任务
-    return tasks.filter(task => {
+    const filteredTasks = tasksWithCycles.filter(task => {
+      // 首先检查任务活跃状态
+      if (!task.isActive) {
+        console.log(`任务ID ${task.id} 被过滤：非活跃任务`);
+        return false;
+      }
+      
       // 如果没有当前周期，保留任务
-      if (!task.currentCycle) return true;
+      if (!task.currentCycle) {
+        console.log(`任务ID ${task.id} 被保留：没有当前周期`);
+        return true;
+      }
       
       // 如果不包含已完成任务且当前任务已完成，则过滤掉
-      if (!includeCompleted && task.currentCycle.isCompleted) return false;
+      if (!includeCompleted && task.currentCycle.isCompleted) {
+        console.log(`任务ID ${task.id} 被过滤：已完成任务`);
+        return false;
+      }
       
       // 如果不包含逾期任务且当前任务已逾期且未完成，则过滤掉
-      if (!includeOverdue && task.currentCycle.isOverdue && !task.currentCycle.isCompleted) return false;
+      if (!includeOverdue && task.currentCycle.isOverdue && !task.currentCycle.isCompleted) {
+        console.log(`任务ID ${task.id} 被过滤：逾期任务`);
+        return false;
+      }
       
       // 其他情况保留任务
+      console.log(`任务ID ${task.id} 被保留：活跃任务`);
       return true;
     });
+    
+    console.log(`过滤后返回 ${filteredTasks.length} 个任务`);
+    return filteredTasks;
   } catch (error) {
     console.error('获取所有任务时出错:', error);
     throw error;
@@ -1292,63 +1418,179 @@ setCheckOverdueTasksCallback(checkAndUpdateOverdueTasks);
 /**
  * 完成任务
  * @param taskId 任务ID
- * @returns Promise<Task>
+ * @returns 完成后的任务对象
  */
-export async function completeTask(taskId: number): Promise<Task> {
-  console.log(`完成任务: ${taskId}`);
-  
-  // 1. 获取任务
-  const task = await getTaskById(taskId);
-  if (!task) {
-    throw new Error(`任务不存在: ${taskId}`);
+export const completeTask = async (taskId: number): Promise<Task> => {
+  try {
+    console.log(`完成任务: ${taskId}`);
+    
+    // 1. 获取任务
+    const task = await getTaskById(taskId);
+    if (!task) {
+      throw new Error(`任务ID ${taskId} 不存在`);
+    }
+    
+    // 2. 检查当前周期，如果没有则创建一个
+    if (!task.currentCycle) {
+      console.log(`任务ID ${taskId} 没有当前周期，正在创建新周期`);
+      // 查找任务最后一个周期
+      const cycles = await getTaskCyclesByTaskId(taskId);
+      
+      if (cycles.length > 0) {
+        // 使用最近的周期作为基础创建新周期
+        const lastCycle = cycles.sort((a, b) => 
+          new Date(b.dueDate).getTime() - new Date(a.dueDate).getTime()
+        )[0];
+        
+        console.log(`任务 ID ${taskId} 基于上一个周期计算新周期, 上一个周期: ${JSON.stringify(lastCycle)}`);
+        
+        // 创建新周期
+        const newCycle = await createTaskCycle(task);
+        task.currentCycle = newCycle;
+        
+        // 保存任务以更新当前周期
+        await saveTask({
+          ...task,
+          currentCycle: newCycle
+        });
+      } else {
+        // 如果没有历史周期，创建一个默认周期
+        const today = new Date().toISOString();
+        const tomorrow = new Date();
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        const tomorrowISO = tomorrow.toISOString();
+        
+        const defaultCycle: TaskCycle = {
+          id: 0,
+          taskId: taskId,
+          startDate: today,
+          dueDate: tomorrowISO,
+          dateType: task.dateType,
+          isCompleted: false,
+          isOverdue: false,
+          createdAt: today
+        };
+        
+        const savedCycle = await saveTaskCycle(defaultCycle);
+        task.currentCycle = savedCycle;
+        
+        // 保存任务以更新当前周期
+        await saveTask({
+          ...task,
+          currentCycle: savedCycle
+        });
+        
+        console.log(`为任务ID ${taskId} 创建了默认周期: ${savedCycle.id}`);
+      }
+    }
+    
+    // 3. 记录完成状态
+    const now = new Date().toISOString();
+    const completedCycle = {
+      ...task.currentCycle,
+      isCompleted: true,
+      completedDate: now,
+    };
+    
+    // 4. 更新任务周期
+    await saveTaskCycle(completedCycle);
+    
+    // 5. 记录统计信息
+    await saveTaskHistory({
+      id: 0,
+      taskId: task.id,
+      cycleId: task.currentCycle.id,
+      action: 'completed',
+      timestamp: now
+    });
+    
+    // 6. 更新任务的最后完成时间
+    task.lastCompletedDate = now;
+    
+    // 7. 处理一次性任务或循环任务
+    if (!task.isRecurring || 
+        (task.recurrencePattern.type === 'custom' && task.recurrencePattern.value === 0)) {
+      // 一次性任务完成后标记为非活动而不是删除
+      console.log(`一次性任务 ${taskId} 已完成，标记为非活动`);
+      task.isActive = false;
+      await saveTask(task);
+    } else if (task.autoRestart) {
+      // 循环任务，创建下一个周期
+      console.log(`循环任务 ${taskId} 已完成，创建下一个周期`);
+      try {
+        // 创建下一个周期，使用当前时间作为新周期的开始日期
+        const newStartDate = new Date().toISOString();
+        const newCycle = await createNextCycle(task, now);
+        
+        // 更新任务的currentCycle引用
+        task.currentCycle = newCycle;
+        
+        // 强制更新任务对象，确保新周期被保存到数据库
+        const updatedTask = {
+          ...task,
+          currentCycle: newCycle,
+          updatedAt: new Date().toISOString()
+        };
+        
+        // 保存任务
+        await saveTask(updatedTask);
+        
+        // 再次获取任务，确保数据已更新
+        const refreshedTask = await getTaskById(taskId);
+        if (refreshedTask && refreshedTask.currentCycle && refreshedTask.currentCycle.id === newCycle.id) {
+          console.log(`已为循环任务 ${taskId} 创建新周期并成功保存: ${newCycle.id}`);
+        } else {
+          console.warn(`循环任务 ${taskId} 的新周期(${newCycle.id})可能未正确保存或关联`);
+        }
+        
+        // 返回更新后的任务
+        return refreshedTask || task;
+      } catch (error) {
+        console.error(`创建下一个周期时出错: ${error}`);
+        // 使用备用方法创建周期
+        try {
+          console.log(`尝试使用备用方法为任务 ${taskId} 创建新周期`);
+          const newCycle = await createTaskCycle(task);
+          
+          // 更新任务的currentCycle引用
+          task.currentCycle = newCycle;
+          
+          // 保存任务，确保currentCycle被正确更新
+          const updatedTask = {
+            ...task,
+            currentCycle: newCycle,
+            updatedAt: new Date().toISOString()
+          };
+          
+          await saveTask(updatedTask);
+          
+          // 验证保存
+          const refreshedTask = await getTaskById(taskId);
+          if (refreshedTask && refreshedTask.currentCycle && refreshedTask.currentCycle.id === newCycle.id) {
+            console.log(`已使用备用方法为循环任务 ${taskId} 创建新周期并成功保存: ${newCycle.id}`);
+          } else {
+            console.warn(`使用备用方法创建的周期(${newCycle.id})可能未正确保存或关联`);
+          }
+          
+          // 返回更新后的任务
+          return refreshedTask || task;
+        } catch (backupError) {
+          console.error(`备用方法创建周期也失败: ${backupError}`);
+          // 所有尝试都失败，保存更新后的任务并返回
+          await saveTask(task);
+          return task;
+        }
+      }
+    } else {
+      // 不自动重启的任务，仅保存当前更新
+      await saveTask(task);
+    }
+    
+    return task;
+  } catch (error) {
+    console.error(`完成任务 ${taskId} 时出错:`, error);
+    throw error;
   }
-  
-  // 2. 获取当前周期
-  if (!task.currentCycle) {
-    throw new Error(`任务ID ${taskId} 没有当前周期`);
-  }
-  
-  // 3. 记录完成状态
-  const now = new Date().toISOString();
-  const completedCycle = {
-    ...task.currentCycle,
-    isCompleted: true,
-    completedDate: now,
-  };
-  
-  // 4. 更新任务周期
-  await saveTaskCycle(completedCycle);
-  
-  // 5. 记录统计信息
-  await saveTaskHistory({
-    id: 0,
-    taskId: task.id,
-    cycleId: task.currentCycle.id,
-    action: 'completed',
-    timestamp: now
-  });
-  
-  // 6. 更新任务的最后完成时间
-  task.lastCompletedDate = now;
-  
-  // 7. 处理一次性任务或循环任务
-  if (!task.isRecurring || 
-      (task.recurrencePattern.type === 'custom' && task.recurrencePattern.value === 0)) {
-    // 一次性任务完成后删除而不是禁用
-    console.log(`一次性任务 ${taskId} 已完成，将删除该任务`);
-    await deleteTaskFromStorage(taskId);
-    return { ...task, isActive: false };
-  } else if (task.autoRestart) {
-    // 循环任务，创建下一个周期
-    console.log(`循环任务 ${taskId} 已完成，创建下一个周期`);
-    const newCycle = await createNextCycle(task, now);
-    task.currentCycle = newCycle;
-  }
-  
-  // 8. 更新任务
-  await saveTask(task);
-  
-  return task;
 }
 
 /**
@@ -1360,6 +1602,8 @@ export async function createNextCycle(
   task: Task,
   completedDate: string = new Date().toISOString()
 ): Promise<TaskCycle> {
+  console.log(`为任务 ID ${task.id} 创建下一个周期，使用当前日期作为开始日期`);
+  
   // 使用当前日期作为新周期的开始日期
   const today = new Date().toISOString();
   
@@ -1375,22 +1619,69 @@ export async function createNextCycle(
       case 'daily':
         endDate = new Date(startDate);
         endDate.setDate(endDate.getDate() + pattern.value);
+        console.log(`每日重复: 开始=${startDate.toISOString()}, 间隔=${pattern.value}天`);
         break;
         
       case 'weekly':
-        endDate = new Date(startDate);
-        endDate.setDate(endDate.getDate() + pattern.value * 7);
+        if (pattern.weekDay !== undefined) {
+          // 找到下一个指定的星期几
+          endDate = new Date(startDate);
+          const targetDay = pattern.weekDay;
+          
+          // 计算到下一个目标星期几的天数
+          let daysToAdd = (targetDay - startDate.getDay() + 7) % 7;
+          if (daysToAdd === 0) {
+            daysToAdd = 7; // 如果今天是目标星期几，则加7天到下周同一天
+          }
+          
+          endDate.setDate(endDate.getDate() + daysToAdd);
+          console.log(`每周特定星期: 开始=${startDate.toISOString()}, 目标星期=${targetDay}, 增加天数=${daysToAdd}`);
+        } else {
+          // 每n周
+          endDate = new Date(startDate);
+          endDate.setDate(endDate.getDate() + pattern.value * 7);
+          console.log(`每隔周重复: 开始=${startDate.toISOString()}, 间隔=${pattern.value}周`);
+        }
         break;
         
       case 'monthly':
-        endDate = new Date(startDate);
-        endDate.setMonth(endDate.getMonth() + pattern.value);
+        if (pattern.monthDay !== undefined) {
+          // 下个月的指定日期
+          endDate = new Date(startDate);
+          endDate.setMonth(endDate.getMonth() + 1);
+          endDate.setDate(pattern.monthDay);
+          
+          // 检查月末溢出
+          const daysInMonth = new Date(endDate.getFullYear(), endDate.getMonth() + 1, 0).getDate();
+          if (pattern.monthDay > daysInMonth) {
+            endDate.setDate(daysInMonth);
+          }
+          
+          console.log(`每月特定日期: 开始=${startDate.toISOString()}, 月天=${pattern.monthDay}`);
+        } else {
+          // 每n月
+          endDate = new Date(startDate);
+          endDate.setMonth(endDate.getMonth() + pattern.value);
+          console.log(`每隔月重复: 开始=${startDate.toISOString()}, 间隔=${pattern.value}月`);
+        }
         break;
         
       case 'yearly':
         endDate = new Date(startDate);
         endDate.setFullYear(endDate.getFullYear() + pattern.value);
+        console.log(`每年重复: 开始=${startDate.toISOString()}, 间隔=${pattern.value}年`);
         break;
+        
+      case 'weekOfMonth':
+        // 处理每月第几周星期几的情况
+        if (pattern.month === undefined || pattern.weekOfMonth === undefined || pattern.weekDay === undefined) {
+          throw new Error('月份、第几周和星期几都必须指定');
+        }
+        
+        // 使用calculateWeekOfMonthDueDate计算下一个截止日期
+        dueDate = calculateWeekOfMonthDueDate(startDate, pattern);
+        console.log(`每月第几周星期几: 开始=${startDate.toISOString()}, 计算结果=${dueDate}`);
+        return createTaskCycleWithDates(task, today, dueDate);
         
       case 'custom':
         if (!pattern.unit) {
@@ -1402,15 +1693,19 @@ export async function createNextCycle(
         switch (pattern.unit) {
           case 'days':
             endDate.setDate(endDate.getDate() + pattern.value);
+            console.log(`自定义天数: 开始=${startDate.toISOString()}, 值=${pattern.value}`);
             break;
           case 'weeks':
             endDate.setDate(endDate.getDate() + pattern.value * 7);
+            console.log(`自定义周数: 开始=${startDate.toISOString()}, 值=${pattern.value}`);
             break;
           case 'months':
             endDate.setMonth(endDate.getMonth() + pattern.value);
+            console.log(`自定义月数: 开始=${startDate.toISOString()}, 值=${pattern.value}`);
             break;
           case 'years':
             endDate.setFullYear(endDate.getFullYear() + pattern.value);
+            console.log(`自定义年数: 开始=${startDate.toISOString()}, 值=${pattern.value}`);
             break;
           default:
             throw new Error(`不支持的循环单位: ${pattern.unit}`);
@@ -1422,6 +1717,7 @@ export async function createNextCycle(
     }
     
     dueDate = endDate.toISOString();
+    console.log(`计算的截止日期: ${dueDate}`);
     
   } catch (error) {
     console.error('计算下一个周期时出错:', error);
@@ -1429,33 +1725,13 @@ export async function createNextCycle(
     const defaultDueDate = new Date();
     defaultDueDate.setDate(defaultDueDate.getDate() + 7);
     dueDate = defaultDueDate.toISOString();
+    console.log(`使用默认截止日期: ${dueDate}`);
   }
   
-  // 创建新的周期
-  const newCycle: TaskCycle = {
-    id: 0, // 将由saveTaskCycle分配
-    taskId: task.id,
-    startDate: today,
-    dueDate: dueDate,
-    dateType: task.dateType,
-    isCompleted: false,
-    isOverdue: false,
-    createdAt: new Date().toISOString()
-  };
-  
-  // 保存新周期
-  const savedCycle = await saveTaskCycle(newCycle);
-  console.log(`为任务 ${task.id} 创建了新周期: ${savedCycle.id}, 开始: ${today}, 截止: ${dueDate}`);
-  
-  // 安排通知
-  try {
-    await scheduleTaskNotification(task, savedCycle);
-  } catch (notificationError) {
-    console.error('设置通知时出错:', notificationError);
-    // 继续执行，不中断周期创建
-  }
-  
-  return savedCycle;
+  // 创建并返回新周期
+  const newCycle = await createTaskCycleWithDates(task, today, dueDate);
+  console.log(`成功创建下一个周期: ID=${newCycle.id}, 开始=${today}, 截止=${dueDate}`);
+  return newCycle;
 }
 
 /**
