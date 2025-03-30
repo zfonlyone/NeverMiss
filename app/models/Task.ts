@@ -1,13 +1,6 @@
 import { v4 as uuidv4 } from 'uuid';
 
-export type RecurrenceType = 
-  | 'daily'
-  | 'weekly'
-  | 'monthly'
-  | 'yearly'
-  | 'weekOfMonth'
-  | 'composite'
-  | 'custom';
+export type RecurrenceType = 'daily' | 'weekly' | 'monthly' | 'yearly' | 'composite';
 export type RecurrenceUnit = 'minutes' | 'hours' | 'days' | 'weeks' | 'months' | 'years';
 export type ReminderUnit = 'minutes' | 'hours' | 'days';
 export type TaskStatus = 'active' | 'inactive';
@@ -33,30 +26,27 @@ export interface RecurrencePattern {
   isLunar?: boolean; // 是否使用农历
 }
 
-// 组合循环模式接口
+// 复合循环模式
 export interface CompositeRecurrencePattern extends RecurrencePattern {
   type: 'composite';
+  // 年相关设置
+  yearEnabled?: boolean;
+  year?: number;
   
-  // 组合模式参数
-  year?: number;         // 年份循环值
-  yearEnabled?: boolean; // 是否启用年份
+  // 月相关设置
+  monthEnabled?: boolean;
+  month?: number;
   
-  month?: number;         // 月份循环值
-  monthEnabled?: boolean; // 是否启用月份
+  // 月中第几天设置
+  monthDayEnabled?: boolean;
+  monthDay?: number;
   
-  weekOfMonth?: WeekOfMonth; // 月中第几周
-  weekOfMonthEnabled?: boolean; // 是否启用月中周
+  // 星期几设置
+  weekDayEnabled?: boolean;
+  weekDay?: WeekDay;
   
-  weekDay?: WeekDay;       // 星期几
-  weekDayEnabled?: boolean; // 是否启用星期几
-  
-  monthDay?: number;        // 月中天数
-  monthDayEnabled?: boolean; // 是否启用月中天
-  
-  yearDay?: number;         // 年中天数
-  yearDayEnabled?: boolean; // 是否启用年中天
-  
-  isReverse?: boolean;      // 是否倒数
+  // 倒数设置
+  isReverse?: boolean;
 }
 
 export interface TaskCycle {

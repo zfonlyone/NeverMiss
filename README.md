@@ -96,33 +96,7 @@ npx eas build --platform ios --profile preview --local
 
 ## 📂 项目结构
 
-```
-/
-├── app/                # Expo Router应用入口
-│   ├── _layout.tsx     # 应用布局定义
-│   ├── index.tsx       # 主页面定义
-│   └── ...             # 其他路由
-├── assets/             # 静态资源（图片、字体等）
-├── components/         # 共享UI组件
-├── config/             # 应用配置
-├── constants/          # 常量定义
-├── contexts/           # React Context定义
-├── controllers/        # 控制器层（MVC架构）
-├── docs/               # 项目文档
-├── hooks/              # 自定义React Hooks
-├── locales/            # 国际化资源
-├── migrations/         # 数据库迁移脚本
-├── models/             # 数据模型
-├── navigation/         # 导航配置
-├── scripts/            # 构建和部署脚本
-├── screens/            # 应用屏幕
-├── services/           # 服务层
-└── utils/              # 工具函数
-```
 
-完整的项目结构请参考：
-- [项目结构说明](docs/PROJECT_STRUCTURE.md)
-- [应用架构说明](docs/ARCHITECTURE.md)
 
 ## 🏗️ 项目架构
 
@@ -136,20 +110,7 @@ NeverMiss采用修改版的MVC架构，结合了React Native的组件化特性�
 详细的架构说明请参考：
 - [应用架构说明](docs/ARCHITECTURE.md)
 
-## 🔧 常见问题
 
-遇到问题? 查看我们的[常见问题解决方案](docs/DEVELOPMENT_GUIDE.md#8-常见问题解答)。
-
-## 🤝 贡献指南
-
-1. Fork 仓库
-2. 创建功能分支 (`git checkout -b feature/amazing-feature`)
-3. 提交更改 (`git commit -m 'feat: 添加新功能'`)
-4. 推送到分支 (`git push origin feature/amazing-feature`)
-5. 打开 Pull Request
-
-详细的贡献指南请参考：
-- [贡献指南](docs/CONTRIBUTING.md)
 
 ## 📄 许可证
 

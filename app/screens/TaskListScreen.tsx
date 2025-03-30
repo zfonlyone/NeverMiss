@@ -98,11 +98,11 @@ export default function TaskListScreen() {
   };
 
   const handleCreateTask = () => {
-    router.push('/screens/task-form');
+    router.push('/screens/TaskFormScreen');
   };
 
   const handleTaskPress = (task: Task) => {
-    router.push({ pathname: '/screens/task-form', params: { taskId: task.id.toString() } });
+    router.push({ pathname: '/screens/TaskFormScreen', params: { taskId: task.id.toString() } });
   };
 
   // 处理任务完成

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -10,12 +10,12 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
-  ActivityIndicator
+  ActivityIndicator,
+  SafeAreaView
 } from 'react-native';
 import { useRouter, useLocalSearchParams, Stack } from 'expo-router';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useTheme } from '../contexts/ThemeContext';
-import RecurrenceSelector from '../components/RecurrenceSelector';
 import TagSelector from '../components/TagSelector';
 import ColorSelector from '../components/ColorSelector';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -29,7 +29,8 @@ import {
   RecurrenceType,
   ReminderUnit,
   validateTask,
-  CompositeRecurrencePattern
+  CompositeRecurrencePattern,
+  WeekDay
 } from '../models/Task';
 import { createTask as createTaskService, updateTask as updateTaskService, getTask as getTaskById } from '../services/taskService';
 import RNPickerSelect from 'react-native-picker-select';
@@ -1103,306 +1104,687 @@ export default function TaskFormScreen({ taskId }: TaskFormScreenProps) {
   };
 
   return (
-    <KeyboardAvoidingView
-      style={[styles.container, { backgroundColor: colors.background }]}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={100}
-    >
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <Stack.Screen
+        options={{
+          headerTitle: taskId ? t.task.editTask : t.task.addTask,
+          headerBackTitle: t.common.back,
+          headerRight: () => (
+            <TouchableOpacity
+              style={styles.headerSaveButton}
+              onPress={handleSave}
+              disabled={isLoading}
+            >
+              <Ionicons 
+                name="checkmark" 
+                size={28} 
+                color={isLoading ? colors.border : colors.primary} 
+              />
+            </TouchableOpacity>
+          ),
+          headerStyle: {
+            backgroundColor: colors.card,
+          },
+          headerTitleStyle: {
+            color: colors.text,
+          },
+          headerTintColor: colors.primary,
+        }}
+      />
+      
+      <StatusBar style={isDarkMode ? 'light' : 'dark'} />
+      
       {isLoading && (
-        <View style={styles.loadingOverlay}>
+        <View style={[styles.loadingOverlay, { backgroundColor: 'rgba(0,0,0,0.3)' }]}>
           <ActivityIndicator size="large" color={colors.primary} />
         </View>
       )}
       
-      <StatusBar style={isDarkMode ? "light" : "dark"} />
-      <View style={[styles.header, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
-        <TouchableOpacity onPress={handleCancel} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color={colors.primary} />
-        </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>
-          {isEditMode ? t.task.editTask : t.task.newTask}
-        </Text>
-        <TouchableOpacity onPress={handleSave} disabled={isLoading} style={styles.headerSaveButton}>
-          {isLoading ? (
-            <ActivityIndicator size="small" color={colors.primary} />
-          ) : (
-            <Ionicons name="checkmark" size={28} color={colors.primary} />
-          )}
-        </TouchableOpacity>
-      </View>
-
-      <ScrollView 
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.container}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 0}
       >
-        {/* 基本信息部分 */}
-        <View style={[styles.formSection, { backgroundColor: colors.card }]}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>{t.task.title}</Text>
-          <TextInput
-            style={[
-              styles.titleInput, 
-              { 
-                borderColor: colors.border, 
-                backgroundColor: isDarkMode ? colors.card : '#f9f9f9',
-                color: colors.text 
-              }
-            ]}
-            value={title}
-            onChangeText={setTitle}
-            placeholder={t.task.title}
-            placeholderTextColor={colors.subText}
-            maxLength={100}
-          />
-        </View>
-
-        <View style={[styles.formSection, { backgroundColor: colors.card }]}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>{t.task.description}</Text>
-          <TextInput
-            style={[
-              styles.descriptionInput, 
-              { 
-                borderColor: colors.border,
-                backgroundColor: isDarkMode ? colors.card : '#f9f9f9',
-                color: colors.text
-              }
-            ]}
-            value={description}
-            onChangeText={setDescription}
-            placeholder={t.task.description}
-            placeholderTextColor={colors.subText}
-            multiline
-            numberOfLines={3}
-          />
-        </View>
-
-        {/* 日期类型选择 - 独立卡片 */}
-        <View style={[styles.formSection, { backgroundColor: colors.card }]}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>{t.task.dateType}</Text>
-          <View style={[styles.segmentedControl, { backgroundColor: colors.border }]}>
-            <TouchableOpacity
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={[styles.scrollContent, { paddingBottom: Platform.OS === 'ios' ? 120 : 20 }]}
+          showsVerticalScrollIndicator={true}
+        >
+          {/* 基本信息卡片 */}
+          <View style={[styles.card, { backgroundColor: colors.card }]}>
+            <TextInput
               style={[
-                styles.segmentButton,
-                styles.segmentButtonLeft,
-                dateType === 'solar' && { backgroundColor: colors.primary }
+                styles.titleInput,
+                { color: colors.text, borderColor: colors.border, backgroundColor: colors.background }
               ]}
-              onPress={() => setDateType('solar')}
-            >
-              <Text
+              placeholder={t.task.title}
+              placeholderTextColor={colors.subText}
+              value={title}
+              onChangeText={setTitle}
+              maxLength={50}
+            />
+            
+            <TextInput
+              style={[
+                styles.descriptionInput, 
+                { color: colors.text, borderColor: colors.border, backgroundColor: colors.background, marginTop: 12 }
+              ]}
+              placeholder={t.task.description}
+              placeholderTextColor={colors.subText}
+              value={description}
+              onChangeText={setDescription}
+              multiline
+              maxLength={500}
+              textAlignVertical="top"
+            />
+          </View>
+          
+          {/* 日期类型选择卡片 */}
+          <View style={[styles.card, { backgroundColor: colors.card }]}>
+            <Text style={[styles.cardTitle, { color: colors.text }]}>{t.task.dateType}</Text>
+            <View style={[styles.segmentedControl, { backgroundColor: colors.border }]}>
+              <TouchableOpacity
                 style={[
+                  styles.segmentButton,
+                  styles.segmentButtonLeft,
+                  dateType === 'solar' && { backgroundColor: colors.primary }
+                ]}
+                onPress={() => handleDateTypeToggle()}
+              >
+                <Text style={[
                   styles.segmentButtonText,
                   dateType === 'solar' ? { color: '#FFFFFF' } : { color: colors.text }
-                ]}
-              >
-                {t.task.solarCalendar}
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[
-                styles.segmentButton,
-                styles.segmentButtonRight,
-                dateType === 'lunar' && { backgroundColor: colors.primary }
-              ]}
-              onPress={() => setDateType('lunar')}
-            >
-              <Text
+                ]}>
+                  {t.task.solarCalendar}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
                 style={[
+                  styles.segmentButton,
+                  styles.segmentButtonRight,
+                  dateType === 'lunar' && { backgroundColor: colors.primary }
+                ]}
+                onPress={() => handleDateTypeToggle()}
+              >
+                <Text style={[
                   styles.segmentButtonText,
                   dateType === 'lunar' ? { color: '#FFFFFF' } : { color: colors.text }
-                ]}
-              >
-                {t.task.lunarCalendar}
-              </Text>
-            </TouchableOpacity>
+                ]}>
+                  {t.task.lunarCalendar}
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
-        </View>
-        
-        {/* 循环设置 - 独立卡片 */}
-        <View style={[styles.formSection, { backgroundColor: colors.card }]}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>{t.reminder.recurrenceSettings}</Text>
           
-          <View style={styles.settingRow}>
-            <Text style={[styles.settingLabel, { color: colors.text }]}>{t.common.enabled}</Text>
+          {/* 重复设置卡片 - 完全重构 */}
+          <View style={[styles.card, { backgroundColor: colors.card }]}>
+            <Text style={[styles.cardTitle, { color: colors.text }]}>循环设置</Text>
+            
+            <View style={styles.settingRow}>
+              <Text style={[styles.settingLabel, { color: colors.text }]}>启用循环</Text>
               <Switch
                 value={isRecurring}
-              onValueChange={setIsRecurring}
-              trackColor={{ false: colors.border, true: colors.primary }}
-              thumbColor={isRecurring ? colors.primary : colors.card}
-            />
-        </View>
-        
-        {isRecurring && (
-            <>
-              <View style={styles.settingRow}>
-                <Text style={[styles.settingLabel, { color: colors.text }]}>使用截止日期计算</Text>
-                <Switch
-                  value={useDueDateToCalculate}
-                  onValueChange={setUseDueDateToCalculate}
-                  trackColor={{ false: colors.border, true: colors.primary }}
-                  thumbColor={useDueDateToCalculate ? colors.primary : colors.card}
+                onValueChange={handleRecurringToggle}
+                trackColor={{ false: colors.border, true: colors.primary }}
+                thumbColor={isRecurring ? colors.primaryLight : colors.card}
               />
             </View>
-              
-              <RecurrenceSelector
-                value={recurrencePattern}
-                onChange={setRecurrencePattern}
-                fullScreen={false}
-              />
-            </>
-          )}
-        </View>
-
-        {/* 日期设置部分 */}
-        <View style={[styles.formSection, { backgroundColor: colors.card }]}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>日期设置</Text>
-          
-          {isRecurring && (
-            <View style={styles.dateInputTypeContainer}>
-              <Text style={[styles.dateLabel, { color: colors.text }]}>选择输入方式：</Text>
-              <View style={[styles.segmentedControl, { backgroundColor: colors.border, marginBottom: 16 }]}>
-                <TouchableOpacity
-                  style={[
-                    styles.segmentButton,
-                    styles.segmentButtonLeft,
-                    dateInputType === 'startDate' && { backgroundColor: colors.primary }
-                  ]}
-                  onPress={() => handleDateInputTypeChange('startDate')}
-                >
-                  <Text
+            
+            {isRecurring && (
+              <>
+                {/* 循环模式选择 */}
+                <Text style={[styles.fieldLabel, { color: colors.text, marginTop: 16 }]}>循环模式</Text>
+                
+                <View style={styles.typeButtonsContainer}>
+                  <TouchableOpacity
                     style={[
+                      styles.cycleButton,
+                      recurrencePattern.type === 'daily' && styles.cycleButtonActive,
+                      { borderColor: colors.border }
+                    ]}
+                    onPress={() => setRecurrencePattern({...recurrencePattern, type: 'daily'})}
+                  >
+                    <Text style={[styles.cycleButtonText, { color: recurrencePattern.type === 'daily' ? '#FFFFFF' : colors.text }]}>
+                      每天
+                    </Text>
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity
+                    style={[
+                      styles.cycleButton,
+                      recurrencePattern.type === 'weekly' && styles.cycleButtonActive,
+                      { borderColor: colors.border }
+                    ]}
+                    onPress={() => setRecurrencePattern({...recurrencePattern, type: 'weekly'})}
+                  >
+                    <Text style={[styles.cycleButtonText, { color: recurrencePattern.type === 'weekly' ? '#FFFFFF' : colors.text }]}>
+                      每周
+                    </Text>
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity
+                    style={[
+                      styles.cycleButton,
+                      recurrencePattern.type === 'monthly' && styles.cycleButtonActive,
+                      { borderColor: colors.border }
+                    ]}
+                    onPress={() => setRecurrencePattern({...recurrencePattern, type: 'monthly'})}
+                  >
+                    <Text style={[styles.cycleButtonText, { color: recurrencePattern.type === 'monthly' ? '#FFFFFF' : colors.text }]}>
+                      每月
+                    </Text>
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity
+                    style={[
+                      styles.cycleButton,
+                      recurrencePattern.type === 'yearly' && styles.cycleButtonActive,
+                      { borderColor: colors.border }
+                    ]}
+                    onPress={() => setRecurrencePattern({...recurrencePattern, type: 'yearly'})}
+                  >
+                    <Text style={[styles.cycleButtonText, { color: recurrencePattern.type === 'yearly' ? '#FFFFFF' : colors.text }]}>
+                      每年
+                    </Text>
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity
+                    style={[
+                      styles.cycleButton,
+                      recurrencePattern.type === 'composite' && styles.cycleButtonActive,
+                      { borderColor: colors.border }
+                    ]}
+                    onPress={() => setRecurrencePattern({...recurrencePattern, type: 'composite'})}
+                  >
+                    <Text style={[styles.cycleButtonText, { color: recurrencePattern.type === 'composite' ? '#FFFFFF' : colors.text }]}>
+                      组合
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+                
+                {/* 循环间隔设置 - 基本模式 */}
+                {recurrencePattern.type !== 'composite' && (
+                  <>
+                    <Text style={[styles.fieldLabel, { color: colors.text, marginTop: 16 }]}>
+                      {recurrencePattern.type === 'daily' && '每隔几天'}
+                      {recurrencePattern.type === 'weekly' && '每隔几周'}
+                      {recurrencePattern.type === 'monthly' && '每隔几月'}
+                      {recurrencePattern.type === 'yearly' && '每隔几年'}
+                    </Text>
+                    
+                    <View style={styles.valueInputContainer}>
+                      <TextInput
+                        style={[styles.valueInput, { color: colors.text, borderColor: colors.border, backgroundColor: colors.background }]}
+                        value={recurrencePattern.value?.toString() || "1"}
+                        onChangeText={(text) => {
+                          const value = parseInt(text) || 1;
+                          setRecurrencePattern({...recurrencePattern, value});
+                        }}
+                        keyboardType="number-pad"
+                      />
+                      
+                      <Text style={[styles.valueLabel, { color: colors.text }]}>
+                        {recurrencePattern.type === 'daily' && '天'}
+                        {recurrencePattern.type === 'weekly' && '周'}
+                        {recurrencePattern.type === 'monthly' && '月'}
+                        {recurrencePattern.type === 'yearly' && '年'}
+                      </Text>
+                    </View>
+                  </>
+                )}
+                
+                {/* 星期几设置 - 每周模式 */}
+                {recurrencePattern.type === 'weekly' && (
+                  <>
+                    <Text style={[styles.fieldLabel, { color: colors.text, marginTop: 16 }]}>选择星期几</Text>
+                    <View style={styles.weekDaysContainer}>
+                      {[0, 1, 2, 3, 4, 5, 6].map((day) => (
+                        <TouchableOpacity
+                          key={day}
+                          style={[
+                            styles.weekDayButton,
+                            recurrencePattern.weekDay === day && styles.weekDayButtonActive,
+                            { borderColor: colors.border }
+                          ]}
+                          onPress={() => setRecurrencePattern({...recurrencePattern, weekDay: day as WeekDay})}
+                        >
+                          <Text style={[
+                            styles.weekDayText,
+                            { color: recurrencePattern.weekDay === day ? '#FFFFFF' : colors.text }
+                          ]}>
+                            {['日', '一', '二', '三', '四', '五', '六'][day]}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </>
+                )}
+                
+                {/* 每月几号 - 每月模式 */}
+                {recurrencePattern.type === 'monthly' && (
+                  <>
+                    <Text style={[styles.fieldLabel, { color: colors.text, marginTop: 16 }]}>每月几号</Text>
+                    <View style={styles.monthDayContainer}>
+                      <TextInput
+                        style={[styles.valueInput, { color: colors.text, borderColor: colors.border, backgroundColor: colors.background }]}
+                        value={recurrencePattern.monthDay?.toString() || "1"}
+                        onChangeText={(text) => {
+                          const value = parseInt(text) || 1;
+                          setRecurrencePattern({...recurrencePattern, monthDay: value > 0 && value <= 31 ? value : 1});
+                        }}
+                        keyboardType="number-pad"
+                      />
+                      <Text style={[styles.valueLabel, { color: colors.text }]}>号</Text>
+                      
+                      {/* 倒数选项 */}
+                      <TouchableOpacity
+                        style={[
+                          styles.reverseButton,
+                          recurrencePattern.isReverse && styles.reverseButtonActive,
+                          { borderColor: colors.border, marginLeft: 12 }
+                        ]}
+                        onPress={() => setRecurrencePattern({...recurrencePattern, isReverse: !recurrencePattern.isReverse})}
+                      >
+                        <Text style={[
+                          styles.reverseButtonText, 
+                          { color: recurrencePattern.isReverse ? '#FFFFFF' : colors.text }
+                        ]}>
+                          倒数计算
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  </>
+                )}
+                
+                {/* 组合模式设置 */}
+                {recurrencePattern.type === 'composite' && (
+                  <View style={styles.compositeContainer}>
+                    {/* 年份设置 */}
+                    <View style={styles.compositeRow}>
+                      <Switch
+                        value={(recurrencePattern as CompositeRecurrencePattern).yearEnabled || false}
+                        onValueChange={(value) => {
+                          const newPattern = {...recurrencePattern} as CompositeRecurrencePattern;
+                          newPattern.yearEnabled = value;
+                          if (value && !newPattern.year) newPattern.year = 1;
+                          setRecurrencePattern(newPattern);
+                        }}
+                        trackColor={{ false: colors.border, true: colors.primary }}
+                        thumbColor={(recurrencePattern as CompositeRecurrencePattern).yearEnabled ? colors.primaryLight : colors.card}
+                      />
+                      <Text style={[styles.compositeLabel, { color: colors.text }]}>每</Text>
+                      <TextInput
+                        style={[
+                          styles.compositeInput,
+                          { 
+                            color: colors.text, 
+                            borderColor: colors.border, 
+                            backgroundColor: (recurrencePattern as CompositeRecurrencePattern).yearEnabled ? colors.background : colors.disabled
+                          }
+                        ]}
+                        value={(recurrencePattern as CompositeRecurrencePattern).year?.toString() || "1"}
+                        onChangeText={(text) => {
+                          const value = parseInt(text) || 1;
+                          const newPattern = {...recurrencePattern} as CompositeRecurrencePattern;
+                          newPattern.year = value;
+                          setRecurrencePattern(newPattern);
+                        }}
+                        keyboardType="number-pad"
+                        editable={(recurrencePattern as CompositeRecurrencePattern).yearEnabled}
+                      />
+                      <Text style={[styles.compositeLabel, { color: colors.text }]}>年</Text>
+                    </View>
+                    
+                    {/* 月份设置 */}
+                    <View style={styles.compositeRow}>
+                      <Switch
+                        value={(recurrencePattern as CompositeRecurrencePattern).monthEnabled || false}
+                        onValueChange={(value) => {
+                          const newPattern = {...recurrencePattern} as CompositeRecurrencePattern;
+                          newPattern.monthEnabled = value;
+                          if (value && !newPattern.month) newPattern.month = 1;
+                          setRecurrencePattern(newPattern);
+                        }}
+                        trackColor={{ false: colors.border, true: colors.primary }}
+                        thumbColor={(recurrencePattern as CompositeRecurrencePattern).monthEnabled ? colors.primaryLight : colors.card}
+                      />
+                      <Text style={[styles.compositeLabel, { color: colors.text }]}>每</Text>
+                      <TextInput
+                        style={[
+                          styles.compositeInput,
+                          { 
+                            color: colors.text, 
+                            borderColor: colors.border, 
+                            backgroundColor: (recurrencePattern as CompositeRecurrencePattern).monthEnabled ? colors.background : colors.disabled
+                          }
+                        ]}
+                        value={(recurrencePattern as CompositeRecurrencePattern).month?.toString() || "1"}
+                        onChangeText={(text) => {
+                          const value = parseInt(text) || 1;
+                          const newPattern = {...recurrencePattern} as CompositeRecurrencePattern;
+                          newPattern.month = value;
+                          setRecurrencePattern(newPattern);
+                        }}
+                        keyboardType="number-pad"
+                        editable={(recurrencePattern as CompositeRecurrencePattern).monthEnabled}
+                      />
+                      <Text style={[styles.compositeLabel, { color: colors.text }]}>月</Text>
+                    </View>
+                    
+                    {/* 每月第几天设置 */}
+                    <View style={styles.compositeRow}>
+                      <Switch
+                        value={(recurrencePattern as CompositeRecurrencePattern).monthDayEnabled || false}
+                        onValueChange={(value) => {
+                          const newPattern = {...recurrencePattern} as CompositeRecurrencePattern;
+                          newPattern.monthDayEnabled = value;
+                          if (value && !newPattern.monthDay) newPattern.monthDay = 1;
+                          setRecurrencePattern(newPattern);
+                        }}
+                        trackColor={{ false: colors.border, true: colors.primary }}
+                        thumbColor={(recurrencePattern as CompositeRecurrencePattern).monthDayEnabled ? colors.primaryLight : colors.card}
+                      />
+                      <Text style={[styles.compositeLabel, { color: colors.text }]}>每月</Text>
+                      <TextInput
+                        style={[
+                          styles.compositeInput,
+                          { 
+                            color: colors.text, 
+                            borderColor: colors.border, 
+                            backgroundColor: (recurrencePattern as CompositeRecurrencePattern).monthDayEnabled ? colors.background : colors.disabled
+                          }
+                        ]}
+                        value={(recurrencePattern as CompositeRecurrencePattern).monthDay?.toString() || "1"}
+                        onChangeText={(text) => {
+                          const value = parseInt(text) || 1;
+                          const newPattern = {...recurrencePattern} as CompositeRecurrencePattern;
+                          newPattern.monthDay = value;
+                          setRecurrencePattern(newPattern);
+                        }}
+                        keyboardType="number-pad"
+                        editable={(recurrencePattern as CompositeRecurrencePattern).monthDayEnabled}
+                      />
+                      <Text style={[styles.compositeLabel, { color: colors.text }]}>日</Text>
+                      
+                      <TouchableOpacity
+                        style={[
+                          styles.reverseButton,
+                          {
+                            borderColor: colors.border,
+                            backgroundColor: (recurrencePattern as CompositeRecurrencePattern).isReverse ? colors.primary : 'transparent',
+                            marginLeft: 12
+                          }
+                        ]}
+                        onPress={() => {
+                          const newPattern = {...recurrencePattern} as CompositeRecurrencePattern;
+                          newPattern.isReverse = !newPattern.isReverse;
+                          setRecurrencePattern(newPattern);
+                        }}
+                      >
+                        <Text style={[
+                          styles.reverseButtonText, 
+                          { color: (recurrencePattern as CompositeRecurrencePattern).isReverse ? '#FFFFFF' : colors.text }
+                        ]}>
+                          倒数
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                    
+                    {/* 星期几设置 */}
+                    <View style={styles.compositeRow}>
+                      <Switch
+                        value={(recurrencePattern as CompositeRecurrencePattern).weekDayEnabled || false}
+                        onValueChange={(value) => {
+                          const newPattern = {...recurrencePattern} as CompositeRecurrencePattern;
+                          newPattern.weekDayEnabled = value;
+                          if (value && newPattern.weekDay === undefined) newPattern.weekDay = 1 as WeekDay;
+                          setRecurrencePattern(newPattern);
+                        }}
+                        trackColor={{ false: colors.border, true: colors.primary }}
+                        thumbColor={(recurrencePattern as CompositeRecurrencePattern).weekDayEnabled ? colors.primaryLight : colors.card}
+                      />
+                      <Text style={[styles.compositeLabel, { color: colors.text }]}>星期</Text>
+                      <View style={styles.weekDaysContainerSmall}>
+                        {[0, 1, 2, 3, 4, 5, 6].map((day) => (
+                          <TouchableOpacity
+                            key={day}
+                            style={[
+                              styles.weekDayButtonSmall,
+                              (recurrencePattern as CompositeRecurrencePattern).weekDay === day && styles.weekDayButtonActive,
+                              { 
+                                borderColor: colors.border,
+                                opacity: (recurrencePattern as CompositeRecurrencePattern).weekDayEnabled ? 1 : 0.5
+                              }
+                            ]}
+                            onPress={() => {
+                              if ((recurrencePattern as CompositeRecurrencePattern).weekDayEnabled) {
+                                const newPattern = {...recurrencePattern} as CompositeRecurrencePattern;
+                                newPattern.weekDay = day as WeekDay;
+                                setRecurrencePattern(newPattern);
+                              }
+                            }}
+                          >
+                            <Text style={[
+                              styles.weekDayTextSmall,
+                              { 
+                                color: (recurrencePattern as CompositeRecurrencePattern).weekDay === day ? '#FFFFFF' : colors.text
+                              }
+                            ]}>
+                              {['日', '一', '二', '三', '四', '五', '六'][day]}
+                            </Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    </View>
+                  </View>
+                )}
+                
+                {/* 日期计算方式设置 */}
+                <View style={[styles.settingRow, { marginTop: 20, paddingTop: 16, borderTopWidth: StyleSheet.hairlineWidth }]}>
+                  <Text style={[styles.settingLabel, { color: colors.text }]}>日期计算方式</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <Text style={[styles.calcMethodText, { color: colors.text }]}>
+                      {useDueDateToCalculate ? "截止日期→开始日期" : "开始日期→截止日期"}
+                    </Text>
+                    <TouchableOpacity
+                      style={[styles.methodButton, { backgroundColor: colors.primary, marginLeft: 8 }]}
+                      onPress={handleDateCalculationToggle}
+                    >
+                      <Text style={[styles.methodButtonText, { color: '#FFFFFF' }]}>切换</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </>
+            )}
+          </View>
+          
+          {/* 日期设置卡片 */}
+          <View style={[styles.card, { backgroundColor: colors.card }]}>
+            <Text style={[styles.cardTitle, { color: colors.text }]}>日期设置</Text>
+            
+            {isRecurring && (
+              <View style={styles.inputTypeSelector}>
+                <Text style={[styles.fieldLabel, { color: colors.text }]}>选择输入方式</Text>
+                <View style={[styles.segmentedControl, { backgroundColor: colors.border, marginTop: 8 }]}>
+                  <TouchableOpacity
+                    style={[
+                      styles.segmentButton,
+                      styles.segmentButtonLeft,
+                      dateInputType === 'startDate' && { backgroundColor: colors.primary }
+                    ]}
+                    onPress={() => handleDateInputTypeChange('startDate')}
+                  >
+                    <Text style={[
                       styles.segmentButtonText,
                       dateInputType === 'startDate' ? { color: '#FFFFFF' } : { color: colors.text }
-                    ]}
-                  >
-                    输入开始日期
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[
-                    styles.segmentButton,
-                    styles.segmentButtonRight,
-                    dateInputType === 'dueDate' && { backgroundColor: colors.primary }
-                  ]}
-                  onPress={() => handleDateInputTypeChange('dueDate')}
-                >
-                  <Text
+                    ]}>
+                      输入开始日期
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
                     style={[
+                      styles.segmentButton,
+                      styles.segmentButtonRight,
+                      dateInputType === 'dueDate' && { backgroundColor: colors.primary }
+                    ]}
+                    onPress={() => handleDateInputTypeChange('dueDate')}
+                  >
+                    <Text style={[
                       styles.segmentButtonText,
                       dateInputType === 'dueDate' ? { color: '#FFFFFF' } : { color: colors.text }
-                    ]}
+                    ]}>
+                      输入截止日期
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+            
+            {/* 非循环任务或用户选择输入开始日期 */}
+            {(!isRecurring || (isRecurring && dateInputType === 'startDate')) && (
+              <View style={styles.dateSection}>
+                <Text style={[styles.fieldLabel, { color: colors.text, marginTop: 16 }]}>{t.task.startDate}</Text>
+                <View style={styles.dateTimeContainer}>
+                  <TouchableOpacity 
+                    style={[styles.dateButton, { borderColor: colors.border, backgroundColor: colors.background }]}
+                    onPress={() => setShowStartDatePicker(true)}
                   >
-                    输入截止日期
+                    <Text style={[styles.dateButtonText, { color: colors.text }]}>
+                      {formatDate(startDate)}
+                    </Text>
+                    <Ionicons name="calendar-outline" size={20} color={colors.primary} />
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity 
+                    style={[styles.timeButton, { borderColor: colors.border, backgroundColor: colors.background }]}
+                    onPress={() => setShowStartTimePicker(true)}
+                  >
+                    <Text style={[styles.timeButtonText, { color: colors.text }]}>
+                      {formatTime(startDate, dateType)}
+                    </Text>
+                    <Ionicons name="time-outline" size={20} color={colors.primary} />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+            
+            {/* 非循环任务或用户选择输入截止日期 */}
+            {(!isRecurring || (isRecurring && dateInputType === 'dueDate')) && (
+              <View style={styles.dateSection}>
+                <Text style={[styles.fieldLabel, { color: colors.text, marginTop: 16 }]}>{t.task.dueDate}</Text>
+                <View style={styles.dateTimeContainer}>
+                  <TouchableOpacity 
+                    style={[styles.dateButton, { borderColor: colors.border, backgroundColor: colors.background }]}
+                    onPress={() => setShowDueDatePicker(true)}
+                  >
+                    <Text style={[styles.dateButtonText, { color: colors.text }]}>
+                      {formatDate(dueDate)}
+                    </Text>
+                    <Ionicons name="calendar-outline" size={20} color={colors.primary} />
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity 
+                    style={[styles.timeButton, { borderColor: colors.border, backgroundColor: colors.background }]}
+                    onPress={() => setShowDueTimePicker(true)}
+                  >
+                    <Text style={[styles.timeButtonText, { color: colors.text }]}>
+                      {formatTime(dueDate, dateType)}
+                    </Text>
+                    <Ionicons name="time-outline" size={20} color={colors.primary} />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+            
+            {/* 计算出的对应日期 - 循环任务显示 */}
+            {isRecurring && (
+              <View style={styles.calculatedDateSection}>
+                <Text style={[styles.fieldLabel, { color: colors.text, marginTop: 16 }]}>
+                  {dateInputType === 'startDate' ? t.task.dueDate : t.task.startDate}
+                  <Text style={{ color: colors.subText, fontStyle: 'italic', fontSize: 14 }}> (自动计算)</Text>
+                </Text>
+                <View style={[styles.calculatedDateBox, { backgroundColor: colors.background, borderColor: colors.border }]}>
+                  <Text style={[styles.calculatedDateText, { color: colors.text }]}>
+                    {dateInputType === 'startDate' 
+                      ? `${formatDate(dueDate)} ${formatTime(dueDate, dateType)}`
+                      : `${formatDate(startDate)} ${formatTime(startDate, dateType)}`
+                    }
                   </Text>
-                </TouchableOpacity>
+                </View>
+              </View>
+            )}
+          </View>
+          
+          {/* 提醒设置卡片 */}
+          <View style={[styles.card, { backgroundColor: colors.card }]}>
+            <Text style={[styles.cardTitle, { color: colors.text }]}>提醒设置</Text>
+            
+            <View style={styles.reminderSection}>
+              <Text style={[styles.fieldLabel, { color: colors.text }]}>提前提醒</Text>
+              
+              <View style={styles.reminderInputsContainer}>
+                <View style={styles.reminderInputGroup}>
+                  <TextInput
+                    style={[styles.reminderInput, { color: colors.text, borderColor: colors.border, backgroundColor: colors.background }]}
+                    value={reminderDays.toString()}
+                    onChangeText={handleReminderDaysChange}
+                    keyboardType="number-pad"
+                  />
+                  <Text style={[styles.reminderLabel, { color: colors.text }]}>天</Text>
+                </View>
+                
+                <View style={styles.reminderInputGroup}>
+                  <TextInput
+                    style={[styles.reminderInput, { color: colors.text, borderColor: colors.border, backgroundColor: colors.background }]}
+                    value={reminderHours.toString()}
+                    onChangeText={handleReminderHoursChange}
+                    keyboardType="number-pad"
+                  />
+                  <Text style={[styles.reminderLabel, { color: colors.text }]}>小时</Text>
+                </View>
+                
+                <View style={styles.reminderInputGroup}>
+                  <TextInput
+                    style={[styles.reminderInput, { color: colors.text, borderColor: colors.border, backgroundColor: colors.background }]}
+                    value={reminderMinutes.toString()}
+                    onChangeText={handleReminderMinutesChange}
+                    keyboardType="number-pad"
+                  />
+                  <Text style={[styles.reminderLabel, { color: colors.text }]}>分钟</Text>
+                </View>
               </View>
             </View>
-          )}
-          
-          {/* 日期计算方式选择 */}
-          {isRecurring && (
-            <View style={styles.dateInputTypeContainer}>
-              <Text style={[styles.dateLabel, { color: colors.text }]}>日期计算方式：</Text>
-              <View style={styles.settingRow}>
-                <Text style={[styles.settingLabel, { color: colors.text }]}>
-                  {useDueDateToCalculate ? "用截止日期计算开始日期" : "用开始日期计算截止日期"}
+            
+            <View style={styles.timePickerSection}>
+              <Text style={[styles.fieldLabel, { color: colors.text, marginTop: 16 }]}>提醒时间</Text>
+              <TouchableOpacity 
+                style={[styles.timePickerButton, { borderColor: colors.border, backgroundColor: colors.background }]}
+                onPress={() => setShowTimePicker(true)}
+              >
+                <Text style={[styles.timePickerText, { color: colors.text }]}>
+                  {formatTime(new Date(new Date().setHours(reminderTime.hour, reminderTime.minute)), 'solar')}
                 </Text>
-                <TouchableOpacity 
-                  style={[styles.switchButton, { backgroundColor: colors.primary }]}
-                  onPress={handleDateCalculationToggle}
-                >
-                  <Text style={styles.switchButtonText}>切换</Text>
-                </TouchableOpacity>
-              </View>
+                <Ionicons name="time-outline" size={20} color={colors.primary} />
+              </TouchableOpacity>
             </View>
-          )}
+          </View>
           
-          {/* 循环任务且用户选择输入开始日期 */}
-          {isRecurring && dateInputType === 'startDate' && (
-            <>
-              <Text style={[styles.dateLabel, { color: colors.text, marginTop: 8 }]}>{t.task.startDate}</Text>
-              <View style={styles.dateTimeContainer}>
-                <TouchableOpacity 
-                  style={[styles.dateButton, { borderColor: colors.border }]}
-                  onPress={() => setShowStartDatePicker(true)}
-                >
-                  <Text style={[styles.dateButtonText, { color: colors.text }]}>
-                    {formatDate(startDate)}
-                  </Text>
-                  <Ionicons name="calendar-outline" size={20} color={colors.primary} />
-                </TouchableOpacity>
-                
-                <TouchableOpacity 
-                  style={[styles.timeButton, { borderColor: colors.border }]}
-                  onPress={() => setShowStartTimePicker(true)}
-                >
-                  <Text style={[styles.timeButtonText, { color: colors.text }]}>
-                    {formatTime(startDate, dateType)}
-                  </Text>
-                  <Ionicons name="time-outline" size={20} color={colors.primary} />
-                </TouchableOpacity>
-              </View>
-              
-              {/* 显示计算出的截止日期 */}
-              <View style={styles.calculatedDueDateContainer}>
-                <Text style={[styles.dateLabel, { color: colors.text, marginTop: 8 }]}>{t.task.dueDate}</Text>
-                <Text style={[styles.calculatedDueDate, { color: colors.text }]}>
-                  {formatDate(dueDate)} {formatTime(dueDate, dateType)}
-                </Text>
-              </View>
-            </>
-          )}
-
-          {/* 循环任务且用户选择输入截止日期 */}
-          {isRecurring && dateInputType === 'dueDate' && (
-            <>
-              <Text style={[styles.dateLabel, { color: colors.text, marginTop: 8 }]}>{t.task.dueDate}</Text>
-              <View style={styles.dateTimeContainer}>
-                <TouchableOpacity 
-                  style={[styles.dateButton, { borderColor: colors.border }]}
-                  onPress={() => setShowDueDatePicker(true)}
-                >
-                  <Text style={[styles.dateButtonText, { color: colors.text }]}>
-                    {formatDate(dueDate)}
-                  </Text>
-                  <Ionicons name="calendar-outline" size={20} color={colors.primary} />
-                </TouchableOpacity>
-                
-                <TouchableOpacity 
-                  style={[styles.timeButton, { borderColor: colors.border }]}
-                  onPress={() => setShowDueTimePicker(true)}
-                >
-                  <Text style={[styles.timeButtonText, { color: colors.text }]}>
-                    {formatTime(dueDate, dateType)}
-                  </Text>
-                  <Ionicons name="time-outline" size={20} color={colors.primary} />
-                </TouchableOpacity>
-              </View>
-              
-              {/* 显示计算出的开始日期 */}
-              <View style={styles.calculatedDueDateContainer}>
-                <Text style={[styles.dateLabel, { color: colors.text, marginTop: 8 }]}>{t.task.startDate}</Text>
-                <Text style={[styles.calculatedDueDate, { color: colors.text }]}>
-                  {formatDate(startDate)} {formatTime(startDate, dateType)}
-                </Text>
-              </View>
-            </>
-          )}
+          {/* 标签选择器 */}
+          <View style={[styles.card, { backgroundColor: colors.card }]}>
+            <Text style={[styles.cardTitle, { color: colors.text }]}>标签</Text>
+            <TagSelector
+              selectedTags={tags}
+              onTagsChange={setTags}
+            />
+          </View>
           
-          {/* 日期时间选择器 */}
+          {/* 时间选择器 - 隐藏的 */}
           {showStartDatePicker && (
             <DateTimePicker
               value={startDate}
               mode="date"
               display={Platform.OS === 'ios' ? 'spinner' : 'default'}
               onChange={handleStartDateChange}
-            />
-          )}
-          
-          {showDueDatePicker && (
-            <DateTimePicker
-              value={dueDate}
-              mode="date"
-              display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-              onChange={handleDueDateChange}
             />
           )}
           
@@ -1415,6 +1797,15 @@ export default function TaskFormScreen({ taskId }: TaskFormScreenProps) {
             />
           )}
           
+          {showDueDatePicker && (
+            <DateTimePicker
+              value={dueDate}
+              mode="date"
+              display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+              onChange={handleDueDateChange}
+            />
+          )}
+          
           {showDueTimePicker && (
             <DateTimePicker
               value={dueDate}
@@ -1423,59 +1814,6 @@ export default function TaskFormScreen({ taskId }: TaskFormScreenProps) {
               onChange={handleDueTimeChange}
             />
           )}
-        </View>
-
-        
-
-        {/* 提醒设置部分 */}
-        <View style={[styles.formSection, { backgroundColor: colors.card }]}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>{t.reminder.reminderSettings}</Text>
-          
-          <Text style={[styles.dateLabel, { color: colors.text, marginTop: 8 }]}>{t.task.reminderOffset}</Text>
-          <View style={styles.dateTimeContainer}>
-            <View style={styles.reminderRow}>
-              <TextInput
-                style={[styles.reminderInput, { borderColor: colors.border, color: colors.text }]}
-                value={reminderDays.toString()}
-                onChangeText={handleReminderDaysChange}
-                keyboardType="numeric"
-                placeholder="0"
-                placeholderTextColor={colors.subText}
-              />
-              <Text style={[styles.reminderUnitText, { color: colors.text }]}>{t.task.days}</Text>
-              
-              <TextInput
-                style={[styles.reminderInput, { borderColor: colors.border, color: colors.text }]}
-                value={reminderHours.toString()}
-                onChangeText={handleReminderHoursChange}
-                keyboardType="numeric"
-                placeholder="0"
-                placeholderTextColor={colors.subText}
-              />
-              <Text style={[styles.reminderUnitText, { color: colors.text }]}>{t.task.hours}</Text>
-              
-              <TextInput
-                style={[styles.reminderInput, { borderColor: colors.border, color: colors.text }]}
-                value={reminderMinutes.toString()}
-                onChangeText={handleReminderMinutesChange}
-                keyboardType="numeric"
-                placeholder="0"
-                placeholderTextColor={colors.subText}
-              />
-              <Text style={[styles.reminderUnitText, { color: colors.text }]}>{t.task.minutes}</Text>
-            </View>
-          </View>
-          
-          <Text style={[styles.dateLabel, { color: colors.text, marginTop: 12 }]}>{t.reminder.reminderTime}</Text>
-          <TouchableOpacity 
-            style={[styles.timePickerButton, { borderColor: colors.border }]}
-            onPress={() => setShowTimePicker(true)}
-          >
-            <Text style={[styles.timeButtonText, { color: colors.text }]}>
-              {formatTime(reminderTime, 'solar')}
-            </Text>
-            <Ionicons name="time-outline" size={20} color={colors.primary} />
-          </TouchableOpacity>
           
           {showTimePicker && (
             <DateTimePicker
@@ -1485,52 +1823,9 @@ export default function TaskFormScreen({ taskId }: TaskFormScreenProps) {
               onChange={handleTimeChange}
             />
           )}
-        </View>
-
-        {/* 标签选择 */}
-        <View style={[styles.formSection, { backgroundColor: colors.card }]}>
-          <TagSelector selectedTags={tags} onTagsChange={setTags} />
-        </View>
-
-        {/* 颜色选择 */}
-        <View style={[styles.formSection, { backgroundColor: colors.card }]}>
-          <ColorSelector selectedColor={backgroundColor} onColorChange={setBackgroundColor} />
-        </View>
-
-        {/* 其他设置部分 */}
-        <View style={[styles.formSection, { backgroundColor: colors.card }]}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>{t.menu.settings}</Text>
-          
-          <View style={[styles.switchSetting, { backgroundColor: colors.card }]}>
-            <View style={[styles.switchTextContainer, { backgroundColor: colors.card }]}>
-              <Text style={[styles.switchLabel, { color: colors.text }]}>{t.task.enableTask}</Text>
-              <Text style={[styles.switchDescription, { color: colors.subText }]}>{t.task.enableTaskDesc}</Text>
-            </View>
-            <Switch
-              value={isActive}
-              onValueChange={setIsActive}
-              trackColor={{ false: '#767577', true: colors.primary + '80' }}
-              thumbColor={isActive ? colors.primary : '#f4f3f4'}
-              ios_backgroundColor="#3e3e3e"
-            />
-          </View>
-
-          <View style={[styles.switchSetting, { backgroundColor: colors.card }]}>
-            <View style={[styles.switchTextContainer, { backgroundColor: colors.card }]}>
-              <Text style={[styles.switchLabel, { color: colors.text }]}>{t.task.syncToCalendar}</Text>
-              <Text style={[styles.switchDescription, { color: colors.subText }]}>{t.task.syncToCalendarDesc}</Text>
-            </View>
-            <Switch
-              value={syncToCalendar}
-              onValueChange={setSyncToCalendar}
-              trackColor={{ false: '#767577', true: colors.primary + '80' }}
-              thumbColor={syncToCalendar ? colors.primary : '#f4f3f4'}
-              ios_backgroundColor="#3e3e3e"
-            />
-          </View>
-        </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </View>
   );
 }
 
@@ -1549,18 +1844,16 @@ const styles = StyleSheet.create({
     top: 0,
     bottom: 0,
   },
-  contentContainer: {
-    paddingBottom: 30,
+  scrollView: {
+    flex: 1,
   },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: 'white',
+  scrollContent: {
+    paddingBottom: 40,
   },
-  formSection: {
+  card: {
     marginHorizontal: 10,
     marginVertical: 8,
-    borderRadius: 8,
+    borderRadius: 12,
     padding: 15,
     shadowColor: '#000',
     shadowOffset: {
@@ -1571,42 +1864,27 @@ const styles = StyleSheet.create({
     shadowRadius: 3.84,
     elevation: 5,
   },
-  inputContainer: {
-    marginBottom: 15,
-  },
-  input: {
-    borderWidth: 1,
-    paddingHorizontal: 10,
-    paddingVertical: 12,
-    borderRadius: 8,
-    fontSize: 16,
-  },
-  multilineInput: {
-    minHeight: 100,
-    textAlignVertical: 'top',
-  },
-  saveButton: {
-    marginHorizontal: 20,
-    marginTop: 20,
-    marginBottom: 40,
-    height: 50,
-    borderRadius: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  saveButtonText: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: 'white',
-  },
-  labelText: {
-    fontSize: 16,
-    marginBottom: 8,
-  },
-  sectionTitle: {
+  cardTitle: {
     fontSize: 18,
     fontWeight: 'bold',
     marginBottom: 12,
+    color: '#333',
+  },
+  titleInput: {
+    height: 48,
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    fontSize: 16,
+  },
+  descriptionInput: {
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingTop: 12,
+    fontSize: 16,
+    minHeight: 100,
+    textAlignVertical: 'top',
   },
   settingRow: {
     flexDirection: 'row',
@@ -1618,14 +1896,86 @@ const styles = StyleSheet.create({
   settingLabel: {
     fontSize: 16,
   },
-  dateLabel: {
+  fieldLabel: {
     fontSize: 16,
     marginBottom: 8,
+  },
+  segmentedControl: {
+    flexDirection: 'row',
+    borderRadius: 8,
+    overflow: 'hidden',
+    height: 44,
+  },
+  segmentButton: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  segmentButtonLeft: {
+    borderTopLeftRadius: 8,
+    borderBottomLeftRadius: 8,
+  },
+  segmentButtonRight: {
+    borderTopRightRadius: 8,
+    borderBottomRightRadius: 8,
+  },
+  segmentButtonText: {
+    fontSize: 14,
+    fontWeight: '500',
+    textAlign: 'center',
+  },
+  typeButtonsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 8,
+    flexWrap: 'wrap',
+  },
+  cycleButton: {
+    padding: 8,
+    borderWidth: 1,
+    borderRadius: 8,
+    margin: 4,
+    minWidth: 70,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cycleButtonActive: {
+    backgroundColor: '#007AFF',
+    borderColor: '#007AFF',
+  },
+  cycleButtonText: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  valueInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  valueInput: {
+    width: 80,
+    height: 48,
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    fontSize: 16,
+    textAlign: 'center',
+  },
+  valueLabel: {
+    fontSize: 16,
+    marginLeft: 12,
+  },
+  inputTypeSelector: {
+    marginBottom: 16,
+  },
+  dateSection: {
+    marginBottom: 16,
   },
   dateTimeContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 15,
+    marginTop: 8,
   },
   dateButton: {
     flexDirection: 'row',
@@ -1654,61 +2004,61 @@ const styles = StyleSheet.create({
   timeButtonText: {
     fontSize: 16,
   },
-  calculatedDueDateContainer: {
-    marginBottom: 15,
+  calculatedDateSection: {
+    marginBottom: 16,
   },
-  calculatedDueDate: {
+  calculatedDateBox: {
+    marginTop: 8,
+    padding: 12,
+    borderWidth: 1,
+    borderRadius: 8,
+  },
+  calculatedDateText: {
     fontSize: 16,
     fontWeight: '500',
   },
-  dateInputTypeContainer: {
+  reminderSection: {
     marginBottom: 16,
   },
-  segmentedControl: {
+  reminderInputsContainer: {
     flexDirection: 'row',
-    borderRadius: 8,
-    overflow: 'hidden',
-    height: 44,
+    justifyContent: 'space-between',
+    marginTop: 8,
+    flexWrap: 'wrap',
   },
-  segmentButton: {
-    flex: 1,
-    justifyContent: 'center',
+  reminderInputGroup: {
+    flexDirection: 'row',
     alignItems: 'center',
+    marginRight: 8,
+    marginBottom: 8,
   },
-  segmentButtonLeft: {
-    borderTopLeftRadius: 8,
-    borderBottomLeftRadius: 8,
-  },
-  segmentButtonRight: {
-    borderTopRightRadius: 8,
-    borderBottomRightRadius: 8,
-  },
-  segmentButtonText: {
-    fontSize: 14,
-    fontWeight: '500',
+  reminderInput: {
+    width: 60,
+    height: 48,
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    fontSize: 16,
     textAlign: 'center',
   },
-  recurringToggle: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  reminderLabel: {
+    fontSize: 16,
+    marginLeft: 8,
   },
-  recurringText: {
-    marginRight: 10,
-    fontSize: 14,
+  timePickerSection: {
+    marginTop: 16,
   },
-  header: {
+  timePickerButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: 16,
-    borderBottomWidth: 1,
-    height: 56,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    borderRadius: 8,
+    borderWidth: 1,
   },
-  backButton: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
+  timePickerText: {
+    fontSize: 16,
   },
   headerSaveButton: {
     width: 44,
@@ -1716,173 +2066,101 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  disabledText: {
-    opacity: 0.5,
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingBottom: 40,
-  },
-  titleInput: {
-    height: 48,
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    fontSize: 16,
-  },
-  descriptionInput: {
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingTop: 12,
-    fontSize: 16,
-    minHeight: 100,
-    textAlignVertical: 'top',
-  },
-  recurrenceContainer: {
-    height: 100,
-    marginBottom: 10,
-  },
-  timePickerButton: {
+  weekDaysContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#f9f9f9',
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
+    marginTop: 8,
   },
-  reminderRow: {
-    flexDirection: 'row',
+  weekDayButton: {
+    padding: 8,
+    borderWidth: 1,
+    borderRadius: 8,
+    margin: 4,
+    minWidth: 40,
     alignItems: 'center',
-    justifyContent: 'space-between',
-    flexWrap: 'wrap',
+    justifyContent: 'center',
   },
-  reminderInput: {
-    width: 60,
-    height: 48,
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    fontSize: 16,
-    backgroundColor: '#f9f9f9',
-    textAlign: 'center',
-  },
-  reminderUnitText: {
-    fontSize: 16,
-    marginLeft: 8,
-    marginRight: 16,
-  },
-  reminderOffsetContainer: {
-    flexDirection: 'column',
-    alignItems: 'flex-end',
-  },
-  reminderOffsetInput: {
-    width: 80,
-    height: 40,
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    fontSize: 16,
-    backgroundColor: '#f9f9f9',
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  reminderUnitContainer: {
-    flexDirection: 'row',
-  },
-  unitButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
-    marginHorizontal: 4,
-    borderRadius: 16,
-    backgroundColor: '#f9f9f9',
-  },
-  unitButtonActive: {
+  weekDayButtonActive: {
     backgroundColor: '#007AFF',
     borderColor: '#007AFF',
   },
-  unitButtonText: {
+  weekDayText: {
     fontSize: 14,
-    color: '#333',
-  },
-  unitButtonTextActive: {
-    color: 'white',
-  },
-  switchSetting: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
-  },
-  switchTextContainer: {
-    flex: 1,
-    marginRight: 16,
-  },
-  switchLabel: {
-    fontSize: 16,
     fontWeight: '500',
-    color: '#333',
-    marginBottom: 4,
   },
-  switchDescription: {
-    fontSize: 14,
-    color: '#666',
-  },
-  section: {
-    backgroundColor: 'white',
-    marginTop: 16,
-    padding: 16,
-    borderRadius: 8,
-    marginHorizontal: 16,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 1,
-    },
-    shadowOpacity: 0.05,
-    shadowRadius: 3.84,
-    elevation: 2,
-  },
-  reminderContainer: {
+  monthDayContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    marginTop: 8,
   },
-  reminderGroup: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  label: {
-    fontSize: 16,
-    color: '#333',
-    marginRight: 8,
-  },
-  dateTypeToggle: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  dateTypeText: {
-    fontSize: 16,
-    marginRight: 8,
-  },
-  switchButton: {
+  reverseButton: {
     padding: 8,
+    borderWidth: 1,
     borderRadius: 8,
+    minWidth: 80,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  switchButtonText: {
+  reverseButtonActive: {
+    backgroundColor: '#007AFF',
+    borderColor: '#007AFF',
+  },
+  reverseButtonText: {
     fontSize: 14,
-    fontWeight: 'bold',
-    color: 'white',
+    fontWeight: '500',
+  },
+  compositeContainer: {
+    marginTop: 16,
+  },
+  compositeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+    flexWrap: 'wrap',
+  },
+  compositeLabel: {
+    fontSize: 16,
+    marginHorizontal: 8,
+  },
+  compositeInput: {
+    width: 60,
+    height: 40,
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    fontSize: 16,
+    textAlign: 'center',
+  },
+  weekDaysContainerSmall: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+  },
+  weekDayButtonSmall: {
+    padding: 6,
+    borderWidth: 1,
+    borderRadius: 8,
+    margin: 2,
+    minWidth: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  weekDayTextSmall: {
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  calcMethodText: {
+    fontSize: 14,
+  },
+  methodButton: {
+    padding: 6,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  methodButtonText: {
+    fontSize: 14,
+    fontWeight: '500',
   },
 }); 
