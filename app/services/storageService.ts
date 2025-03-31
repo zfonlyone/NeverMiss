@@ -101,10 +101,11 @@ export const getTasks = async (): Promise<Task[]> => {
   }
 };
 
-export const getTaskById = async (id: number): Promise<Task | null> => {
+export const getTaskById = async (id: number | string): Promise<Task | null> => {
   try {
     const tasks = await getTasks();
-    return tasks.find(task => task.id === id) || null;
+    const numericId = typeof id === 'string' ? parseInt(id, 10) : id;
+    return tasks.find(task => task.id === numericId) || null;
   } catch (error) {
     console.error(`获取任务 ID ${id} 时出错:`, error);
     throw error;
@@ -181,10 +182,11 @@ export const getTaskCycles = async (): Promise<TaskCycle[]> => {
   }
 };
 
-export const getTaskCyclesByTaskId = async (taskId: number): Promise<TaskCycle[]> => {
+export const getTaskCyclesByTaskId = async (taskId: number | string): Promise<TaskCycle[]> => {
   try {
     const cycles = await getTaskCycles();
-    return cycles.filter(cycle => cycle.taskId === taskId);
+    const numericTaskId = typeof taskId === 'string' ? parseInt(taskId, 10) : taskId;
+    return cycles.filter(cycle => cycle.taskId === numericTaskId);
   } catch (error) {
     console.error(`获取任务 ID ${taskId} 的周期时出错:`, error);
     throw error;

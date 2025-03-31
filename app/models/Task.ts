@@ -1,6 +1,6 @@
 import { v4 as uuidv4 } from 'uuid';
 
-export type RecurrenceType = 'daily' | 'weekly' | 'monthly' | 'yearly' | 'composite';
+export type RecurrenceType = 'daily' | 'weekly' | 'monthly' | 'yearly' | 'composite' | 'custom' | 'weekOfMonth';
 export type RecurrenceUnit = 'minutes' | 'hours' | 'days' | 'weeks' | 'months' | 'years';
 export type ReminderUnit = 'minutes' | 'hours' | 'days';
 export type TaskStatus = 'active' | 'inactive';
@@ -10,9 +10,36 @@ export type WeekDay = 0 | 1 | 2 | 3 | 4 | 5 | 6; // 0 = Sunday, 6 = Saturday
 export type WeekType = 'big' | 'small'; // 大周/小周
 export type WeekOfMonth = 1 | 2 | 3 | 4 | 5; // 1 = first week, 5 = last week
 
+export interface SpecialDate {
+  type: string;
+  name: string;
+  date?: string;
+}
+
+export type AdvancedRecurrencePattern = {
+  // 年
+  yearValue: number;
+  // 月
+  monthValue: number;
+  // 周
+  weekValue: number;
+  // 天
+  dayValue: number;
+  // 选择的日期类型: day(天), week(周), month(月), year(年)
+  selectedDateType: 'day' | 'week' | 'month' | 'year';
+  // 选择的计算方向: forward(正数), backward(倒数)
+  countDirection: 'forward' | 'backward';
+  // 周几 0-6 表示周日到周六
+  weekDay: number;
+  // 是否选择特殊日期
+  useSpecialDate: boolean;
+  // 特殊日期类型: weekend(周末), workday(工作日), holiday(节假日), solarTerm(节气日)
+  specialDateType: 'weekend' | 'workday' | 'holiday' | 'solarTerm';
+};
+
 export interface RecurrencePattern {
   type: RecurrenceType;
-  value: number;
+  value?: number;
   unit?: RecurrenceUnit;
   weekDay?: WeekDay;
   weekDays?: WeekDay[]; // 支持多选周几
@@ -24,6 +51,9 @@ export interface RecurrencePattern {
   isLeapMonth?: boolean; // 农历闰月
   isReverse?: boolean; // 是否倒数计算
   isLunar?: boolean; // 是否使用农历
+  specialDate?: SpecialDate; // 特殊日期
+  // 高级循环设置
+  advancedPattern?: AdvancedRecurrencePattern;
 }
 
 // 复合循环模式
@@ -45,20 +75,25 @@ export interface CompositeRecurrencePattern extends RecurrencePattern {
   weekDayEnabled?: boolean;
   weekDay?: WeekDay;
   
+  // 月中第几周设置
+  weekOfMonthEnabled?: boolean;
+  weekOfMonth?: WeekOfMonth;
+  
+  // 年中第几天设置
+  yearDayEnabled?: boolean;
+  yearDay?: number;
+  
   // 倒数设置
   isReverse?: boolean;
 }
 
 export interface TaskCycle {
-  id: number;
+  id?: number;
   taskId: number;
   startDate: string;
   dueDate: string;
-  dateType: DateType;
   isCompleted: boolean;
-  isOverdue: boolean;
-  completedDate?: string;
-  createdAt: string;
+  completedAt?: string;
 }
 
 export interface ReminderTime {
@@ -67,30 +102,29 @@ export interface ReminderTime {
 }
 
 export interface Task {
-  id: number;
+  id?: number;
   title: string;
   description?: string;
-  recurrencePattern: RecurrencePattern;
-  reminderOffset: number;
-  reminderUnit: ReminderUnit;
-  reminderTime: ReminderTime;
-  dateType: DateType;
-  isLunar: boolean; // 是否使用农历
-  isRecurring: boolean; // 是否是循环任务
-  reminderDays: number; // 提前提醒天数
-  reminderHours: number; // 提前提醒小时
-  reminderMinutes: number; // 提前提醒分钟
+  startDate: string;
+  dueDate: string;
   isActive: boolean;
+  isRecurring: boolean;
+  recurrencePattern: RecurrencePattern;
+  useDueDateToCalculate?: boolean;
+  dateType: DateType;
+  isLunar: boolean;
+  currentCycle?: TaskCycle;
+  status?: 'pending' | 'active' | 'overdue' | 'completed';
+  // 提醒设置
+  reminderOffset?: number;
+  reminderUnit?: 'minutes' | 'hours' | 'days';
   autoRestart: boolean;
   syncToCalendar: boolean;
-  calendarEventId?: string;
-  createdAt: string;
-  updatedAt: string;
-  currentCycle?: TaskCycle;
-  lastCompletedDate?: string;
+  createdAt?: string;
+  updatedAt?: string;
   tags?: string[];
   backgroundColor?: string;
-  useDueDateToCalculate?: boolean; // 是否使用截止日期计算开始日期
+  specialDate?: SpecialDate; // 特殊日期
 }
 
 export interface TaskWithCycles extends Task {
@@ -100,24 +134,27 @@ export interface TaskWithCycles extends Task {
 export interface CreateTaskInput {
   title: string;
   description?: string;
+  startDate: string;
+  dueDate: string;
+  isActive: boolean;
+  isRecurring: boolean;
   recurrencePattern: RecurrencePattern;
-  reminderOffset: number;
-  reminderUnit: ReminderUnit;
-  reminderTime: ReminderTime;
+  useDueDateToCalculate?: boolean;
   dateType: DateType;
   isLunar: boolean;
-  isRecurring: boolean;
+  status?: 'pending' | 'active' | 'overdue' | 'completed';
+  autoRestart: boolean;
+  syncToCalendar: boolean;
+  // 提醒设置
+  reminderOffset?: number;
+  reminderUnit?: 'minutes' | 'hours' | 'days';
+  reminderTime: { hour: number, minute: number };
   reminderDays: number;
   reminderHours: number;
   reminderMinutes: number;
-  isActive?: boolean;
-  autoRestart?: boolean;
-  syncToCalendar?: boolean;
-  startDate: string;
-  dueDate: string;
-  useDueDateToCalculate?: boolean; // 是否使用截止日期来计算开始日期
   tags?: string[];
   backgroundColor?: string;
+  specialDate?: SpecialDate; // 特殊日期
 }
 
 export interface UpdateTaskInput {
@@ -141,6 +178,7 @@ export interface UpdateTaskInput {
   useDueDateToCalculate?: boolean; // 是否使用截止日期来计算开始日期
   tags?: string[];
   backgroundColor?: string;
+  specialDate?: SpecialDate; // 特殊日期
 }
 
 export function createTask(

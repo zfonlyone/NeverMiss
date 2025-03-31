@@ -78,7 +78,9 @@ export default function TaskList({
   const getStatusColor = (task: Task) => {
     if (!task.currentCycle) return '#999999';
     if (task.currentCycle.isCompleted) return '#4CAF50';
-    if (task.currentCycle.isOverdue) return '#F44336';
+    const dueDate = new Date(task.currentCycle.dueDate);
+    const isOverdue = dueDate < new Date() && !task.currentCycle.isCompleted;
+    if (isOverdue) return '#F44336';
     if (!task.isActive) return '#999999';
     return '#2196F3';
   };
@@ -86,7 +88,9 @@ export default function TaskList({
   const getStatusIcon = (task: Task) => {
     if (!task.currentCycle) return 'help-circle';
     if (task.currentCycle.isCompleted) return 'checkmark-circle';
-    if (task.currentCycle.isOverdue) return 'alert-circle';
+    const dueDate = new Date(task.currentCycle.dueDate);
+    const isOverdue = dueDate < new Date() && !task.currentCycle.isCompleted;
+    if (isOverdue) return 'alert-circle';
     if (!task.isActive) return 'pause-circle';
     return 'time';
   };
@@ -105,9 +109,16 @@ export default function TaskList({
     }
   };
 
+  // 处理 FlatList 的 keyExtractor 方法
+  const keyExtractor = (item: Task) => {
+    return item.id ? item.id.toString() : Math.random().toString();
+  };
+
+  // 渲染单个任务项
   const renderItem = ({ item }: { item: Task }) => {
     const dueDate = new Date(item.currentCycle?.dueDate || '');
-    const isOverdue = dueDate < new Date() && !item.currentCycle?.isCompleted;
+    const isCompleted = item.currentCycle?.isCompleted || false;
+    const isOverdue = dueDate < new Date() && !isCompleted;
     
     // 计算剩余天数
     const today = new Date();
@@ -126,16 +137,23 @@ export default function TaskList({
         <TouchableOpacity 
           style={[
             styles.itemContent, 
-            { backgroundColor: colors.card }
+            { backgroundColor: item.backgroundColor || colors.card }
           ]} 
-          onPress={() => onTaskPress(item)}
+          onPress={() => {
+            console.log('点击任务，任务ID:', item.id);
+            if (onTaskPress && item.id !== undefined) {
+              onTaskPress(item);
+            } else {
+              console.error('无法处理任务点击：ID不存在或处理器未提供', item);
+            }
+          }}
         >
           {/* 任务标题和状态 */}
           <View style={styles.titleRow}>
             <Text style={[
               styles.itemTitle, 
               { color: colors.text },
-              isOverdue && styles.overdueBadge
+              isOverdue ? styles.overdueBadge : {}
             ]}>
               {item.title}
             </Text>
@@ -166,6 +184,17 @@ export default function TaskList({
             >
               {item.description}
             </Text>
+          )}
+
+          {/* 任务标签 */}
+          {item.tags && item.tags.length > 0 && (
+            <View style={styles.tagsContainer}>
+              {item.tags.map((tag, index) => (
+                <View key={index} style={[styles.tagBadge, {backgroundColor: '#2196F3'}]}>
+                  <Text style={styles.tagText}>{tag}</Text>
+                </View>
+              ))}
+            </View>
           )}
           
           {/* 任务信息行 */}
@@ -209,21 +238,23 @@ export default function TaskList({
             )}
             
             {/* 提醒时间 */}
-            <View style={styles.infoItem}>
-              <Ionicons 
-                name="alarm" 
-                size={14} 
-                color={colors.primary} 
-              />
-              <Text 
-                style={[
-                  styles.infoText,
-                  { color: colors.subText }
-                ]}
-              >
-                {`${item.reminderTime.hour.toString().padStart(2, '0')}:${item.reminderTime.minute.toString().padStart(2, '0')}`}
-              </Text>
-            </View>
+            {item.reminderOffset && item.reminderOffset > 0 && (
+              <View style={styles.infoItem}>
+                <Ionicons 
+                  name="alarm" 
+                  size={14} 
+                  color={colors.primary} 
+                />
+                <Text 
+                  style={[
+                    styles.infoText,
+                    { color: colors.subText }
+                  ]}
+                >
+                  提前{item.reminderOffset}{item.reminderUnit === 'minutes' ? '分钟' : item.reminderUnit === 'hours' ? '小时' : '天'}
+                </Text>
+              </View>
+            )}
           </View>
         </TouchableOpacity>
         
@@ -263,7 +294,7 @@ export default function TaskList({
       ) : (
         <FlatList
           data={tasks}
-          keyExtractor={(item) => item.id.toString()}
+          keyExtractor={keyExtractor}
           renderItem={renderItem}
           refreshControl={
             <RefreshControl
@@ -408,5 +439,22 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 3.84,
+  },
+  tagsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginBottom: 12,
+  },
+  tagBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    marginRight: 8,
+    marginBottom: 4,
+  },
+  tagText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 'bold',
   },
 }); 

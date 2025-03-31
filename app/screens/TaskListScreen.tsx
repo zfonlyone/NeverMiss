@@ -102,12 +102,28 @@ export default function TaskListScreen() {
   };
 
   const handleTaskPress = (task: Task) => {
-    router.push({ pathname: '/screens/TaskFormScreen', params: { taskId: task.id.toString() } });
+    if (task && task.id !== undefined) {
+      console.log('跳转到任务编辑页面，任务ID:', task.id);
+      // 确保使用正确的路径格式并明确转换为字符串类型
+      const taskIdStr = String(task.id);
+      router.push({
+        pathname: '/screens/TaskFormScreen',
+        params: { taskId: taskIdStr }
+      });
+    } else {
+      console.error('无效的任务或任务ID为undefined');
+    }
   };
 
   // 处理任务完成
   const handleTaskComplete = async (task: Task) => {
     try {
+      // 检查任务ID是否存在
+      if (task.id === undefined) {
+        Alert.alert('错误', '任务ID不存在，无法完成任务');
+        return;
+      }
+      
       Alert.alert(
         '完成任务',
         `确定要将任务 "${task.title}" 标记为已完成吗？`,
@@ -120,7 +136,7 @@ export default function TaskListScreen() {
             text: '确定',
             onPress: async () => {
               setIsLoading(true);
-              await TaskService.completeTask(task.id);
+              await TaskService.completeTask(task.id!);
               await loadTasks(); // 重新加载任务列表
               Alert.alert('成功', `任务 "${task.title}" 已标记为完成`);
             }
@@ -137,6 +153,12 @@ export default function TaskListScreen() {
   // 处理任务删除
   const handleTaskDelete = async (task: Task) => {
     try {
+      // 检查任务ID是否存在
+      if (task.id === undefined) {
+        Alert.alert('错误', '任务ID不存在，无法删除任务');
+        return;
+      }
+      
       Alert.alert(
         '删除任务',
         `确定要删除任务 "${task.title}" 吗？此操作不可恢复。`,
@@ -150,7 +172,7 @@ export default function TaskListScreen() {
             style: 'destructive',
             onPress: async () => {
               setIsLoading(true);
-              await TaskService.deleteTask(task.id);
+              await TaskService.deleteTask(task.id!);
               await loadTasks(); // 重新加载任务列表
               Alert.alert('成功', `任务 "${task.title}" 已删除`);
             }
