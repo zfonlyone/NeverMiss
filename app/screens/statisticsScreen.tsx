@@ -13,59 +13,91 @@ import { Ionicons } from '@expo/vector-icons';
 import { getTasks } from '../services/storageService';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useTheme } from '../contexts/ThemeContext';
-import { getCompletedTasks, getOverdueTasks } from '../services/taskService';
+import { getCompletedTasks, getOverdueTasks, getTaskCompletionStats, getCompletedTaskHistory } from '../services/taskService';
 import { Task } from '../models/Task';
 import { format } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
+import { TaskHistory } from '../models/TaskHistory';
+
+interface CompletionStats {
+  totalCompletions: number;
+  onTimeCompletions: number;
+  overdueCompletions: number;
+  dailyCompletions: {[date: string]: number};
+  tagCompletions: {[tag: string]: number};
+}
+
+interface TaskCompleteHistory {
+  task: Task;
+  history: TaskHistory;
+}
 
 export default function StatisticsScreen() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(true);
-  const [stats, setStats] = useState({
-    totalTasks: 0,
-    completedTasks: 0,
-    overdueTasks: 0,
-    completionRate: 0,
-  });
-  const [completedTasksList, setCompletedTasksList] = useState<Task[]>([]);
-  const [overdueTasksList, setOverdueTasksList] = useState<Task[]>([]);
-  const [activeTab, setActiveTab] = useState<'completed' | 'overdue'>('completed');
+  const [stats, setStats] = useState<CompletionStats | null>(null);
+  const [completedTasks, setCompletedTasks] = useState<TaskCompleteHistory[]>([]);
+  const [timeRange, setTimeRange] = useState<'today' | 'week' | 'month' | 'all'>('week');
   
   const { t, language } = useLanguage();
   const { colors, isDarkMode } = useTheme();
 
   useEffect(() => {
     loadStatistics();
-  }, []);
+  }, [timeRange]);
 
   
   const loadStatistics = async () => {
     try {
       setIsLoading(true);
-      const tasks = await getTasks();
-      const completed = await getCompletedTasks();
-      const overdue = await getOverdueTasks();
       
-      // 计算统计数据
-      const totalTasks = tasks.length;
-      const completedTasks = completed.length;
-      const overdueTasks = overdue.length;
-      const completionRate = totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0;
+      // 加载统计数据
+      const statsData = await getTaskCompletionStats();
+      setStats(statsData);
       
-      setStats({
-        totalTasks,
-        completedTasks,
-        overdueTasks,
-        completionRate,
-      });
+      // 加载任务完成历史
+      const historyData = await getCompletedTaskHistory();
       
-      setCompletedTasksList(completed);
-      setOverdueTasksList(overdue);
+      // 根据选择的时间范围筛选
+      const filteredHistory = filterHistoryByTimeRange(historyData, timeRange);
+      setCompletedTasks(filteredHistory);
+      
     } catch (error) {
-      console.error('加载统计数据时出错:', error);
+      console.error('加载统计数据失败:', error);
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // 根据时间范围筛选历史记录
+  const filterHistoryByTimeRange = (
+    history: TaskCompleteHistory[],
+    range: 'today' | 'week' | 'month' | 'all'
+  ): TaskCompleteHistory[] => {
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    
+    return history.filter(item => {
+      const completedDate = new Date(item.history.timestamp);
+      
+      switch (range) {
+        case 'today':
+          return completedDate >= today;
+          
+        case 'week':
+          const weekStart = new Date(today);
+          weekStart.setDate(today.getDate() - today.getDay());
+          return completedDate >= weekStart;
+          
+        case 'month':
+          const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+          return completedDate >= monthStart;
+          
+        case 'all':
+        default:
+          return true;
+      }
+    });
   };
 
   const formatDate = (date: string) => {
@@ -88,10 +120,10 @@ export default function StatisticsScreen() {
         ]}>{item.title}</Text>
         <View style={[
           styles.statusBadge,
-          { backgroundColor: activeTab === 'completed' ? '#4CAF50' : '#F44336' }
+          { backgroundColor: '#4CAF50' }
         ]}>
           <Text style={styles.statusText}>
-            {activeTab === 'completed' ? t.task.statusCompleted : t.task.statusOverdue}
+            {t.task.statusCompleted}
           </Text>
         </View>
       </View>
@@ -113,16 +145,31 @@ export default function StatisticsScreen() {
               styles.taskDate,
               { color: colors.subText }
             ]}>
-              {activeTab === 'completed' 
-                ? `${t.statistics.completedDate}: ${formatDate(item.currentCycle.completedDate || new Date().toISOString())}` 
-                : `${t.task.dueDate}: ${formatDate(item.currentCycle.dueDate)}`
-              }
+              {t.statistics.completedDate}: {formatDate(item.currentCycle.completedDate || new Date().toISOString())}
             </Text>
           </View>
         </View>
       )}
     </View>
   );
+
+  // 渲染统计卡片
+  const renderStatCard = (title: string, value: number | string, icon: string, color: string) => (
+    <View style={[styles.statCard, {borderLeftColor: color}]}>
+      <Ionicons name={icon as any} size={24} color={color} />
+      <Text style={styles.statValue}>{value}</Text>
+      <Text style={styles.statTitle}>{title}</Text>
+    </View>
+  );
+
+  // 计算完成率
+  const calculateCompletionRate = (): string => {
+    if (!stats) return '0%';
+    const total = stats.onTimeCompletions + stats.overdueCompletions;
+    if (total === 0) return '0%';
+    const rate = (stats.onTimeCompletions / total) * 100;
+    return `${Math.round(rate)}%`;
+  };
 
   return (
     <>
@@ -184,7 +231,7 @@ export default function StatisticsScreen() {
                   <Text style={[
                     styles.statValue,
                     { color: colors.text }
-                  ]}>{stats.totalTasks}</Text>
+                  ]}>{stats?.totalCompletions || 0}</Text>
                 </View>
               </View>
               
@@ -200,7 +247,7 @@ export default function StatisticsScreen() {
                   <Text style={[
                     styles.statValue,
                     { color: colors.text }
-                  ]}>{stats.completedTasks}</Text>
+                  ]}>{stats?.onTimeCompletions || 0}</Text>
                 </View>
               </View>
               
@@ -216,7 +263,7 @@ export default function StatisticsScreen() {
                   <Text style={[
                     styles.statValue,
                     { color: colors.text }
-                  ]}>{stats.overdueTasks}</Text>
+                  ]}>{stats?.overdueCompletions || 0}</Text>
                 </View>
               </View>
             </View>
@@ -235,14 +282,14 @@ export default function StatisticsScreen() {
                   <View 
                     style={[
                       styles.progressBar,
-                      { width: `${stats.completionRate}%`, backgroundColor: colors.primary }
+                      { width: `${calculateCompletionRate()}%`, backgroundColor: colors.primary }
                     ]}
                   />
                 </View>
                 <Text style={[
                   styles.completionRateText,
                   { color: colors.text }
-                ]}>{stats.completionRate.toFixed(1)}%</Text>
+                ]}>{calculateCompletionRate()}</Text>
               </View>
             </View>
             
@@ -259,105 +306,78 @@ export default function StatisticsScreen() {
                 styles.tipText,
                 { color: colors.subText }
               ]}>
-                {stats.completionRate < 50 
+                {calculateCompletionRate() < 50 
                   ? t.statistics.tipLow
-                  : stats.completionRate < 80
+                  : calculateCompletionRate() < 80
                     ? t.statistics.tipMedium
                     : t.statistics.tipHigh
                 }
               </Text>
             </View>
             
-            {/* 任务列表标签页 */}
-            <View style={[
-              styles.tabContainer,
-              { backgroundColor: colors.card }
-            ]}>
-              <TouchableOpacity
-                style={[
-                  styles.tab,
-                  activeTab === 'completed' && [
-                    styles.activeTab,
-                    { borderBottomColor: colors.primary }
-                  ]
-                ]}
-                onPress={() => setActiveTab('completed')}
-              >
-                <Text style={[
-                  styles.tabText,
-                  { color: activeTab === 'completed' ? colors.primary : colors.subText }
-                ]}>
-                  {t.statistics.completedTasks} ({stats.completedTasks})
-                </Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity
-                style={[
-                  styles.tab,
-                  activeTab === 'overdue' && [
-                    styles.activeTab,
-                    { borderBottomColor: colors.primary }
-                  ]
-                ]}
-                onPress={() => setActiveTab('overdue')}
-              >
-                <Text style={[
-                  styles.tabText,
-                  { color: activeTab === 'overdue' ? colors.primary : colors.subText }
-                ]}>
-                  {t.statistics.overdueTasks} ({stats.overdueTasks})
-                </Text>
-              </TouchableOpacity>
+            {/* 时间范围选择器 */}
+            <View style={styles.timeRangeSelector}>
+              <Text style={styles.sectionTitle}>{t.statistics.completionHistory}</Text>
+              <View style={styles.timeRangeButtons}>
+                {[
+                  { value: 'today', label: '今天' },
+                  { value: 'week', label: '本周' },
+                  { value: 'month', label: '本月' },
+                  { value: 'all', label: '全部' }
+                ].map(item => (
+                  <TouchableOpacity
+                    key={item.value}
+                    style={[
+                      styles.timeRangeButton,
+                      timeRange === item.value && styles.timeRangeButtonActive
+                    ]}
+                    onPress={() => setTimeRange(item.value as any)}
+                  >
+                    <Text
+                      style={[
+                        styles.timeRangeButtonText,
+                        timeRange === item.value && styles.timeRangeButtonTextActive
+                      ]}
+                    >
+                      {item.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
             </View>
             
-            {/* 任务列表 */}
-            <View style={styles.tasksContainer}>
-              {activeTab === 'completed' ? (
-                completedTasksList.length > 0 ? (
-                  completedTasksList.map((task, index) => (
-                    <React.Fragment key={`completed-${task.id}`}>
-                      {renderTaskItem({ item: task })}
-                    </React.Fragment>
-                  ))
-                ) : (
-                  <View style={styles.emptyContainer}>
-                    <Ionicons 
-                      name="checkmark-circle-outline" 
-                      size={60} 
-                      color={colors.border} 
-                    />
-                    <Text style={[
-                      styles.emptyText,
-                      { color: colors.text }
-                    ]}>
-                      {t.statistics.noCompletedTasks}
-                    </Text>
-                  </View>
-                )
+            {/* 任务完成历史记录 */}
+            <View style={styles.historyContainer}>
+              {completedTasks.length > 0 ? (
+                completedTasks.map((item, index) => (
+                  <React.Fragment key={`${item.task.id}-${item.history.id}`}>
+                    {renderTaskItem({item: item.task})}
+                  </React.Fragment>
+                ))
               ) : (
-                overdueTasksList.length > 0 ? (
-                  overdueTasksList.map((task, index) => (
-                    <React.Fragment key={`overdue-${task.id}`}>
-                      {renderTaskItem({ item: task })}
-                    </React.Fragment>
-                  ))
-                ) : (
-                  <View style={styles.emptyContainer}>
-                    <Ionicons 
-                      name="alert-circle-outline" 
-                      size={60} 
-                      color={colors.border} 
-                    />
-                    <Text style={[
-                      styles.emptyText,
-                      { color: colors.text }
-                    ]}>
-                      {t.statistics.noOverdueTasks}
-                    </Text>
-                  </View>
-                )
+                <View style={styles.emptyContainer}>
+                  <Ionicons name="document-text-outline" size={48} color="#cccccc" />
+                  <Text style={styles.emptyText}>{t.statistics.noCompletionHistory}</Text>
+                </View>
               )}
             </View>
+            
+            {/* 标签统计 */}
+            {stats && Object.keys(stats.tagCompletions).length > 0 && (
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>{t.statistics.tagStatistics}</Text>
+                <View style={styles.tagStatsContainer}>
+                  {Object.entries(stats.tagCompletions).map(([tag, count]) => (
+                    <View key={tag} style={styles.tagStatItem}>
+                      <View style={styles.tagStatBadge}>
+                        <Text style={styles.tagStatBadgeText}>{tag}</Text>
+                      </View>
+                      <Text style={styles.tagStatCount}>{count}次</Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            )}
           </View>
         )}
       </ScrollView>
@@ -445,26 +465,56 @@ const styles = StyleSheet.create({
     fontSize: 16,
     lineHeight: 24,
   },
-  tabContainer: {
-    flexDirection: 'row',
+  timeRangeSelector: {
+    backgroundColor: '#ffffff',
+    padding: 16,
+    marginHorizontal: 12,
+    marginBottom: 12,
     borderRadius: 8,
-    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 1,
+    elevation: 1,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 12,
+  },
+  timeRangeButtons: {
+    flexDirection: 'row',
+    backgroundColor: '#f5f5f5',
+    borderRadius: 8,
     overflow: 'hidden',
   },
-  tab: {
+  timeRangeButton: {
     flex: 1,
-    paddingVertical: 16,
+    paddingVertical: 8,
     alignItems: 'center',
   },
-  activeTab: {
-    borderBottomWidth: 2,
+  timeRangeButtonActive: {
+    backgroundColor: '#2196F3',
   },
-  tabText: {
-    fontSize: 16,
-    fontWeight: '500',
+  timeRangeButtonText: {
+    fontSize: 14,
+    color: '#666666',
   },
-  tasksContainer: {
-    marginBottom: 24,
+  timeRangeButtonTextActive: {
+    color: '#ffffff',
+    fontWeight: 'bold',
+  },
+  historyContainer: {
+    backgroundColor: '#ffffff',
+    marginHorizontal: 12,
+    marginBottom: 12,
+    borderRadius: 8,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 1,
+    elevation: 1,
   },
   taskItem: {
     borderRadius: 8,
@@ -535,5 +585,73 @@ const styles = StyleSheet.create({
   backButtonText: {
     fontSize: 16,
     marginLeft: 8,
+  },
+  statCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 8,
+    padding: 16,
+    marginBottom: 12,
+    width: '48%',
+    alignItems: 'center',
+    borderLeftWidth: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 1,
+    elevation: 1,
+  },
+  statTitle: {
+    fontSize: 14,
+    color: '#666666',
+    marginTop: 4,
+  },
+  completionRateContainer: {
+    alignItems: 'center',
+  },
+  completionRateText: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    marginTop: 8,
+  },
+  tipText: {
+    fontSize: 16,
+    lineHeight: 24,
+  },
+  section: {
+    backgroundColor: '#ffffff',
+    marginHorizontal: 12,
+    marginBottom: 12,
+    borderRadius: 8,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 1,
+    elevation: 1,
+  },
+  tagStatsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+  tagStatItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 16,
+    marginBottom: 12,
+  },
+  tagStatBadge: {
+    backgroundColor: '#e3f2fd',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    marginRight: 8,
+  },
+  tagStatBadgeText: {
+    fontSize: 12,
+    color: '#2196F3',
+  },
+  tagStatCount: {
+    fontSize: 14,
+    fontWeight: 'bold',
   },
 }); 

@@ -22,7 +22,8 @@ import {
   RecurrenceType,
   RecurrencePattern,
   WeekDay,
-  AdvancedRecurrencePattern
+  AdvancedRecurrencePattern,
+  UpdateTaskInput
 } from '../models/Task';
 import { format } from 'date-fns';
 import { 
@@ -30,6 +31,8 @@ import {
   updateTask as updateTaskService, 
   getTask 
 } from '../services/taskService';
+import RecurrencePatternSelector from '../components/RecurrencePatternSelector';
+import { recurrenceCalculator } from '../services/recurrenceCalculator';
 
 // 简化版任务表单
 export default function TaskFormScreen() {
@@ -118,142 +121,47 @@ export default function TaskFormScreen() {
     }
   }, [dueDate, recurrencePattern, isRecurring, useDueDateToCalculate]);
 
+  // 时间相关参数变化时重新计算日期
+  useEffect(() => {
+    if (isRecurring) {
+      if (useDueDateToCalculate) {
+        calculateStartDate();
+      } else {
+        calculateDueDate();
+      }
+    }
+  }, [recurrencePattern, useAdvancedRecurrence, advancedRecurrencePattern, dateType]);
+
   // 计算截止日期
   const calculateDueDate = () => {
     if (!isRecurring || useDueDateToCalculate) return;
 
     try {
-      let newDueDate = new Date(startDate);
+      const newDueDate = recurrenceCalculator.calculateDueDate(
+        startDate,
+        recurrencePattern,
+        useAdvancedRecurrence,
+        advancedRecurrencePattern,
+        dateType
+      );
       
-      if (useAdvancedRecurrence) {
-        // 高级模式下的日期计算
-        const {
-          selectedDateType,
-          yearValue,
-          monthValue,
-          weekValue,
-          dayValue,
-          weekDay,
-          useSpecialDate,
-          specialDateType,
-          countDirection
-        } = advancedRecurrencePattern;
-        
-        // 基于基础单位计算
-        switch(selectedDateType) {
-          case 'day':
-            // 简单天数增加
-            newDueDate.setDate(newDueDate.getDate() + dayValue);
-              break;
-            
-          case 'week':
-            if (useSpecialDate) {
-              // 特殊日期处理 - 例如找到下一个周末或工作日
-              switch(specialDateType) {
-                case 'weekend':
-                  // 找到下一个周末 (周六或周日)
-                  while (newDueDate.getDay() !== 0 && newDueDate.getDay() !== 6) {
-                    newDueDate.setDate(newDueDate.getDate() + 1);
-                  }
-                  // 如果找到的是周六，并且想要下一个完整周末，再加一天到周日
-                  if (newDueDate.getDay() === 6) {
-                    newDueDate.setDate(newDueDate.getDate() + 1);
-                  }
-              break;
-                case 'workday':
-                  // 找到下一个工作日 (周一至周五)
-                  while (newDueDate.getDay() === 0 || newDueDate.getDay() === 6) {
-                    newDueDate.setDate(newDueDate.getDate() + 1);
-                  }
-              break;
-                // 其他特殊日期类型的处理可以添加在这里
-              }
-              } else {
-              // 普通周处理
-              // 找到下一个指定的星期几
-              const currentDay = newDueDate.getDay();
-              let daysToAdd = (weekDay - currentDay + 7) % 7;
-              if (daysToAdd === 0) daysToAdd = 7; // 如果是同一天，加7天
-              
-              // 加上周数
-              daysToAdd += (weekValue - 1) * 7;
-              
-              newDueDate.setDate(newDueDate.getDate() + daysToAdd);
-              }
-              break;
-            
-          case 'month':
-            if (useSpecialDate) {
-              // 特殊日期处理
-              // 这里简化处理，实际可能需要更复杂的逻辑
-              newDueDate.setMonth(newDueDate.getMonth() + 1);
-            } else {
-              // 判断是否是倒数计算
-              if (countDirection === 'backward') {
-                // 倒数计算 - 例如每月倒数第N天
-                // 这里简化处理，真实情况需要更复杂的计算
-                const currentDate = newDueDate.getDate();
-                const lastDayOfMonth = new Date(newDueDate.getFullYear(), newDueDate.getMonth() + 1, 0).getDate();
-                const targetDate = lastDayOfMonth - currentDate;
-                
-                // 移动到下个月同样位置
-                newDueDate.setMonth(newDueDate.getMonth() + monthValue);
-                
-                // 调整到正确的倒数日期
-                const nextLastDayOfMonth = new Date(newDueDate.getFullYear(), newDueDate.getMonth() + 1, 0).getDate();
-                newDueDate.setDate(nextLastDayOfMonth - targetDate);
-              } else {
-                // 正常月份递增
-                newDueDate.setMonth(newDueDate.getMonth() + monthValue);
-              }
-            }
-            break;
-            
-          case 'year':
-            if (useSpecialDate) {
-              // 特殊年度日期处理
-              newDueDate.setFullYear(newDueDate.getFullYear() + yearValue);
-            } else {
-              // 正常年份递增
-              newDueDate.setFullYear(newDueDate.getFullYear() + yearValue);
-            }
-            break;
+      // 验证日期是否有效
+      if (isNaN(newDueDate.getTime())) {
+        console.error('计算出无效的截止日期');
+        // 使用安全的默认值
+        const safeDueDate = new Date(startDate);
+        safeDueDate.setDate(safeDueDate.getDate() + 1);
+        setDueDate(safeDueDate);
+        return;
       }
-    } else {
-        // 简单模式下的日期计算 - 保持原有逻辑
-        const { type, value = 1 } = recurrencePattern;
-        
-          switch(type) {
-            case 'daily':
-            newDueDate.setDate(newDueDate.getDate() + value);
-              break;
-            case 'weekly':
-              if (recurrencePattern.weekDay !== undefined) {
-              // 找下一个指定的星期几
-              const currentDay = newDueDate.getDay();
-                const targetDay = recurrencePattern.weekDay;
-              let daysToAdd = (targetDay - currentDay + 7) % 7;
-              if (daysToAdd === 0) daysToAdd = 7; // 如果是同一天，加7天
-              newDueDate.setDate(newDueDate.getDate() + daysToAdd);
-                } else {
-              // 每几周
-              newDueDate.setDate(newDueDate.getDate() + (value * 7));
-              }
-              break;
-            case 'monthly':
-            newDueDate.setMonth(newDueDate.getMonth() + value);
-              break;
-            case 'yearly':
-            newDueDate.setFullYear(newDueDate.getFullYear() + value);
-              break;
-            default:
-            newDueDate.setDate(newDueDate.getDate() + 1);
-          }
-        }
-        
-        setDueDate(newDueDate);
-      } catch (error) {
-        console.error('计算截止日期错误:', error);
+      
+      setDueDate(newDueDate);
+    } catch (error) {
+      console.error('计算截止日期错误:', error);
+      // 使用安全的默认值
+      const safeDueDate = new Date(startDate);
+      safeDueDate.setDate(safeDueDate.getDate() + 1);
+      setDueDate(safeDueDate);
     }
   };
 
@@ -262,131 +170,31 @@ export default function TaskFormScreen() {
     if (!isRecurring || !useDueDateToCalculate) return;
 
     try {
-      let newStartDate = new Date(dueDate);
+      const newStartDate = recurrenceCalculator.calculateStartDate(
+        dueDate,
+        recurrencePattern,
+        useAdvancedRecurrence,
+        advancedRecurrencePattern,
+        dateType
+      );
       
-      if (useAdvancedRecurrence) {
-        // 高级模式下的日期计算
-        const {
-          selectedDateType,
-          yearValue,
-          monthValue,
-          weekValue,
-          dayValue,
-          weekDay,
-          useSpecialDate,
-          specialDateType,
-          countDirection
-        } = advancedRecurrencePattern;
-        
-        // 基于基础单位计算，但方向相反
-        switch(selectedDateType) {
-          case 'day':
-            // 简单天数减少
-            newStartDate.setDate(newStartDate.getDate() - dayValue);
-            break;
-            
-          case 'week':
-            if (useSpecialDate) {
-              // 特殊日期处理 - 例如找到上一个周末或工作日
-              switch(specialDateType) {
-                case 'weekend':
-                  // 找到上一个周末
-                  while (newStartDate.getDay() !== 0 && newStartDate.getDay() !== 6) {
-                    newStartDate.setDate(newStartDate.getDate() - 1);
-                  }
-                  break;
-                case 'workday':
-                  // 找到上一个工作日
-                  while (newStartDate.getDay() === 0 || newStartDate.getDay() === 6) {
-                    newStartDate.setDate(newStartDate.getDate() - 1);
-                  }
-                  break;
-                // 其他特殊日期类型的处理
-              }
-            } else {
-              // 普通周处理
-              // 找到上一个指定的星期几
-              const currentDay = newStartDate.getDay();
-              let daysToSubtract = (currentDay - weekDay + 7) % 7;
-              if (daysToSubtract === 0) daysToSubtract = 7; // 如果是同一天，减7天
-              
-              // 加上周数
-              daysToSubtract += (weekValue - 1) * 7;
-              
-              newStartDate.setDate(newStartDate.getDate() - daysToSubtract);
-            }
-            break;
-            
-          case 'month':
-            if (useSpecialDate) {
-              // 特殊日期处理
-              newStartDate.setMonth(newStartDate.getMonth() - 1);
-    } else {
-              // 判断是否是倒数计算
-              if (countDirection === 'backward') {
-                // 倒数计算
-                const currentDate = newStartDate.getDate();
-                const lastDayOfMonth = new Date(newStartDate.getFullYear(), newStartDate.getMonth() + 1, 0).getDate();
-                const targetDate = lastDayOfMonth - currentDate;
-                
-                // 移动到上个月
-                newStartDate.setMonth(newStartDate.getMonth() - monthValue);
-                
-                // 调整到正确的倒数日期
-                const prevLastDayOfMonth = new Date(newStartDate.getFullYear(), newStartDate.getMonth() + 1, 0).getDate();
-                newStartDate.setDate(prevLastDayOfMonth - targetDate);
-        } else {
-                // 正常月份递减
-                newStartDate.setMonth(newStartDate.getMonth() - monthValue);
-              }
-            }
-              break;
-            
-          case 'year':
-            if (useSpecialDate) {
-              // 特殊年度日期处理
-              newStartDate.setFullYear(newStartDate.getFullYear() - yearValue);
-              } else {
-              // 正常年份递减
-              newStartDate.setFullYear(newStartDate.getFullYear() - yearValue);
-              }
-              break;
+      // 验证日期是否有效
+      if (isNaN(newStartDate.getTime())) {
+        console.error('计算出无效的开始日期');
+        // 使用安全的默认值
+        const safeStartDate = new Date(dueDate);
+        safeStartDate.setDate(safeStartDate.getDate() - 1);
+        setStartDate(safeStartDate);
+        return;
       }
-    } else {
-        // 简单模式下的日期计算 - 保持原有逻辑
-        const { type, value = 1 } = recurrencePattern;
-        
-          switch(type) {
-            case 'daily':
-            newStartDate.setDate(newStartDate.getDate() - value);
-              break;
-            case 'weekly':
-              if (recurrencePattern.weekDay !== undefined) {
-              // 找上一个指定的星期几
-              const currentDay = newStartDate.getDay();
-                const targetDay = recurrencePattern.weekDay;
-              let daysToSubtract = (currentDay - targetDay + 7) % 7;
-              if (daysToSubtract === 0) daysToSubtract = 7; // 如果是同一天，减7天
-              newStartDate.setDate(newStartDate.getDate() - daysToSubtract);
-                } else {
-              // 每几周
-              newStartDate.setDate(newStartDate.getDate() - (value * 7));
-              }
-              break;
-            case 'monthly':
-            newStartDate.setMonth(newStartDate.getMonth() - value);
-              break;
-            case 'yearly':
-            newStartDate.setFullYear(newStartDate.getFullYear() - value);
-              break;
-            default:
-            newStartDate.setDate(newStartDate.getDate() - 1);
-          }
-        }
-        
-        setStartDate(newStartDate);
-      } catch (error) {
-        console.error('计算开始日期错误:', error);
+      
+      setStartDate(newStartDate);
+    } catch (error) {
+      console.error('计算开始日期错误:', error);
+      // 使用安全的默认值
+      const safeStartDate = new Date(dueDate);
+      safeStartDate.setDate(safeStartDate.getDate() - 1);
+      setStartDate(safeStartDate);
     }
   };
 
@@ -452,53 +260,78 @@ export default function TaskFormScreen() {
     
     try {
       setIsLoading(true);
-      // 将taskId转换为数字类型，如果可能的话
-      const numericTaskId = typeof taskId === 'string' ? parseInt(taskId, 10) : taskId;
+      // 将taskId转换为数字类型
+      const numericTaskId = typeof taskId === 'string' ? parseInt(taskId, 10) : Number(taskId);
       
-      console.log(`正在加载任务ID: ${numericTaskId}`);
       const task = await getTask(numericTaskId);
       
       if (task) {
-        console.log('成功加载任务:', task.title);
-        // 只加载基本信息
         setTitle(task.title);
         setDescription(task.description || '');
         
-        if (task.currentCycle) {
-          setStartDate(new Date(task.currentCycle.startDate));
-          setDueDate(new Date(task.currentCycle.dueDate));
+        // 确保日期有效
+        const taskStartDate = new Date(task.startDate);
+        const taskDueDate = new Date(task.dueDate);
+        
+        if (!isNaN(taskStartDate.getTime())) {
+          setStartDate(taskStartDate);
+        } else {
+          console.warn('任务开始日期无效，使用当前日期');
+          setStartDate(new Date());
         }
         
-        setDateType(task.dateType);
-        setIsRecurring(task.isRecurring === true);
+        if (!isNaN(taskDueDate.getTime())) {
+          setDueDate(taskDueDate);
+        } else {
+          console.warn('任务截止日期无效，使用明天');
+          const tomorrow = new Date();
+          tomorrow.setDate(tomorrow.getDate() + 1);
+          setDueDate(tomorrow);
+        }
+        
+        setIsRecurring(task.isRecurring);
         setRecurrencePattern(task.recurrencePattern);
-        setUseDueDateToCalculate(task.useDueDateToCalculate || false);
         
-        // 加载提醒设置
-        setEnableReminder(task.reminderOffset !== undefined && task.reminderOffset > 0);
-        if (task.reminderOffset) {
-          setReminderOffset(task.reminderOffset);
+        // 处理高级循环模式
+        if (task.recurrencePattern.advancedPattern) {
+          setUseAdvancedRecurrence(true);
+          setAdvancedRecurrencePattern(task.recurrencePattern.advancedPattern);
+        } else {
+          setUseAdvancedRecurrence(false);
         }
+        
+        // 处理计算方向
+        if (task.useDueDateToCalculate) {
+          setUseDueDateToCalculate(task.useDueDateToCalculate);
+        }
+        
+        // 日期类型
+        if (task.dateType) {
+          setDateType(task.dateType);
+        }
+        
+        // 提醒设置
+        if (task.reminderOffset !== undefined) {
+          setReminderOffset(task.reminderOffset);
+          setEnableReminder(true);
+        } else {
+          setEnableReminder(false);
+        }
+        
         if (task.reminderUnit) {
           setReminderUnit(task.reminderUnit);
         }
         
-        // 加载任务标签
-        if (task.tags && task.tags.length > 0) {
-          setTaskLabel(task.tags[0]);
-        }
-        
-        // 加载背景颜色
+        // 卡片背景颜色
         if (task.backgroundColor) {
           setCardBackgroundColor(task.backgroundColor);
         }
       } else {
-        console.error(`找不到ID为 ${numericTaskId} 的任务`);
         Alert.alert('提示', '找不到指定的任务');
       }
     } catch (error) {
-      console.error('加载任务失败:', error);
-      Alert.alert('提示', '无法加载任务信息');
+      console.error('加载任务详情失败:', error);
+      Alert.alert('提示', '加载任务详情失败');
     } finally {
       setIsLoading(false);
     }
@@ -534,44 +367,66 @@ export default function TaskFormScreen() {
     try {
       if (useCurrentTime) {
         const now = new Date();
-        setStartDate(now);
         
-        // 根据循环设置计算新的截止日期
         if (isRecurring) {
-          const oldDueDate = new Date(dueDate);
-          setDueDate(oldDueDate); // 先保持原值
+          // 先设置开始日期
+          const newStartDate = new Date(now);
           
-          // 异步设置开始日期后再计算
-          setTimeout(() => {
-            calculateDueDate();
-          }, 0);
+          // 直接计算新的截止日期而不使用状态
+          const newDueDate = recurrenceCalculator.calculateDueDate(
+            newStartDate,
+            recurrencePattern,
+            useAdvancedRecurrence,
+            advancedRecurrencePattern,
+            dateType
+          );
+          
+          // 一次性更新两个状态
+          setStartDate(newStartDate);
+          setDueDate(newDueDate);
         } else {
           // 非重复任务，默认设置为明天
           const newDueDate = new Date(now);
           newDueDate.setDate(now.getDate() + 1);
+          setStartDate(now);
           setDueDate(newDueDate);
         }
       } else {
         // 以上一周期截止日期为新周期开始
         const newStartDate = new Date(dueDate);
-        setStartDate(newStartDate);
         
-        // 根据循环设置计算新的截止日期
         if (isRecurring) {
-          // 异步设置开始日期后再计算
-          setTimeout(() => {
-            calculateDueDate();
-          }, 0);
-    } else {
+          // 直接计算新的截止日期而不使用状态和setTimeout
+          const newDueDate = recurrenceCalculator.calculateDueDate(
+            newStartDate,
+            recurrencePattern,
+            useAdvancedRecurrence,
+            advancedRecurrencePattern,
+            dateType
+          );
+          
+          // 一次性更新两个状态
+          setStartDate(newStartDate);
+          setDueDate(newDueDate);
+        } else {
           // 非重复任务不应该到这里，但仍处理
           const newDueDate = new Date(newStartDate);
           newDueDate.setDate(newStartDate.getDate() + 1);
+          setStartDate(newStartDate);
           setDueDate(newDueDate);
         }
       }
-      } catch (error) {
+    } catch (error) {
       console.error('重置任务周期错误:', error);
       Alert.alert('提示', '重置周期失败');
+      
+      // 出错时设置一个安全的默认值
+      const safeStartDate = new Date();
+      const safeDueDate = new Date();
+      safeDueDate.setDate(safeStartDate.getDate() + 1);
+      
+      setStartDate(safeStartDate);
+      setDueDate(safeDueDate);
     }
   };
   
@@ -612,68 +467,100 @@ export default function TaskFormScreen() {
     }
   }, [taskId, isLoading]);
 
+  // 检查任务是否过期并提示用户
+  const checkIfTaskExpired = () => {
+    const now = new Date();
+    // 检查任务是否已过期
+    if (dueDate < now) {
+      Alert.alert(
+        '任务已过期',
+        '您正在创建/编辑一个已过期的任务。请选择操作：',
+        [
+          {
+            text: '更新为当前日期',
+            onPress: () => resetTaskCycle(true),
+            style: 'default'
+          },
+          {
+            text: '保持原日期',
+            style: 'cancel'
+          }
+        ]
+      );
+      return true;
+    }
+    return false;
+  };
+
+  // 保存任务
   const handleSave = async () => {
-    try {
       if (!title.trim()) {
         Alert.alert('提示', '请输入任务标题');
         return;
       }
       
+      // 验证日期有效性
+      if (isNaN(startDate.getTime()) || isNaN(dueDate.getTime())) {
+        Alert.alert('提示', '日期设置无效，请重新设置日期');
+        return;
+      }
+      
+      // 确保截止日期不早于开始日期
+      if (dueDate < startDate) {
+        Alert.alert('提示', '截止日期不能早于开始日期');
+        return;
+      }
+      
+      // 检查任务是否过期，如果过期则提示用户
+      if (checkIfTaskExpired()) {
+        return;
+      }
+      
+    try {
       setIsLoading(true);
       
-      // 再次检查任务状态
-      const status = checkTaskCycleStatus();
-      
       // 准备任务数据
-      const taskData: CreateTaskInput = {
-        title,
-        description,
+      const taskData = {
+        title: title.trim(),
+        description: description.trim(),
         startDate: startDate.toISOString(),
         dueDate: dueDate.toISOString(),
+        isActive: true,
+        isRecurring,
+        recurrencePattern: {
+          ...recurrencePattern,
+          // 如果使用高级循环模式，则添加advancedPattern字段
+          ...(useAdvancedRecurrence ? { advancedPattern: advancedRecurrencePattern } : {})
+        },
+        useDueDateToCalculate,
         dateType,
         isLunar: dateType === 'lunar',
-        isRecurring,
-        // 根据模式选择使用哪种循环设置
-        recurrencePattern: useAdvancedRecurrence 
-          ? {
-              type: recurrencePattern.type,
-              value: recurrencePattern.value,
-              weekDay: recurrencePattern.weekDay,
-              advancedPattern: advancedRecurrencePattern
-            }
-          : recurrencePattern,
-        useDueDateToCalculate,
-        // 任务状态
-        status,
-        // 提醒设置
-        reminderOffset: enableReminder ? reminderOffset : 0,
-        reminderUnit: reminderUnit,
-        // 将任务标签保存为标签数组
-        tags: taskLabel ? [taskLabel] : [],
-        // 背景颜色
-        backgroundColor: cardBackgroundColor,
-        // 添加必要的默认值
-        isActive: true,
         autoRestart: true,
         syncToCalendar: false,
-        reminderTime: { hour: 9, minute: 0 },
+        reminderOffset: enableReminder ? reminderOffset : 0,
+        reminderUnit: enableReminder ? reminderUnit : 'minutes',
+        reminderTime: { hour: 9, minute: 0 }, // 默认早上9点
         reminderDays: 0,
         reminderHours: 0,
-        reminderMinutes: enableReminder ? (reminderUnit === 'minutes' ? reminderOffset : 0) : 0
+        reminderMinutes: reminderOffset,
+        tags: taskLabel ? [taskLabel] : [],
+        backgroundColor: cardBackgroundColor
       };
       
       if (isEditMode && taskId) {
-        // 将字符串类型的taskId转换为数字
-        const numericTaskId = typeof taskId === 'string' ? parseInt(taskId, 10) : taskId;
-        await updateTaskService(numericTaskId, taskData as any);
+        // 编辑模式
+        const numericTaskId = typeof taskId === 'string' ? parseInt(taskId, 10) : Number(taskId);
+        await updateTaskService(numericTaskId, taskData as UpdateTaskInput);
+        Alert.alert('提示', '任务更新成功', [
+          { text: '确定', onPress: () => router.back() }
+        ]);
       } else {
-        await createTaskService(taskData);
+        // 创建模式
+        await createTaskService(taskData as CreateTaskInput);
+        Alert.alert('提示', '任务创建成功', [
+          { text: '确定', onPress: () => router.back() }
+        ]);
       }
-      
-      router.push({
-        pathname: '/screens/TaskListScreen',
-        params: { refresh: 'true' }
-      });
     } catch (error) {
       console.error('保存任务失败:', error);
       Alert.alert('提示', '保存任务失败');
@@ -936,806 +823,16 @@ export default function TaskFormScreen() {
         </View>
         
         {/* 重复设置 - 使用最简化的纯按钮实现 */}
-        <View style={{
-          backgroundColor: '#ffffff',
-          margin: 12,
-          padding: 16,
-          borderRadius: 12,
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: 1 },
-          shadowOpacity: 0.2,
-          shadowRadius: 1.41,
-          elevation: 2,
-        }}>
-          <Text style={{
-            fontSize: 18,
-            fontWeight: '600',
-            marginBottom: 16,
-            color: '#000000'
-          }}>重复设置</Text>
-          
-          {/* 使用按钮代替开关 */}
-          <TouchableOpacity
-            style={{
-              backgroundColor: isRecurring ? '#e3f2fd' : '#f5f5f5',
-              padding: 12,
-              borderRadius: 8,
-              borderWidth: 1,
-              borderColor: isRecurring ? '#2196F3' : '#dddddd',
-              marginBottom: 16,
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: 'space-between'
-            }}
-            onPress={() => setIsRecurring(!isRecurring)}
-          >
-            <Text style={{
-              fontSize: 16,
-              color: '#000000',
-              fontWeight: isRecurring ? 'bold' : 'normal'
-            }}>
-              {isRecurring ? '已启用重复' : '启用重复'}
-            </Text>
-            <Ionicons 
-              name={isRecurring ? "repeat" : "repeat-outline"} 
-              size={24} 
-              color={isRecurring ? '#2196F3' : '#666666'} 
-            />
-          </TouchableOpacity>
-          
-          {/* 仅当启用重复时显示三种模式选择 */}
-          {isRecurring && (
-            <>
-              <Text style={{
-                fontSize: 16,
-                fontWeight: '500',
-                marginBottom: 12,
-                color: '#000000'
-              }}>
-                重复模式选择
-              </Text>
-              
-              <View style={{
-                flexDirection: 'row',
-                flexWrap: 'wrap',
-                marginBottom: 16
-              }}>
-                {[
-                  { value: 'simple', label: '简单模式', icon: 'calendar-outline' as const },
-                  { value: 'advanced', label: '高级模式', icon: 'options-outline' as const },
-                  { value: 'special', label: '特殊日期', icon: 'star-outline' as const }
-                ].map((item) => (
-                  <TouchableOpacity
-                    key={item.value}
-                    style={{
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      backgroundColor: 
-                        (item.value === 'simple' && !useAdvancedRecurrence && !advancedRecurrencePattern.useSpecialDate) || 
-                        (item.value === 'advanced' && useAdvancedRecurrence && !advancedRecurrencePattern.useSpecialDate) ||
-                        (item.value === 'special' && advancedRecurrencePattern.useSpecialDate)
-                          ? '#e3f2fd' : '#f5f5f5',
-                      padding: 10,
-                      borderRadius: 8,
-                      marginRight: 8,
-                      marginBottom: 8,
-                      borderWidth: 1,
-                      borderColor: 
-                        (item.value === 'simple' && !useAdvancedRecurrence && !advancedRecurrencePattern.useSpecialDate) || 
-                        (item.value === 'advanced' && useAdvancedRecurrence && !advancedRecurrencePattern.useSpecialDate) ||
-                        (item.value === 'special' && advancedRecurrencePattern.useSpecialDate)
-                          ? '#2196F3' : '#dddddd'
-                    }}
-                    onPress={() => {
-                      if (item.value === 'simple') {
-                        setUseAdvancedRecurrence(false);
-                        setAdvancedRecurrencePattern({
-                          ...advancedRecurrencePattern,
-                          useSpecialDate: false
-                        });
-                      } else if (item.value === 'advanced') {
-                        setUseAdvancedRecurrence(true);
-                        setAdvancedRecurrencePattern({
-                          ...advancedRecurrencePattern,
-                          useSpecialDate: false
-                        });
-                      } else if (item.value === 'special') {
-                        setUseAdvancedRecurrence(true);
-                        setAdvancedRecurrencePattern({
-                          ...advancedRecurrencePattern,
-                          useSpecialDate: true
-                        });
-                      }
-                    }}
-                  >
-                    <Ionicons 
-                      name={item.icon as any} 
-                      size={20} 
-                      color={
-                        (item.value === 'simple' && !useAdvancedRecurrence && !advancedRecurrencePattern.useSpecialDate) || 
-                        (item.value === 'advanced' && useAdvancedRecurrence && !advancedRecurrencePattern.useSpecialDate) ||
-                        (item.value === 'special' && advancedRecurrencePattern.useSpecialDate)
-                          ? '#2196F3' : '#666666'
-                      } 
-                      style={{ marginRight: 8 }}
-                    />
-                    <Text style={{
-                      fontSize: 14,
-                      fontWeight: 
-                        (item.value === 'simple' && !useAdvancedRecurrence && !advancedRecurrencePattern.useSpecialDate) || 
-                        (item.value === 'advanced' && useAdvancedRecurrence && !advancedRecurrencePattern.useSpecialDate) ||
-                        (item.value === 'special' && advancedRecurrencePattern.useSpecialDate)
-                          ? 'bold' : 'normal',
-                      color: 
-                        (item.value === 'simple' && !useAdvancedRecurrence && !advancedRecurrencePattern.useSpecialDate) || 
-                        (item.value === 'advanced' && useAdvancedRecurrence && !advancedRecurrencePattern.useSpecialDate) ||
-                        (item.value === 'special' && advancedRecurrencePattern.useSpecialDate)
-                          ? '#2196F3' : '#333333'
-                    }}>
-                      {item.label}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-        </View>
-
-              {/* 简单模式的设置 */}
-              {isRecurring && !useAdvancedRecurrence && !advancedRecurrencePattern.useSpecialDate && (
-                <>
-                  <Text style={{
-                    fontSize: 16,
-                    fontWeight: '500',
-                    marginBottom: 12,
-                    color: '#000000'
-                  }}>
-                    重复类型
-                  </Text>
-                  
-                  <View style={{
-                    flexDirection: 'row',
-                    flexWrap: 'wrap',
-                    marginBottom: 16
-                  }}>
-                    {[
-                      { type: 'daily', label: '每天' },
-                      { type: 'weekly', label: '每周' },
-                      { type: 'monthly', label: '每月' },
-                      { type: 'yearly', label: '每年' }
-                    ].map((item) => (
-                <TouchableOpacity
-                        key={item.type}
-                        style={{
-                          flexDirection: 'row',
-                          alignItems: 'center',
-                          backgroundColor: recurrencePattern.type === item.type ? '#e3f2fd' : '#f5f5f5',
-                          padding: 10,
-                          borderRadius: 8,
-                          marginRight: 8,
-                          marginBottom: 8,
-                          borderWidth: 1,
-                          borderColor: recurrencePattern.type === item.type ? '#2196F3' : '#dddddd'
-                        }}
-                        onPress={() => {
-                          setRecurrencePattern({
-                            ...recurrencePattern,
-                            type: item.type as RecurrenceType
-                          });
-                        }}
-                      >
-                        <Text style={{
-                          fontSize: 14,
-                          fontWeight: recurrencePattern.type === item.type ? 'bold' : 'normal',
-                          color: recurrencePattern.type === item.type ? '#2196F3' : '#333333'
-                        }}>
-                          {item.label}
-                  </Text>
-                </TouchableOpacity>
-                    ))}
-                  </View>
-                  
-                  {/* 间隔值设置 */}
-                  <View style={{
-                    marginBottom: 16
-                  }}>
-                    <Text style={{
-                      fontSize: 14,
-                      marginBottom: 8,
-                      color: '#666666'
-                    }}>
-                      间隔设置
-                    </Text>
-                    
-                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                      <Text style={{ fontSize: 14, marginRight: 8 }}>每</Text>
-                      <TextInput
-                        style={{
-                          borderWidth: 1,
-                          borderColor: '#dddddd',
-                          borderRadius: 8,
-                          padding: 8,
-                          width: 60,
-                          textAlign: 'center',
-                          backgroundColor: '#ffffff',
-                          fontSize: 14
-                        }}
-                        value={String(recurrencePattern.value || 1)}
-                        onChangeText={(text) => {
-                          const value = parseInt(text);
-                          if (!isNaN(value) && value > 0) {
-                            setRecurrencePattern({
-                              ...recurrencePattern,
-                              value
-                            });
-                          }
-                        }}
-                        keyboardType="numeric"
-                      />
-                      <Text style={{ fontSize: 14, marginLeft: 8 }}>
-                        {recurrencePattern.type === 'daily' ? '天' : 
-                         recurrencePattern.type === 'weekly' ? '周' : 
-                         recurrencePattern.type === 'monthly' ? '月' : '年'}
-                      </Text>
-                    </View>
-                  </View>
-                  
-                  {/* 周几选择 - 仅当重复类型为每周时显示 */}
-                  {recurrencePattern.type === 'weekly' && (
-                    <View style={{
-                      marginBottom: 16
-                    }}>
-                      <Text style={{
-                        fontSize: 14,
-                        marginBottom: 8,
-                        color: '#666666'
-                      }}>
-                        选择星期几
-                      </Text>
-                      
-                      <View style={{
-                        flexDirection: 'row',
-                        flexWrap: 'wrap'
-                      }}>
-                        {['日', '一', '二', '三', '四', '五', '六'].map((day, index) => (
-                <TouchableOpacity
-                            key={index}
-                            style={{
-                              width: 36,
-                              height: 36,
-                              borderRadius: 18,
-                              justifyContent: 'center',
-                              alignItems: 'center',
-                              backgroundColor: recurrencePattern.weekDay === index ? '#2196F3' : '#f5f5f5',
-                              borderWidth: 1,
-                              borderColor: recurrencePattern.weekDay === index ? '#2196F3' : '#dddddd',
-                              margin: 4
-                            }}
-                            onPress={() => {
-                              setRecurrencePattern({
-                                ...recurrencePattern,
-                                weekDay: index as WeekDay
-                              });
-                            }}
-                          >
-                            <Text style={{
-                              color: recurrencePattern.weekDay === index ? '#ffffff' : '#000000',
-                              fontWeight: recurrencePattern.weekDay === index ? 'bold' : 'normal'
-                            }}>
-                              {day}
-                  </Text>
-                </TouchableOpacity>
-                        ))}
-              </View>
-            </View>
-          )}
-          
-                  {/* 当前重复模式预览 */}
-                  <View style={{
-                    backgroundColor: '#e3f2fd',
-                    padding: 12,
-                    borderRadius: 8,
-                    marginTop: 8
-                  }}>
-                    <Text style={{
-                      fontSize: 14,
-                      fontWeight: '600',
-                      color: '#2196F3',
-                      marginBottom: 4
-                    }}>
-                      当前设置
-                </Text>
-                    <Text style={{ fontSize: 14 }}>
-                      {recurrencePattern.type === 'daily' && `每${recurrencePattern.value || 1}天重复一次`}
-                      {recurrencePattern.type === 'weekly' && recurrencePattern.weekDay !== undefined && 
-                        `每${recurrencePattern.value || 1}周的星期${'日一二三四五六'[recurrencePattern.weekDay]}重复一次`}
-                      {recurrencePattern.type === 'weekly' && recurrencePattern.weekDay === undefined && 
-                        `每${recurrencePattern.value || 1}周重复一次`}
-                      {recurrencePattern.type === 'monthly' && `每${recurrencePattern.value || 1}个月重复一次`}
-                      {recurrencePattern.type === 'yearly' && `每${recurrencePattern.value || 1}年重复一次`}
-                    </Text>
-                  </View>
-                </>
-              )}
-              
-              {/* 高级模式的循环设置 */}
-              {isRecurring && useAdvancedRecurrence && !advancedRecurrencePattern.useSpecialDate && (
-                <>
-                  <Text style={{
-                    fontSize: 16,
-                    fontWeight: '500',
-                    marginBottom: 12,
-                    color: '#000000'
-                  }}>
-                    高级循环设置
-                  </Text>
-                  
-                  {/* 选择日期基础类型 */}
-                  <View style={{
-                    marginBottom: 16,
-                    backgroundColor: '#ffffff',
-                    padding: 12,
-                    borderRadius: 8,
-                    borderWidth: 1,
-                    borderColor: '#eeeeee',
-                  }}>
-                    <Text style={{
-                      fontSize: 14,
-                      marginBottom: 10,
-                      color: '#666666',
-                      fontWeight: '500'
-                    }}>
-                      选择基础周期单位
-                    </Text>
-                    
-                    <View style={{
-                      flexDirection: 'row',
-                      flexWrap: 'wrap',
-                    }}>
-                      {[
-                        { value: 'day', label: '天' },
-                        { value: 'week', label: '周' },
-                        { value: 'month', label: '月' },
-                        { value: 'year', label: '年' }
-                      ].map((item) => (
-                <TouchableOpacity 
-                          key={item.value}
-                          style={{
-                            flexDirection: 'row',
-                            alignItems: 'center',
-                            backgroundColor: advancedRecurrencePattern.selectedDateType === item.value ? '#e3f2fd' : '#f5f5f5',
-                            padding: 10,
-                            borderRadius: 8,
-                            marginRight: 8,
-                            marginBottom: 8,
-                            borderWidth: 1,
-                            borderColor: advancedRecurrencePattern.selectedDateType === item.value ? '#2196F3' : '#dddddd',
-                          }}
-                          onPress={() => {
-                            setAdvancedRecurrencePattern({
-                              ...advancedRecurrencePattern,
-                              selectedDateType: item.value as 'day' | 'week' | 'month' | 'year'
-                            });
-                          }}
-                        >
-                          <Text style={{
-                            fontSize: 14,
-                            fontWeight: advancedRecurrencePattern.selectedDateType === item.value ? 'bold' : 'normal',
-                            color: advancedRecurrencePattern.selectedDateType === item.value ? '#2196F3' : '#333333',
-                          }}>
-                            {item.label}
-                          </Text>
-                </TouchableOpacity>
-                      ))}
-                    </View>
-                  </View>
-                  
-                  {/* 年循环设置 */}
-                  {advancedRecurrencePattern.selectedDateType === 'year' && (
-                    <View style={{
-                      marginBottom: 16,
-                      backgroundColor: '#ffffff',
-                      padding: 12,
-                      borderRadius: 8,
-                      borderWidth: 1,
-                      borderColor: '#eeeeee',
-                    }}>
-                      <Text style={{
-                        fontSize: 14,
-                        marginBottom: 10,
-                        color: '#666666',
-                        fontWeight: '500'
-                      }}>
-                        年循环
-                      </Text>
-                      
-                      <View style={{
-                        flexDirection: 'row',
-                        alignItems: 'center'
-                      }}>
-                        <Text style={{ fontSize: 14, marginRight: 8 }}>每</Text>
-                        <TextInput
-                          style={{
-                            borderWidth: 1,
-                            borderColor: '#dddddd',
-                            borderRadius: 8,
-                            padding: 8,
-                            width: 60,
-                            textAlign: 'center',
-                            backgroundColor: '#ffffff',
-                            fontSize: 14
-                          }}
-                          value={advancedRecurrencePattern.yearValue.toString()}
-                          onChangeText={(text) => {
-                            const value = parseInt(text);
-                            if (!isNaN(value) && value > 0) {
-                              setAdvancedRecurrencePattern({
-                                ...advancedRecurrencePattern,
-                                yearValue: value
-                              });
-                            }
-                          }}
-                          keyboardType="numeric"
-                        />
-                        <Text style={{ fontSize: 14, marginLeft: 8 }}>年</Text>
-              </View>
-            </View>
-          )}
-          
-                  {/* 月循环设置 */}
-                  {(advancedRecurrencePattern.selectedDateType === 'month' || 
-                    advancedRecurrencePattern.selectedDateType === 'year') && (
-                    <View style={{
-                      marginBottom: 16,
-                      backgroundColor: '#ffffff',
-                      padding: 12,
-                      borderRadius: 8,
-                      borderWidth: 1,
-                      borderColor: '#eeeeee',
-                    }}>
-                      <Text style={{
-                        fontSize: 14,
-                        marginBottom: 10,
-                        color: '#666666',
-                        fontWeight: '500'
-                      }}>
-                        月循环
-                      </Text>
-                      
-                      <View style={{
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        justifyContent: 'space-between'
-                      }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                          <Text style={{ fontSize: 14, marginRight: 8 }}>每</Text>
-                          <TextInput
-                            style={{
-                              borderWidth: 1,
-                              borderColor: '#dddddd',
-                              borderRadius: 8,
-                              padding: 8,
-                              width: 60,
-                              textAlign: 'center',
-                              backgroundColor: '#ffffff',
-                              fontSize: 14
-                            }}
-                            value={advancedRecurrencePattern.monthValue.toString()}
-                            onChangeText={(text) => {
-                              const value = parseInt(text);
-                              if (!isNaN(value) && value > 0) {
-                                setAdvancedRecurrencePattern({
-                                  ...advancedRecurrencePattern,
-                                  monthValue: value
-                                });
-                              }
-                            }}
-                            keyboardType="numeric"
-                          />
-                          <Text style={{ fontSize: 14, marginLeft: 8 }}>月</Text>
-                        </View>
-                        
-                <TouchableOpacity 
-                          style={{
-                            flexDirection: 'row',
-                            alignItems: 'center',
-                            backgroundColor: advancedRecurrencePattern.countDirection === 'backward' ? '#e3f2fd' : '#f5f5f5',
-                            padding: 8,
-                            borderRadius: 8,
-                            borderWidth: 1,
-                            borderColor: advancedRecurrencePattern.countDirection === 'backward' ? '#2196F3' : '#dddddd',
-                          }}
-                          onPress={() => {
-                            setAdvancedRecurrencePattern({
-                              ...advancedRecurrencePattern,
-                              countDirection: advancedRecurrencePattern.countDirection === 'forward' ? 'backward' : 'forward'
-                            });
-                          }}
-                        >
-                          <Text style={{
-                            fontSize: 14,
-                            fontWeight: advancedRecurrencePattern.countDirection === 'backward' ? 'bold' : 'normal',
-                            color: advancedRecurrencePattern.countDirection === 'backward' ? '#2196F3' : '#333333',
-                          }}>
-                            {advancedRecurrencePattern.countDirection === 'backward' ? '倒数' : '正数'}
-                  </Text>
-                </TouchableOpacity>
-                      </View>
-                    </View>
-                  )}
-                  
-                  {/* 周循环设置 */}
-                  {(advancedRecurrencePattern.selectedDateType === 'week' || 
-                    advancedRecurrencePattern.selectedDateType === 'month' || 
-                    advancedRecurrencePattern.selectedDateType === 'year') && (
-                    <View style={{
-                      marginBottom: 16,
-                      backgroundColor: '#ffffff',
-                      padding: 12,
-                      borderRadius: 8,
-                      borderWidth: 1,
-                      borderColor: '#eeeeee',
-                    }}>
-                      <Text style={{
-                        fontSize: 14,
-                        marginBottom: 10,
-                        color: '#666666',
-                        fontWeight: '500'
-                      }}>
-                        周循环
-                      </Text>
-                      
-                      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
-                        <Text style={{ fontSize: 14, marginRight: 8 }}>每</Text>
-                        <TextInput
-                          style={{
-                            borderWidth: 1,
-                            borderColor: '#dddddd',
-                            borderRadius: 8,
-                            padding: 8,
-                            width: 60,
-                            textAlign: 'center',
-                            backgroundColor: '#ffffff',
-                            fontSize: 14
-                          }}
-                          value={advancedRecurrencePattern.weekValue.toString()}
-                          onChangeText={(text) => {
-                            const value = parseInt(text);
-                            if (!isNaN(value) && value > 0) {
-                              setAdvancedRecurrencePattern({
-                                ...advancedRecurrencePattern,
-                                weekValue: value
-                              });
-                            }
-                          }}
-                          keyboardType="numeric"
-                        />
-                        <Text style={{ fontSize: 14, marginLeft: 8 }}>周的</Text>
-                      </View>
-                      
-                      <Text style={{ fontSize: 14, marginBottom: 5, color: '#666666' }}>选择星期几</Text>
-                      <View style={{
-                        flexDirection: 'row',
-                        flexWrap: 'wrap',
-                        marginTop: 5
-                      }}>
-                        {['日', '一', '二', '三', '四', '五', '六'].map((day, index) => (
-                <TouchableOpacity 
-                            key={index}
-                            style={{
-                              width: 36,
-                              height: 36,
-                              borderRadius: 18,
-                              justifyContent: 'center',
-                              alignItems: 'center',
-                              backgroundColor: advancedRecurrencePattern.weekDay === index ? '#2196F3' : '#f5f5f5',
-                              borderWidth: 1,
-                              borderColor: advancedRecurrencePattern.weekDay === index ? '#2196F3' : '#dddddd',
-                              margin: 4
-                            }}
-                            onPress={() => {
-                              setAdvancedRecurrencePattern({
-                                ...advancedRecurrencePattern,
-                                weekDay: index
-                              });
-                            }}
-                          >
-                            <Text style={{
-                              color: advancedRecurrencePattern.weekDay === index ? '#ffffff' : '#000000',
-                              fontWeight: advancedRecurrencePattern.weekDay === index ? 'bold' : 'normal'
-                            }}>
-                              {day}
-                  </Text>
-                </TouchableOpacity>
-                        ))}
-              </View>
-                    </View>
-                  )}
-                  
-                  {/* 天循环设置 */}
-                  {advancedRecurrencePattern.selectedDateType === 'day' && (
-                    <View style={{
-                      marginBottom: 16,
-                      backgroundColor: '#ffffff',
-                      padding: 12,
-                      borderRadius: 8,
-                      borderWidth: 1,
-                      borderColor: '#eeeeee',
-                    }}>
-                      <Text style={{
-                        fontSize: 14,
-                        marginBottom: 10,
-                        color: '#666666',
-                        fontWeight: '500'
-                      }}>
-                        天循环
-                      </Text>
-                      
-                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                        <Text style={{ fontSize: 14, marginRight: 8 }}>每</Text>
-                        <TextInput
-                          style={{
-                            borderWidth: 1,
-                            borderColor: '#dddddd',
-                            borderRadius: 8,
-                            padding: 8,
-                            width: 60,
-                            textAlign: 'center',
-                            backgroundColor: '#ffffff',
-                            fontSize: 14
-                          }}
-                          value={advancedRecurrencePattern.dayValue.toString()}
-                          onChangeText={(text) => {
-                            const value = parseInt(text);
-                            if (!isNaN(value) && value > 0) {
-                              setAdvancedRecurrencePattern({
-                                ...advancedRecurrencePattern,
-                                dayValue: value
-                              });
-                            }
-                          }}
-                          keyboardType="numeric"
-                        />
-                        <Text style={{ fontSize: 14, marginLeft: 8 }}>天</Text>
-                      </View>
-                    </View>
-                  )}
-                  
-                  {/* 当前设置预览 */}
-                  <View style={{
-                    backgroundColor: '#e3f2fd',
-                    padding: 12,
-                    borderRadius: 8,
-                    marginBottom: 16
-                  }}>
-                    <Text style={{
-                      fontSize: 14,
-                      fontWeight: '600',
-                      color: '#2196F3',
-                      marginBottom: 4
-                    }}>
-                      当前设置
-                    </Text>
-                    <Text style={{ fontSize: 14 }}>
-                      {getAdvancedRecurrenceDescription()}
-                </Text>
-              </View>
-            </>
-          )}
-
-              {/* 特殊日期设置 */}
-              {isRecurring && advancedRecurrencePattern.useSpecialDate && (
-                <>
-                  <Text style={{
-                    fontSize: 16,
-                    fontWeight: '500',
-                    marginBottom: 12,
-                    color: '#000000'
-                  }}>
-                    特殊日期设置
-                  </Text>
-                  
-                  <View style={{
-                    backgroundColor: '#ffffff',
-                    padding: 12,
-                    borderRadius: 8,
-                    borderWidth: 1,
-                    borderColor: '#eeeeee',
-                    marginBottom: 16
-                  }}>
-                    <Text style={{
-                      fontSize: 14,
-                      marginBottom: 12,
-                      color: '#666666',
-                      fontWeight: '500'
-                    }}>
-                      选择特殊日期类型
-                    </Text>
-                    
-                    <View style={{
-                      flexDirection: 'row',
-                      flexWrap: 'wrap',
-                    }}>
-                      {[
-                        { value: 'weekend', label: '周末', icon: 'sunny-outline' },
-                        { value: 'workday', label: '工作日', icon: 'briefcase-outline' },
-                        { value: 'holiday', label: '节假日', icon: 'calendar-outline' },
-                        { value: 'solarTerm', label: '节气日', icon: 'leaf-outline' }
-                      ].map((item) => (
-                <TouchableOpacity 
-                          key={item.value}
-                          style={{
-                            flexDirection: 'row',
-                            alignItems: 'center',
-                            backgroundColor: advancedRecurrencePattern.specialDateType === item.value ? '#e3f2fd' : '#ffffff',
-                            padding: 10,
-                            borderRadius: 8,
-                            marginRight: 8,
-                            marginBottom: 8,
-                            borderWidth: 1,
-                            borderColor: advancedRecurrencePattern.specialDateType === item.value ? '#2196F3' : '#dddddd',
-                          }}
-                          onPress={() => {
-                            setAdvancedRecurrencePattern({
-                              ...advancedRecurrencePattern,
-                              specialDateType: item.value as 'weekend' | 'workday' | 'holiday' | 'solarTerm'
-                            });
-                          }}
-                        >
-                          <Ionicons 
-                            name={item.icon as any} 
-                            size={18} 
-                            color={advancedRecurrencePattern.specialDateType === item.value ? '#2196F3' : '#666666'} 
-                            style={{ marginRight: 6 }}
-                          />
-                          <Text style={{
-                            fontSize: 14,
-                            fontWeight: advancedRecurrencePattern.specialDateType === item.value ? 'bold' : 'normal',
-                            color: advancedRecurrencePattern.specialDateType === item.value ? '#2196F3' : '#333333',
-                          }}>
-                            {item.label}
-                  </Text>
-                </TouchableOpacity>
-                      ))}
-              </View>
-              
-                    <Text style={{
-                      fontSize: 12,
-                      marginTop: 12,
-                      color: '#666666',
-                      fontStyle: 'italic'
-                    }}>
-                      {advancedRecurrencePattern.specialDateType === 'weekend' && '重复设置将只在周六和周日生效'}
-                      {advancedRecurrencePattern.specialDateType === 'workday' && '重复设置将只在周一至周五生效'}
-                      {advancedRecurrencePattern.specialDateType === 'holiday' && '重复设置将在法定节假日生效'}
-                      {advancedRecurrencePattern.specialDateType === 'solarTerm' && '重复设置将在二十四节气日生效'}
-                    </Text>
-                  </View>
-                  
-                  {/* 当前设置预览 */}
-                  <View style={{
-                    backgroundColor: '#e3f2fd',
-                    padding: 12,
-                    borderRadius: 8,
-                    marginBottom: 16
-                  }}>
-                    <Text style={{
-                      fontSize: 14,
-                      fontWeight: '600',
-                      color: '#2196F3',
-                      marginBottom: 4
-                    }}>
-                      当前设置
-                    </Text>
-                    <Text style={{ fontSize: 14 }}>
-                      {advancedRecurrencePattern.specialDateType === 'weekend' && '每周末重复'}
-                      {advancedRecurrencePattern.specialDateType === 'workday' && '每个工作日重复'}
-                      {advancedRecurrencePattern.specialDateType === 'holiday' && '每个法定节假日重复'}
-                      {advancedRecurrencePattern.specialDateType === 'solarTerm' && '每个节气日重复'}
-                </Text>
-              </View>
-            </>
-          )}
-            </>
-          )}
-        </View>
+        <RecurrencePatternSelector
+          isRecurring={isRecurring}
+          recurrencePattern={recurrencePattern}
+          useAdvancedRecurrence={useAdvancedRecurrence}
+          advancedRecurrencePattern={advancedRecurrencePattern}
+          onIsRecurringChange={setIsRecurring}
+          onRecurrencePatternChange={setRecurrencePattern}
+          onUseAdvancedRecurrenceChange={setUseAdvancedRecurrence}
+          onAdvancedRecurrencePatternChange={setAdvancedRecurrencePattern}
+        />
         
         {/* 日期设置 */}
         <View style={styles.section}>
@@ -1801,10 +898,12 @@ export default function TaskFormScreen() {
                   display="default"
                   onChange={(event, selectedDate) => {
                     setShowDueDatePicker(false);
-                    if (selectedDate) {
+                    if (selectedDate && !isNaN(selectedDate.getTime())) {
                       setDueDate(selectedDate);
-                      // 对于一次性任务，设置开始日期为当前日期
-                      setStartDate(new Date());
+                      // 自动计算开始日期
+                      setTimeout(() => calculateStartDate(), 0);
+                    } else {
+                      console.warn('选择的截止日期无效，保持原值');
                     }
                   }}
                 />
@@ -1839,10 +938,12 @@ export default function TaskFormScreen() {
                   display="default"
                   onChange={(event, selectedDate) => {
                     setShowDueDatePicker(false);
-                    if (selectedDate) {
+                    if (selectedDate && !isNaN(selectedDate.getTime())) {
                       setDueDate(selectedDate);
                       // 自动计算开始日期
                       setTimeout(() => calculateStartDate(), 0);
+                    } else {
+                      console.warn('选择的截止日期无效，保持原值');
                     }
                   }}
                 />
@@ -1869,10 +970,12 @@ export default function TaskFormScreen() {
                   display="default"
                   onChange={(event, selectedDate) => {
                     setShowStartDatePicker(false);
-                    if (selectedDate) {
+                    if (selectedDate && !isNaN(selectedDate.getTime())) {
                       setStartDate(selectedDate);
                       // 自动计算截止日期
                       setTimeout(() => calculateDueDate(), 0);
+                    } else {
+                      console.warn('选择的开始日期无效，保持原值');
                     }
                   }}
                 />

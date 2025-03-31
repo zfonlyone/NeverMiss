@@ -13,7 +13,7 @@ import MainNavigator from './app/navigation/MainNavigator';
 import { LanguageProvider } from './app/contexts/LanguageContext';
 import { initializePersistentNotification } from './app/controllers/NotificationController';
 import { configureNotifications } from './app/services/notificationService';
-import { recalculateAllTaskDates } from './app/services/taskService';
+import { recalculateAllTaskDates, fixAllTaskDates } from './app/services/taskService';
 
 export default function App() {
   useEffect(() => {
@@ -24,6 +24,8 @@ export default function App() {
         await configureNotifications();
         // 初始化通知栏常驻
         await initializePersistentNotification();
+        // 修复所有任务日期问题
+        await fixAllTaskDates();
         // 重新计算所有任务日期
         await recalculateAllTaskDates(true);
         

@@ -104,8 +104,14 @@ contexts/
 utils/
 ├── taskUtils.ts             # 任务相关工具函数
 ├── dateUtils.ts             # 日期处理工具函数
+├── storage.ts               # 存储工具函数和存储键常量
 └── ...
 ```
+
+**特别说明：**
+- `storage.ts`包含所有AsyncStorage相关的工具函数和存储键常量
+- 所有存储键常量必须定义在`storage.ts`中的`STORAGE_KEYS`对象中
+- 不应在项目的其他地方定义存储键常量，而是统一从`storage.ts`导入使用
 
 ## 根目录文件
 

@@ -34,6 +34,8 @@ import { format, addDays, addWeeks, addMonths, addYears, differenceInDays } from
 import lunarService from './lunarService';
 import { setCheckOverdueTasksCallback } from './backgroundTaskService';
 import { cycleCalculator as calculator } from './cycleCalculator';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { STORAGE_KEYS } from '../utils/storage';
 
 // 任务周期计算器接口
 interface CycleCalculator {
@@ -1166,6 +1168,41 @@ export const getTask = async (id: number | string): Promise<Task | null> => {
     const task = await getTaskById(numericId);
     
     if (task) {
+      // 确保日期是有效的
+      try {
+        // 检查开始日期
+        const startDate = new Date(task.startDate);
+        if (isNaN(startDate.getTime())) {
+          console.warn('任务开始日期无效，重置为当前日期');
+          task.startDate = new Date().toISOString();
+        }
+        
+        // 检查截止日期
+        const dueDate = new Date(task.dueDate);
+        if (isNaN(dueDate.getTime())) {
+          console.warn('任务截止日期无效，重置为明天');
+          const tomorrow = new Date();
+          tomorrow.setDate(tomorrow.getDate() + 1);
+          task.dueDate = tomorrow.toISOString();
+        }
+        
+        // 确保开始日期在截止日期之前
+        if (new Date(task.startDate) > new Date(task.dueDate)) {
+          console.warn('任务开始日期晚于截止日期，重置为截止日期前一天');
+          const fixedStartDate = new Date(task.dueDate);
+          fixedStartDate.setDate(fixedStartDate.getDate() - 1);
+          task.startDate = fixedStartDate.toISOString();
+        }
+      } catch (error) {
+        console.error('处理任务日期时出错:', error);
+        // 出错时设置为安全的默认值
+        const now = new Date();
+        const tomorrow = new Date();
+        tomorrow.setDate(now.getDate() + 1);
+        task.startDate = now.toISOString();
+        task.dueDate = tomorrow.toISOString();
+      }
+      
       // 加载任务周期
       const cycles = await getTaskCyclesByTaskId(task.id);
       if (cycles.length > 0) {
@@ -1173,7 +1210,43 @@ export const getTask = async (id: number | string): Promise<Task | null> => {
         const currentCycle = cycles.sort((a, b) => 
           new Date(b.dueDate).getTime() - new Date(a.dueDate).getTime()
         )[0];
+        
+        // 确保周期日期有效
+        try {
+          const cycleStartDate = new Date(currentCycle.startDate);
+          if (isNaN(cycleStartDate.getTime())) {
+            console.warn('周期开始日期无效，使用任务开始日期');
+            currentCycle.startDate = task.startDate;
+          }
+          
+          const cycleDueDate = new Date(currentCycle.dueDate);
+          if (isNaN(cycleDueDate.getTime())) {
+            console.warn('周期截止日期无效，使用任务截止日期');
+            currentCycle.dueDate = task.dueDate;
+          }
+        } catch (error) {
+          console.error('处理周期日期时出错:', error);
+          currentCycle.startDate = task.startDate;
+          currentCycle.dueDate = task.dueDate;
+        }
+        
         task.currentCycle = currentCycle;
+        
+        // 保存修复后的周期
+        if (currentCycle.startDate !== cycles[0].startDate || 
+            currentCycle.dueDate !== cycles[0].dueDate) {
+          await saveTaskCycle(currentCycle);
+        }
+      }
+      
+      // 如果日期被修复了，保存任务
+      const originalTask = await getTaskById(numericId);
+      if (originalTask && (
+        originalTask.startDate !== task.startDate || 
+        originalTask.dueDate !== task.dueDate
+      )) {
+        console.log('保存修复后的任务日期');
+        await saveTask(task);
       }
     }
     
@@ -1665,16 +1738,130 @@ export const completeTask = async (taskId: number): Promise<Task | null> => {
 // 创建任务完成记录
 export const createTaskCompletionRecord = async (taskId: number, completionData: any): Promise<any> => {
   try {
-    // 这里根据你的实际存储方式来实现
-    // 如果使用SQLite等本地数据库，则调用相应的插入方法
-    // 如果使用API，则调用相应的API方法
+    // 获取任务详情
+    const task = await getTask(taskId);
+    if (!task) {
+      throw new Error(`任务ID ${taskId} 不存在`);
+    }
     
-    // 模拟创建完成记录
-    console.log('创建任务完成记录:', completionData);
-    return completionData;
+    // 创建任务历史记录
+    const history: TaskHistory = {
+      id: 0, // 将由saveTaskHistory分配
+      taskId,
+      cycleId: task.currentCycle?.id || 0,
+      action: 'completed',
+      timestamp: new Date().toISOString(),
+      details: JSON.stringify({
+        taskTitle: task.title,
+        completedAt: completionData.completedAt,
+        startDate: completionData.cycleStartDate,
+        dueDate: completionData.cycleDueDate,
+        isOnTime: new Date(completionData.completedAt) <= new Date(completionData.cycleDueDate),
+        isRecurring: task.isRecurring,
+        tags: task.tags || []
+      })
+    };
+    
+    // 保存任务历史
+    const savedHistory = await saveTaskHistory(history);
+    
+    // 更新任务完成次数统计
+    await updateTaskCompletionStats(task);
+    
+    return savedHistory;
   } catch (error) {
     console.error('创建任务完成记录失败:', error);
     throw error;
+  }
+};
+
+/**
+ * 更新任务完成统计数据
+ * @param task 完成的任务
+ */
+const updateTaskCompletionStats = async (task: Task): Promise<void> => {
+  try {
+    // 获取当前统计数据
+    const stats = await getTaskCompletionStats();
+    
+    // 获取今天的日期(YYYY-MM-DD格式)
+    const today = new Date().toISOString().split('T')[0];
+    
+    // 今日完成任务总数+1
+    stats.dailyCompletions[today] = (stats.dailyCompletions[today] || 0) + 1;
+    
+    // 任务标签统计
+    if (task.tags && task.tags.length > 0) {
+      task.tags.forEach(tag => {
+        stats.tagCompletions[tag] = (stats.tagCompletions[tag] || 0) + 1;
+      });
+    }
+    
+    // 更新总完成数
+    stats.totalCompletions += 1;
+    
+    // 准时/逾期完成统计
+    const now = new Date();
+    const dueDate = new Date(task.currentCycle?.dueDate || task.dueDate);
+    if (now <= dueDate) {
+      stats.onTimeCompletions += 1;
+    } else {
+      stats.overdueCompletions += 1;
+    }
+    
+    // 保存更新后的统计数据
+    await saveTaskCompletionStats(stats);
+    
+  } catch (error) {
+    console.error('更新任务完成统计失败:', error);
+  }
+};
+
+/**
+ * 获取任务完成统计数据
+ */
+export const getTaskCompletionStats = async (): Promise<{
+  totalCompletions: number;
+  onTimeCompletions: number;
+  overdueCompletions: number;
+  dailyCompletions: {[date: string]: number};
+  tagCompletions: {[tag: string]: number};
+}> => {
+  try {
+    const statsJson = await AsyncStorage.getItem(STORAGE_KEYS.TASK_STATS);
+    if (statsJson) {
+      return JSON.parse(statsJson);
+    }
+    
+    // 返回初始统计对象
+    return {
+      totalCompletions: 0,
+      onTimeCompletions: 0,
+      overdueCompletions: 0,
+      dailyCompletions: {},
+      tagCompletions: {}
+    };
+  } catch (error) {
+    console.error('获取任务完成统计失败:', error);
+    // 出错时返回空统计
+    return {
+      totalCompletions: 0,
+      onTimeCompletions: 0,
+      overdueCompletions: 0,
+      dailyCompletions: {},
+      tagCompletions: {}
+    };
+  }
+};
+
+/**
+ * 保存任务完成统计数据
+ */
+const saveTaskCompletionStats = async (stats: any): Promise<void> => {
+  try {
+    await AsyncStorage.setItem(STORAGE_KEYS.TASK_STATS, JSON.stringify(stats));
+  } catch (error) {
+    console.error('保存任务完成统计失败:', error);
   }
 };
 
@@ -2009,3 +2196,118 @@ export default {
   continueToNextCycle,
   skipCurrentCycle,
 }; 
+
+/**
+ * 修复所有任务的日期
+ * 检查每个任务的日期是否有效，如果无效则修复
+ * @returns 修复的任务数量
+ */
+export const fixAllTaskDates = async (): Promise<number> => {
+  try {
+    console.log('开始修复所有任务日期...');
+    const tasks = await getTasks();
+    let fixedCount = 0;
+    
+    for (const task of tasks) {
+      let needsFixing = false;
+      
+      // 检查开始日期
+      try {
+        const startDate = new Date(task.startDate);
+        if (isNaN(startDate.getTime())) {
+          console.warn(`任务ID ${task.id}: 开始日期无效，重置为当前日期`);
+          task.startDate = new Date().toISOString();
+          needsFixing = true;
+        }
+      } catch (error) {
+        console.error(`任务ID ${task.id}: 解析开始日期出错`, error);
+        task.startDate = new Date().toISOString();
+        needsFixing = true;
+      }
+      
+      // 检查截止日期
+      try {
+        const dueDate = new Date(task.dueDate);
+        if (isNaN(dueDate.getTime())) {
+          console.warn(`任务ID ${task.id}: 截止日期无效，重置为明天`);
+          const tomorrow = new Date();
+          tomorrow.setDate(tomorrow.getDate() + 1);
+          task.dueDate = tomorrow.toISOString();
+          needsFixing = true;
+        }
+      } catch (error) {
+        console.error(`任务ID ${task.id}: 解析截止日期出错`, error);
+        const tomorrow = new Date();
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        task.dueDate = tomorrow.toISOString();
+        needsFixing = true;
+      }
+      
+      // 确保开始日期在截止日期之前
+      if (new Date(task.startDate) > new Date(task.dueDate)) {
+        console.warn(`任务ID ${task.id}: 开始日期晚于截止日期，重置为截止日期前一天`);
+        const fixedStartDate = new Date(task.dueDate);
+        fixedStartDate.setDate(fixedStartDate.getDate() - 1);
+        task.startDate = fixedStartDate.toISOString();
+        needsFixing = true;
+      }
+      
+      // 如果需要修复，保存任务
+      if (needsFixing) {
+        await saveTask(task);
+        fixedCount++;
+      }
+      
+      // 修复任务周期
+      const cycles = await getTaskCyclesByTaskId(task.id);
+      if (cycles.length > 0) {
+        let cycleFixed = false;
+        
+        // 取最新的周期
+        const currentCycle = cycles.sort((a, b) => 
+          new Date(b.dueDate).getTime() - new Date(a.dueDate).getTime()
+        )[0];
+        
+        // 检查周期开始日期
+        try {
+          const cycleStartDate = new Date(currentCycle.startDate);
+          if (isNaN(cycleStartDate.getTime())) {
+            console.warn(`任务ID ${task.id} 的周期: 开始日期无效，使用任务开始日期`);
+            currentCycle.startDate = task.startDate;
+            cycleFixed = true;
+          }
+        } catch (error) {
+          console.error(`任务ID ${task.id} 的周期: 解析开始日期出错`, error);
+          currentCycle.startDate = task.startDate;
+          cycleFixed = true;
+        }
+        
+        // 检查周期截止日期
+        try {
+          const cycleDueDate = new Date(currentCycle.dueDate);
+          if (isNaN(cycleDueDate.getTime())) {
+            console.warn(`任务ID ${task.id} 的周期: 截止日期无效，使用任务截止日期`);
+            currentCycle.dueDate = task.dueDate;
+            cycleFixed = true;
+          }
+        } catch (error) {
+          console.error(`任务ID ${task.id} 的周期: 解析截止日期出错`, error);
+          currentCycle.dueDate = task.dueDate;
+          cycleFixed = true;
+        }
+        
+        // 如果需要修复，保存周期
+        if (cycleFixed) {
+          await saveTaskCycle(currentCycle);
+          if (!needsFixing) fixedCount++; // 只有任务本身没被计数时才增加计数
+        }
+      }
+    }
+    
+    console.log(`完成日期修复，共修复 ${fixedCount} 个任务`);
+    return fixedCount;
+  } catch (error) {
+    console.error('修复所有任务日期时出错:', error);
+    throw error;
+  }
+};

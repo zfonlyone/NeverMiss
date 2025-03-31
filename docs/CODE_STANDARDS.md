@@ -131,9 +131,47 @@ import EmptyState from '../components/EmptyState';
 
 import { filterTasks } from '../utils/taskUtils';
 import * as TaskService from '../services/taskService';
+import { STORAGE_KEYS } from '../utils/storage';
 
 import { COLORS, SPACING } from '../constants';
 import imageSource from '../assets/images/task.png';
+```
+
+### 常量和配置管理
+
+- 所有AsyncStorage存储键常量应定义在`utils/storage.ts`中的`STORAGE_KEYS`对象中
+- 不要在其他文件中重新定义存储键
+- 通过导入`STORAGE_KEYS`对象使用存储键，而不是使用字符串字面量
+- 存储键命名使用全大写，用下划线分隔，如`TASK_HISTORY`
+- 相关的存储键应按功能分组，并添加注释说明用途
+
+示例：
+
+```typescript
+// utils/storage.ts
+export const STORAGE_KEYS = {
+  // 任务相关
+  TASKS: 'tasks',                 // 所有任务的存储键
+  TASK_CYCLES: 'task_cycles',     // 任务循环周期的存储键
+  TASK_HISTORY: 'task_history',   // 任务历史记录的存储键
+  
+  // 用户偏好
+  SETTINGS: 'settings',           // 用户设置
+  LANGUAGE: 'language',           // 语言设置
+  THEME: 'theme',                 // 主题设置
+} as const;
+
+// 使用示例 - 在services/storageService.ts中
+import { STORAGE_KEYS } from '../utils/storage';
+
+export const getTasks = async () => {
+  try {
+    const tasksJson = await AsyncStorage.getItem(STORAGE_KEYS.TASKS);
+    // ...其他代码
+  } catch (error) {
+    // ...错误处理
+  }
+};
 ```
 
 ### 目录结构

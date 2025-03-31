@@ -42,7 +42,8 @@
         {
           "android": {
             "newArchEnabled": false,
-            "kotlinVersion": "1.6.10"
+            "kotlinVersion": "1.7.20",
+            "suppressKotlinVersionCompatibilityCheck": true
           },
           "ios": {
             "newArchEnabled": true
