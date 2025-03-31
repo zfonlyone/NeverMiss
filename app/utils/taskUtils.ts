@@ -1,6 +1,61 @@
 import { Task } from '../models/Task';
 import { FilterOptions, SortOption, SortDirection, TaskStatusFilter } from '../components/TaskListFilter';
 
+// 预设标签和颜色
+export const TAG_PRESETS = [
+  { value: '工作', color: '#2196F3' },
+  { value: '学习', color: '#4CAF50' },
+  { value: '生活', color: '#FF9800' },
+  { value: '重要', color: '#F44336' },
+  { value: '紧急', color: '#E91E63' },
+  { value: '会议', color: '#9C27B0' }
+];
+
+// 预定义的标签颜色（用于非预设标签）
+export const TAG_COLORS = [
+  '#FF9500', // 橙色
+  '#FF2D55', // 粉红色
+  '#5856D6', // 紫色
+  '#007AFF', // 蓝色
+  '#4CD964', // 绿色
+  '#FFCC00', // 黄色
+  '#8E8E93', // 灰色
+  '#FF3B30', // 红色
+];
+
+/**
+ * 根据标签名称获取颜色
+ * @param tag 标签名称
+ * @returns 标签颜色
+ */
+export function getTagColor(tag: string): string {
+  // 使用简单的哈希函数将标签名映射到颜色数组索引
+  let hash = 0;
+  for (let i = 0; i < tag.length; i++) {
+    hash = ((hash << 5) - hash) + tag.charCodeAt(i);
+    hash |= 0; // 转换为32位整数
+  }
+  // 使用绝对值并取模，确保索引在有效范围内
+  const colorIndex = Math.abs(hash) % TAG_COLORS.length;
+  return TAG_COLORS[colorIndex];
+}
+
+/**
+ * 获取标签对应的颜色
+ * 优先检查预设标签，如果不是预设标签则使用动态生成的颜色
+ * @param tagName 标签名称
+ * @returns 标签颜色
+ */
+export function getSelectedTagColor(tagName: string): string {
+  // 先检查是否是预设标签
+  const preset = TAG_PRESETS.find(tag => tag.value === tagName);
+  if (preset) {
+    return preset.color;
+  }
+  // 如果不是预设标签，使用动态生成的颜色
+  return getTagColor(tagName);
+}
+
 /**
  * 根据筛选条件过滤任务列表
  * @param tasks 原始任务列表
@@ -135,5 +190,7 @@ export function extractAllTags(tasks: Task[]): string[] {
 export default {
   filterTasks,
   sortTasks,
-  extractAllTags
+  extractAllTags,
+  getTagColor,
+  getSelectedTagColor
 }; 

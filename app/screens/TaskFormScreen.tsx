@@ -33,13 +33,15 @@ import {
 } from '../services/taskService';
 import RecurrencePatternSelector from '../components/RecurrencePatternSelector';
 import { recurrenceCalculator } from '../services/recurrenceCalculator';
+import { getTagColor, getSelectedTagColor, TAG_PRESETS } from '../utils/taskUtils';
+import { useTheme } from '../contexts/ThemeContext';
 
 // 简化版任务表单
 export default function TaskFormScreen() {
   const router = useRouter();
+  const { colors, isDarkMode } = useTheme();
   const params = useLocalSearchParams();
-  // 确保taskId是字符串
-  const taskId = params.taskId ? (Array.isArray(params.taskId) ? params.taskId[0] : params.taskId) : undefined;
+  const taskId = params.taskId ? Number(params.taskId) : undefined;
   const isEditMode = !!taskId;
   const [isLoading, setIsLoading] = useState(false);
 
@@ -552,13 +554,25 @@ export default function TaskFormScreen() {
         const numericTaskId = typeof taskId === 'string' ? parseInt(taskId, 10) : Number(taskId);
         await updateTaskService(numericTaskId, taskData as UpdateTaskInput);
         Alert.alert('提示', '任务更新成功', [
-          { text: '确定', onPress: () => router.back() }
+          { 
+            text: '确定', 
+            onPress: () => router.push({
+              pathname: '/screens/TaskListScreen',
+              params: { refresh: 'true' }
+            }) 
+          }
         ]);
       } else {
         // 创建模式
         await createTaskService(taskData as CreateTaskInput);
         Alert.alert('提示', '任务创建成功', [
-          { text: '确定', onPress: () => router.back() }
+          { 
+            text: '确定', 
+            onPress: () => router.push({
+              pathname: '/screens/TaskListScreen',
+              params: { refresh: 'true' }
+            }) 
+          }
         ]);
       }
     } catch (error) {
@@ -569,64 +583,118 @@ export default function TaskFormScreen() {
     }
   };
 
+  // 根据背景颜色计算出对比度高的文本颜色
+  const getContrastColor = (backgroundColor: string): string => {
+    // 如果背景颜色不是有效的十六进制颜色代码，返回黑色
+    if (!backgroundColor || !backgroundColor.startsWith('#')) {
+      return isDarkMode ? '#ffffff' : '#000000';
+    }
+
+    // 移除颜色中的#前缀
+    const hex = backgroundColor.replace('#', '');
+    
+    // 将十六进制转为RGB
+    let r = parseInt(hex.substring(0, 2), 16);
+    let g = parseInt(hex.substring(2, 4), 16);
+    let b = parseInt(hex.substring(4, 6), 16);
+    
+    // 计算亮度 (标准亮度计算公式)
+    const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+    
+    // 如果亮度高于155（中等亮度），使用黑色文本，否则使用白色文本
+    return brightness > 155 ? '#000000' : '#ffffff';
+  };
+  
+  // 调整颜色亮度的辅助函数
+  const adjustColorBrightness = (color: string, percent: number): string => {
+    // 移除颜色中的#前缀
+    const hex = color.replace('#', '');
+    
+    // 将十六进制转为RGB
+    let r = parseInt(hex.substring(0, 2), 16);
+    let g = parseInt(hex.substring(2, 4), 16);
+    let b = parseInt(hex.substring(4, 6), 16);
+    
+    // 调整亮度
+    r = Math.max(0, Math.min(255, r + percent));
+    g = Math.max(0, Math.min(255, g + percent));
+    b = Math.max(0, Math.min(255, b + percent));
+    
+    // 转回十六进制
+    return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+  };
+
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       {isLoading && (
         <View style={styles.loadingOverlay}>
-          <ActivityIndicator size="large" color="#2196F3" />
+          <ActivityIndicator size="large" color={colors.primary} />
         </View>
       )}
       
-      <StatusBar style="dark" />
+      <StatusBar style={isDarkMode ? "light" : "dark"} />
       
       {/* 标题栏 */}
-      <View style={styles.header}>
+      <View style={[styles.header, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
         <TouchableOpacity 
-          onPress={() => router.back()} 
+          onPress={() => router.push({ 
+            pathname: '/screens/TaskListScreen',
+            params: { refresh: 'true' }
+          })} 
           style={styles.backButton}
         >
-          <Ionicons name="arrow-back" size={24} color="#2196F3" />
+          <Ionicons name="arrow-back" size={24} color={colors.primary} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>
+        <Text style={[styles.headerTitle, { color: colors.text }]}>
           {isEditMode ? '编辑任务' : '添加任务'}
         </Text>
         <TouchableOpacity 
           onPress={handleSave} 
           style={styles.saveButton}
         >
-          <Ionicons name="checkmark" size={28} color="#2196F3" />
+          <Ionicons name="checkmark" size={28} color={colors.primary} />
         </TouchableOpacity>
       </View>
 
       <ScrollView style={styles.scrollContainer}>
         {/* 基本信息 */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>基本信息</Text>
+        <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>基本信息</Text>
           
-          <Text style={styles.label}>标题</Text>
+          <Text style={[styles.label, { color: colors.text }]}>标题</Text>
           <TextInput
-            style={styles.input}
+            style={[styles.input, { 
+              backgroundColor: isDarkMode ? '#2c2c2e' : '#ffffff',
+              borderColor: colors.border, 
+              color: colors.text 
+            }]}
             value={title}
             onChangeText={setTitle}
             placeholder="输入任务标题"
+            placeholderTextColor={colors.subText}
           />
 
-          <Text style={styles.label}>描述</Text>
+          <Text style={[styles.label, { color: colors.text }]}>描述</Text>
           <TextInput
-            style={[styles.input, styles.textArea]}
+            style={[styles.input, styles.textArea, { 
+              backgroundColor: isDarkMode ? '#2c2c2e' : '#ffffff',
+              borderColor: colors.border, 
+              color: colors.text 
+            }]}
             value={description}
             onChangeText={setDescription}
             placeholder="输入任务描述"
+            placeholderTextColor={colors.subText}
             multiline
           />
         </View>
 
         {/* 任务标签和背景颜色 */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>任务标签和颜色</Text>
+        <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>任务标签和颜色</Text>
           
           {/* 任务标签选择 - 改为预选项和自定义 */}
-          <Text style={styles.label}>标签</Text>
+          <Text style={[styles.label, { color: colors.text }]}>标签</Text>
           
           {/* 预设标签选项 */}
           <View style={{
@@ -634,30 +702,23 @@ export default function TaskFormScreen() {
             flexWrap: 'wrap',
             marginBottom: 12
           }}>
-            {[
-              { value: '工作', color: '#2196F3' },
-              { value: '学习', color: '#4CAF50' },
-              { value: '生活', color: '#FF9800' },
-              { value: '重要', color: '#F44336' },
-              { value: '紧急', color: '#E91E63' },
-              { value: '会议', color: '#9C27B0' }
-            ].map((item) => (
+            {TAG_PRESETS.map((item) => (
               <TouchableOpacity
                 key={item.value}
                 style={{
-                  backgroundColor: taskLabel === item.value ? item.color : '#f5f5f5',
+                  backgroundColor: taskLabel === item.value ? item.color : isDarkMode ? '#333333' : '#f5f5f5',
                   paddingHorizontal: 12,
                   paddingVertical: 6,
                   borderRadius: 16,
                   marginRight: 8,
                   marginBottom: 8,
                   borderWidth: 1,
-                  borderColor: taskLabel === item.value ? item.color : '#dddddd',
+                  borderColor: taskLabel === item.value ? item.color : isDarkMode ? '#555555' : '#dddddd',
                 }}
                 onPress={() => setTaskLabel(item.value)}
               >
                 <Text style={{
-                  color: taskLabel === item.value ? '#ffffff' : '#333333',
+                  color: taskLabel === item.value ? '#ffffff' : isDarkMode ? '#ffffff' : '#333333',
                   fontWeight: taskLabel === item.value ? 'bold' : 'normal',
                   fontSize: 14
                 }}>
@@ -677,38 +738,40 @@ export default function TaskFormScreen() {
               style={{
                 flex: 1,
                 borderWidth: 1,
-                borderColor: '#dddddd',
+                borderColor: colors.border,
                 borderRadius: 8,
                 padding: 10,
                 fontSize: 14,
-                backgroundColor: '#ffffff'
+                backgroundColor: isDarkMode ? '#2c2c2e' : '#ffffff',
+                color: colors.text
               }}
               value={taskLabel}
               onChangeText={setTaskLabel}
               placeholder="自定义标签"
+              placeholderTextColor={colors.subText}
             />
             {taskLabel && taskLabel.trim() !== '' && (
               <TouchableOpacity
                 style={{
                   marginLeft: 8,
-                  backgroundColor: '#f5f5f5',
+                  backgroundColor: isDarkMode ? '#3a3a3c' : '#f5f5f5',
                   width: 36,
                   height: 36,
                   borderRadius: 18,
                   justifyContent: 'center',
                   alignItems: 'center',
                   borderWidth: 1,
-                  borderColor: '#dddddd'
+                  borderColor: colors.border
                 }}
                 onPress={() => setTaskLabel('')}
               >
-                <Ionicons name="close" size={20} color="#666666" />
+                <Ionicons name="close" size={20} color={colors.subText} />
               </TouchableOpacity>
             )}
           </View>
           
           {/* 背景颜色选择 - 改为圆形预览 */}
-          <Text style={styles.label}>卡片背景颜色</Text>
+          <Text style={[styles.label, { color: colors.text }]}>卡片背景颜色</Text>
           
           <View style={{
             flexDirection: 'row',
@@ -725,7 +788,9 @@ export default function TaskFormScreen() {
               { color: '#fff3e0', name: '橙色' },
               { color: '#ffebee', name: '浅红' },
               { color: '#f3e5f5', name: '浅紫' },
-              { color: '#fffde7', name: '浅黄' }
+              { color: '#fffde7', name: '浅黄' },
+              { color: '#333333', name: '深灰' },
+              { color: '#263238', name: '深蓝' },
             ].map((item) => (
               <TouchableOpacity
                 key={item.color}
@@ -737,7 +802,7 @@ export default function TaskFormScreen() {
                   justifyContent: 'center',
                   alignItems: 'center',
                   borderWidth: 2,
-                  borderColor: cardBackgroundColor === item.color ? '#2196F3' : '#dddddd',
+                  borderColor: cardBackgroundColor === item.color ? colors.primary : colors.border,
                   shadowColor: '#000',
                   shadowOffset: { width: 0, height: 1 },
                   shadowOpacity: 0.1,
@@ -750,7 +815,7 @@ export default function TaskFormScreen() {
                   <Ionicons 
                     name="checkmark" 
                     size={18} 
-                    color={item.color === '#ffffff' ? '#2196F3' : '#ffffff'} 
+                    color={getContrastColor(item.color)} 
                   />
                 )}
               </TouchableOpacity>
@@ -763,25 +828,34 @@ export default function TaskFormScreen() {
             padding: 12,
             borderRadius: 8,
             borderWidth: 1,
-            borderColor: '#dddddd',
+            borderColor: isDarkMode ? 'rgba(255,255,255,0.1)' : colors.border,
             alignItems: 'center',
             marginBottom: 8
           }}>
             <Text style={{
-              color: cardBackgroundColor === '#ffffff' ? '#000000' : '#333333',
-              fontWeight: '500'
+              color: getContrastColor(cardBackgroundColor),
+              fontWeight: '500',
+              fontSize: 16,
+              marginBottom: 6
             }}>
-              预览效果
+              任务标题预览
+            </Text>
+            <Text style={{
+              color: adjustColorBrightness(getContrastColor(cardBackgroundColor), getContrastColor(cardBackgroundColor) === '#ffffff' ? -40 : 40),
+              fontSize: 14,
+              marginBottom: 8
+            }}>
+              这是任务描述文本预览效果
             </Text>
             {taskLabel && (
               <View style={{
-                backgroundColor: '#2196F3',
+                backgroundColor: getSelectedTagColor(taskLabel),
                 paddingHorizontal: 8,
                 paddingVertical: 4,
                 borderRadius: 16,
                 marginTop: 8
               }}>
-                <Text style={{ color: '#ffffff', fontSize: 12 }}>
+                <Text style={{ color: getContrastColor(getSelectedTagColor(taskLabel)), fontSize: 12 }}>
                   {taskLabel}
                 </Text>
               </View>
@@ -790,10 +864,10 @@ export default function TaskFormScreen() {
         </View>
         
         {/* 日期类型 */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>日期类型</Text>
+        <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>日期类型</Text>
           
-          <View style={styles.toggleContainer}>
+          <View style={[styles.toggleContainer, { backgroundColor: isDarkMode ? '#2c2c2e' : '#eeeeee' }]}>
             <TouchableOpacity
               style={[
                 styles.toggleButton, 
@@ -802,7 +876,7 @@ export default function TaskFormScreen() {
               ]}
               onPress={() => setDateType('solar')}
             >
-              <Text style={dateType === 'solar' ? styles.toggleTextActive : styles.toggleText}>
+              <Text style={dateType === 'solar' ? styles.toggleTextActive : [styles.toggleText, { color: colors.text }]}>
                 公历
               </Text>
             </TouchableOpacity>
@@ -815,7 +889,7 @@ export default function TaskFormScreen() {
               ]}
               onPress={() => setDateType('lunar')}
             >
-              <Text style={dateType === 'lunar' ? styles.toggleTextActive : styles.toggleText}>
+              <Text style={dateType === 'lunar' ? styles.toggleTextActive : [styles.toggleText, { color: colors.text }]}>
                 农历
               </Text>
             </TouchableOpacity>
@@ -835,18 +909,18 @@ export default function TaskFormScreen() {
         />
         
         {/* 日期设置 */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>日期设置</Text>
+        <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>日期设置</Text>
           
           {/* 只有在重复任务时才显示计算方向设置 */}
           {isRecurring && (
             <TouchableOpacity
               style={{
-                backgroundColor: '#f5f5f5',
+                backgroundColor: isDarkMode ? '#2c2c2e' : '#f5f5f5',
                 padding: 12,
                 borderRadius: 8,
                 borderWidth: 1,
-                borderColor: '#dddddd',
+                borderColor: colors.border,
                 marginBottom: 16,
                 flexDirection: 'row',
                 alignItems: 'center',
@@ -864,14 +938,14 @@ export default function TaskFormScreen() {
             >
               <Text style={{
                 fontSize: 16,
-                color: '#000000'
+                color: colors.text
               }}>
                 {useDueDateToCalculate ? '使用截止日期计算开始日期' : '使用开始日期计算截止日期'}
               </Text>
               <Ionicons 
                 name="swap-horizontal-outline" 
                 size={24} 
-                color="#666666" 
+                color={colors.subText} 
               />
             </TouchableOpacity>
           )}
@@ -880,22 +954,25 @@ export default function TaskFormScreen() {
           {!isRecurring ? (
             // 一次性任务只显示截止日期选择器
             <>
-              <Text style={styles.label}>截止日期</Text>
+              <Text style={[styles.label, { color: colors.text }]}>截止日期</Text>
               <TouchableOpacity
-                style={styles.dateButton}
+                style={[styles.dateButton, { 
+                  backgroundColor: isDarkMode ? '#2c2c2e' : '#f9f9f9',
+                  borderColor: colors.border
+                }]}
                 onPress={() => setShowDueDatePicker(true)}
               >
-                <Text style={styles.dateButtonText}>
+                <Text style={[styles.dateButtonText, { color: colors.text }]}>
                   {format(dueDate, 'yyyy-MM-dd')}
                 </Text>
-                <Ionicons name="calendar-outline" size={20} color="#666666" />
+                <Ionicons name="calendar-outline" size={20} color={colors.subText} />
               </TouchableOpacity>
           
           {showDueDatePicker && (
             <DateTimePicker
               value={dueDate}
               mode="date"
-                  display="default"
+                  display={Platform.OS === 'ios' ? 'spinner' : 'default'}
                   onChange={(event, selectedDate) => {
                     setShowDueDatePicker(false);
                     if (selectedDate && !isNaN(selectedDate.getTime())) {
@@ -910,7 +987,7 @@ export default function TaskFormScreen() {
               )}
               <Text style={{
                 fontSize: 14,
-                color: '#666666',
+                color: colors.subText,
                 marginTop: 4,
                 fontStyle: 'italic'
               }}>
@@ -920,22 +997,25 @@ export default function TaskFormScreen() {
           ) : useDueDateToCalculate ? (
             // 如果是重复任务且使用截止日期计算开始日期，只显示截止日期选择器
             <>
-              <Text style={styles.label}>截止日期</Text>
+              <Text style={[styles.label, { color: colors.text }]}>截止日期</Text>
               <TouchableOpacity
-                style={styles.dateButton}
+                style={[styles.dateButton, { 
+                  backgroundColor: isDarkMode ? '#2c2c2e' : '#f9f9f9',
+                  borderColor: colors.border
+                }]}
                 onPress={() => setShowDueDatePicker(true)}
               >
-                <Text style={styles.dateButtonText}>
+                <Text style={[styles.dateButtonText, { color: colors.text }]}>
                   {format(dueDate, 'yyyy-MM-dd')}
                 </Text>
-                <Ionicons name="calendar-outline" size={20} color="#666666" />
+                <Ionicons name="calendar-outline" size={20} color={colors.subText} />
               </TouchableOpacity>
               
               {showDueDatePicker && (
             <DateTimePicker
                   value={dueDate}
                   mode="date"
-                  display="default"
+                  display={Platform.OS === 'ios' ? 'spinner' : 'default'}
                   onChange={(event, selectedDate) => {
                     setShowDueDatePicker(false);
                     if (selectedDate && !isNaN(selectedDate.getTime())) {
@@ -952,22 +1032,25 @@ export default function TaskFormScreen() {
           ) : (
             // 如果是重复任务且使用开始日期计算截止日期，只显示开始日期选择器
             <>
-              <Text style={styles.label}>开始日期</Text>
+              <Text style={[styles.label, { color: colors.text }]}>开始日期</Text>
               <TouchableOpacity
-                style={styles.dateButton}
+                style={[styles.dateButton, { 
+                  backgroundColor: isDarkMode ? '#2c2c2e' : '#f9f9f9',
+                  borderColor: colors.border
+                }]}
                 onPress={() => setShowStartDatePicker(true)}
               >
-                <Text style={styles.dateButtonText}>
+                <Text style={[styles.dateButtonText, { color: colors.text }]}>
                   {format(startDate, 'yyyy-MM-dd')}
                 </Text>
-                <Ionicons name="calendar-outline" size={20} color="#666666" />
+                <Ionicons name="calendar-outline" size={20} color={colors.subText} />
               </TouchableOpacity>
               
               {showStartDatePicker && (
             <DateTimePicker
                   value={startDate}
                   mode="date"
-                  display="default"
+                  display={Platform.OS === 'ios' ? 'spinner' : 'default'}
                   onChange={(event, selectedDate) => {
                     setShowStartDatePicker(false);
                     if (selectedDate && !isNaN(selectedDate.getTime())) {
@@ -985,7 +1068,7 @@ export default function TaskFormScreen() {
           
           {/* 当前日期设置显示 */}
           <View style={{
-            backgroundColor: '#e3f2fd',
+            backgroundColor: isDarkMode ? '#2d3e50' : '#e3f2fd',
             padding: 12,
             borderRadius: 8,
             marginTop: 16
@@ -993,7 +1076,7 @@ export default function TaskFormScreen() {
             <Text style={{
               fontSize: 14,
               fontWeight: '600',
-              color: '#2196F3',
+              color: isDarkMode ? '#4d8fcc' : '#2196F3',
               marginBottom: 8
             }}>
               当前设置
@@ -1003,31 +1086,31 @@ export default function TaskFormScreen() {
               justifyContent: 'space-between',
               marginBottom: 4
             }}>
-              <Text style={{ fontSize: 14, fontWeight: '500' }}>开始日期：</Text>
-              <Text style={{ fontSize: 14 }}>{format(startDate, 'yyyy-MM-dd')}</Text>
+              <Text style={{ fontSize: 14, fontWeight: '500', color: colors.text }}>开始日期：</Text>
+              <Text style={{ fontSize: 14, color: colors.text }}>{format(startDate, 'yyyy-MM-dd')}</Text>
             </View>
             <View style={{
               flexDirection: 'row',
               justifyContent: 'space-between'
             }}>
-              <Text style={{ fontSize: 14, fontWeight: '500' }}>截止日期：</Text>
-              <Text style={{ fontSize: 14 }}>{format(dueDate, 'yyyy-MM-dd')}</Text>
+              <Text style={{ fontSize: 14, fontWeight: '500', color: colors.text }}>截止日期：</Text>
+              <Text style={{ fontSize: 14, color: colors.text }}>{format(dueDate, 'yyyy-MM-dd')}</Text>
             </View>
           </View>
         </View>
 
         {/* 提醒设置 */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>提醒设置</Text>
+        <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>提醒设置</Text>
           
           {/* 使用按钮代替开关来启用/禁用提醒 */}
           <TouchableOpacity
             style={{
-              backgroundColor: enableReminder ? '#e3f2fd' : '#f5f5f5',
+              backgroundColor: enableReminder ? (isDarkMode ? '#2d3e50' : '#e3f2fd') : (isDarkMode ? '#2c2c2e' : '#f5f5f5'),
               padding: 12,
               borderRadius: 8,
               borderWidth: 1,
-              borderColor: enableReminder ? '#2196F3' : '#dddddd',
+              borderColor: enableReminder ? colors.primary : colors.border,
               marginBottom: 16,
               flexDirection: 'row',
               alignItems: 'center',
@@ -1037,7 +1120,7 @@ export default function TaskFormScreen() {
           >
             <Text style={{
               fontSize: 16,
-              color: '#000000',
+              color: colors.text,
               fontWeight: enableReminder ? 'bold' : 'normal'
             }}>
               {enableReminder ? '已启用提醒' : '启用提醒'}
@@ -1045,25 +1128,25 @@ export default function TaskFormScreen() {
             <Ionicons 
               name={enableReminder ? "notifications" : "notifications-outline"} 
               size={24} 
-              color={enableReminder ? '#2196F3' : '#666666'} 
+              color={enableReminder ? colors.primary : colors.subText} 
             />
           </TouchableOpacity>
           
           {/* 当启用提醒时显示提醒设置 */}
           {enableReminder && (
             <View style={{
-              backgroundColor: '#ffffff',
+              backgroundColor: isDarkMode ? '#2c2c2e' : '#ffffff',
               padding: 12,
               borderRadius: 8,
               borderWidth: 1,
-              borderColor: '#eeeeee',
+              borderColor: colors.border,
               marginBottom: 16
             }}>
               <Text style={{
                 fontSize: 16,
                 fontWeight: '500',
                 marginBottom: 12,
-                color: '#000000'
+                color: colors.text
               }}>
                 提醒时间
               </Text>
@@ -1073,17 +1156,18 @@ export default function TaskFormScreen() {
                 alignItems: 'center',
                 marginBottom: 16
               }}>
-                <Text style={{ fontSize: 16, marginRight: 8 }}>提前</Text>
+                <Text style={{ fontSize: 16, marginRight: 8, color: colors.text }}>提前</Text>
               <TextInput
                   style={{
                     borderWidth: 1,
-                    borderColor: '#dddddd',
+                    borderColor: colors.border,
                     borderRadius: 8,
                     padding: 12,
                     width: 80,
                     textAlign: 'center',
-                    backgroundColor: '#ffffff',
-                    fontSize: 16
+                    backgroundColor: isDarkMode ? '#3a3a3c' : '#ffffff',
+                    fontSize: 16,
+                    color: colors.text
                   }}
                   value={reminderOffset.toString()}
                   onChangeText={(text) => {
@@ -1099,11 +1183,11 @@ export default function TaskFormScreen() {
                 <View style={{
                   flexDirection: 'row',
                   marginLeft: 12,
-                  backgroundColor: '#f5f5f5',
+                  backgroundColor: isDarkMode ? '#2c2c2e' : '#f5f5f5',
                   borderRadius: 8,
                   overflow: 'hidden',
                   borderWidth: 1,
-                  borderColor: '#dddddd'
+                  borderColor: colors.border
                 }}>
                   {[
                     { value: 'minutes', label: '分钟' },
@@ -1115,12 +1199,12 @@ export default function TaskFormScreen() {
                       style={{
                         paddingVertical: 8,
                         paddingHorizontal: 12,
-                        backgroundColor: reminderUnit === item.value ? '#2196F3' : 'transparent',
+                        backgroundColor: reminderUnit === item.value ? colors.primary : 'transparent',
                       }}
                       onPress={() => setReminderUnit(item.value as 'minutes' | 'hours' | 'days')}
                     >
                       <Text style={{
-                        color: reminderUnit === item.value ? '#ffffff' : '#000000',
+                        color: reminderUnit === item.value ? '#ffffff' : colors.text,
                         fontWeight: reminderUnit === item.value ? 'bold' : 'normal'
                       }}>
                         {item.label}
@@ -1132,19 +1216,19 @@ export default function TaskFormScreen() {
 
               {/* 提醒设置预览 */}
               <View style={{
-                backgroundColor: '#e3f2fd',
+                backgroundColor: isDarkMode ? '#2d3e50' : '#e3f2fd',
                 padding: 12,
                 borderRadius: 8,
               }}>
                 <Text style={{
                   fontSize: 14,
                   fontWeight: '600',
-                  color: '#2196F3',
+                  color: isDarkMode ? '#4d8fcc' : '#2196F3',
                   marginBottom: 4
                 }}>
                   当前设置
                 </Text>
-                <Text style={{ fontSize: 14 }}>
+                <Text style={{ fontSize: 14, color: colors.text }}>
                   将在
                   {useDueDateToCalculate ? '截止' : '开始'}
                   前 {reminderOffset} {
@@ -1164,7 +1248,6 @@ export default function TaskFormScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
   },
   loadingOverlay: {
     ...StyleSheet.absoluteFillObject,
@@ -1177,11 +1260,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#ffffff',
     height: 56,
     paddingHorizontal: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#eeeeee',
   },
   headerTitle: {
     fontSize: 18,
@@ -1203,7 +1284,6 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   section: {
-    backgroundColor: '#ffffff',
     margin: 12,
     padding: 16,
     borderRadius: 12,

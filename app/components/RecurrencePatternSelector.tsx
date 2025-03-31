@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, TextInput, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { RecurrencePattern, AdvancedRecurrencePattern, RecurrenceType, WeekDay } from '../models/Task';
+import { useTheme } from '../contexts/ThemeContext';
+import { getSelectedTagColor } from '../utils/taskUtils';
 
 interface RecurrencePatternSelectorProps {
   isRecurring: boolean;
@@ -28,6 +30,7 @@ export default function RecurrencePatternSelector({
   onUseAdvancedRecurrenceChange,
   onAdvancedRecurrencePatternChange
 }: RecurrencePatternSelectorProps) {
+  const { colors, isDarkMode } = useTheme();
 
   // 获取高级循环描述
   const getAdvancedRecurrenceDescription = () => {
@@ -113,23 +116,25 @@ export default function RecurrencePatternSelector({
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.sectionTitle}>重复设置</Text>
+    <View style={[styles.container, { backgroundColor: colors.card, borderColor: colors.border }]}>
+      <Text style={[styles.sectionTitle, { color: colors.text }]}>重复设置</Text>
       
       {/* 使用按钮启用/禁用重复 */}
       <TouchableOpacity
         style={[
           styles.toggleButton, 
           { 
-            backgroundColor: isRecurring ? '#e3f2fd' : '#f5f5f5',
-            borderColor: isRecurring ? '#2196F3' : '#dddddd',
+            backgroundColor: isRecurring 
+              ? (isDarkMode ? '#2d3e50' : '#e3f2fd') 
+              : (isDarkMode ? '#2c2c2e' : '#f5f5f5'),
+            borderColor: isRecurring ? colors.primary : colors.border,
           }
         ]}
         onPress={() => onIsRecurringChange(!isRecurring)}
       >
         <Text style={{
           fontSize: 16,
-          color: '#000000',
+          color: colors.text,
           fontWeight: isRecurring ? 'bold' : 'normal'
         }}>
           {isRecurring ? '已启用重复' : '启用重复'}
@@ -137,14 +142,14 @@ export default function RecurrencePatternSelector({
         <Ionicons 
           name={isRecurring ? "repeat" : "repeat-outline"} 
           size={24} 
-          color={isRecurring ? '#2196F3' : '#666666'} 
+          color={isRecurring ? colors.primary : colors.subText} 
         />
       </TouchableOpacity>
       
       {/* 仅当启用重复时显示模式选择 */}
       {isRecurring && (
         <>
-          <Text style={styles.subSectionTitle}>重复模式选择</Text>
+          <Text style={[styles.subSectionTitle, { color: colors.text }]}>重复模式选择</Text>
           
           <View style={styles.optionsRow}>
             {[
@@ -161,14 +166,14 @@ export default function RecurrencePatternSelector({
                       (item.value === 'simple' && !useAdvancedRecurrence && !advancedRecurrencePattern.useSpecialDate) ||
                       (item.value === 'advanced' && useAdvancedRecurrence && !advancedRecurrencePattern.useSpecialDate) ||
                       (item.value === 'special' && advancedRecurrencePattern.useSpecialDate)
-                        ? '#e3f2fd' 
-                        : '#f5f5f5',
+                        ? (isDarkMode ? '#2d3e50' : '#e3f2fd')
+                        : (isDarkMode ? '#2c2c2e' : '#f5f5f5'),
                     borderColor: 
                       (item.value === 'simple' && !useAdvancedRecurrence && !advancedRecurrencePattern.useSpecialDate) ||
                       (item.value === 'advanced' && useAdvancedRecurrence && !advancedRecurrencePattern.useSpecialDate) ||
                       (item.value === 'special' && advancedRecurrencePattern.useSpecialDate)
-                        ? '#2196F3' 
-                        : '#dddddd',
+                        ? colors.primary 
+                        : colors.border,
                   }
                 ]}
                 onPress={() => {
@@ -200,8 +205,8 @@ export default function RecurrencePatternSelector({
                     (item.value === 'simple' && !useAdvancedRecurrence && !advancedRecurrencePattern.useSpecialDate) ||
                     (item.value === 'advanced' && useAdvancedRecurrence && !advancedRecurrencePattern.useSpecialDate) ||
                     (item.value === 'special' && advancedRecurrencePattern.useSpecialDate)
-                      ? '#2196F3' 
-                      : '#666666'
+                      ? colors.primary 
+                      : colors.subText
                   } 
                   style={styles.buttonIcon}
                 />
@@ -211,8 +216,8 @@ export default function RecurrencePatternSelector({
                     (item.value === 'simple' && !useAdvancedRecurrence && !advancedRecurrencePattern.useSpecialDate) ||
                     (item.value === 'advanced' && useAdvancedRecurrence && !advancedRecurrencePattern.useSpecialDate) ||
                     (item.value === 'special' && advancedRecurrencePattern.useSpecialDate)
-                      ? '#2196F3' 
-                      : '#666666'
+                      ? colors.primary 
+                      : colors.subText
                 }}>
                   {item.label}
                 </Text>
@@ -237,8 +242,12 @@ export default function RecurrencePatternSelector({
                     style={[
                       styles.typeButton,
                       {
-                        backgroundColor: recurrencePattern.type === item.type ? '#e3f2fd' : '#f5f5f5',
-                        borderColor: recurrencePattern.type === item.type ? '#2196F3' : '#dddddd'
+                        backgroundColor: recurrencePattern.type === item.type 
+                          ? (isDarkMode ? '#2d3e50' : '#e3f2fd') 
+                          : (isDarkMode ? '#2c2c2e' : '#f5f5f5'),
+                        borderColor: recurrencePattern.type === item.type 
+                          ? colors.primary 
+                          : colors.border
                       }
                     ]}
                     onPress={() => {
@@ -251,7 +260,7 @@ export default function RecurrencePatternSelector({
                     <Text style={{
                       fontSize: 14,
                       fontWeight: recurrencePattern.type === item.type ? 'bold' : 'normal',
-                      color: recurrencePattern.type === item.type ? '#2196F3' : '#333333'
+                      color: recurrencePattern.type === item.type ? colors.primary : colors.text
                     }}>
                       {item.label}
                     </Text>
@@ -261,12 +270,19 @@ export default function RecurrencePatternSelector({
               
               {/* 间隔值设置 */}
               <View style={styles.inputSection}>
-                <Text style={styles.inputLabel}>间隔设置</Text>
+                <Text style={[styles.inputLabel, { color: colors.text }]}>间隔设置</Text>
                 
                 <View style={styles.inputRow}>
-                  <Text style={styles.inputText}>每</Text>
+                  <Text style={[styles.inputText, { color: colors.text }]}>每</Text>
                   <TextInput
-                    style={styles.numberInput}
+                    style={[
+                      styles.numberInput,
+                      {
+                        backgroundColor: isDarkMode ? '#2c2c2e' : '#ffffff',
+                        borderColor: colors.border,
+                        color: colors.text
+                      }
+                    ]}
                     value={String(recurrencePattern.value || 1)}
                     onChangeText={(text) => {
                       const value = parseInt(text);
@@ -279,7 +295,7 @@ export default function RecurrencePatternSelector({
                     }}
                     keyboardType="numeric"
                   />
-                  <Text style={styles.inputText}>
+                  <Text style={[styles.inputText, { color: colors.text }]}>
                     {recurrencePattern.type === 'daily' ? '天' : 
                      recurrencePattern.type === 'weekly' ? '周' : 
                      recurrencePattern.type === 'monthly' ? '月' : '年'}

@@ -14,6 +14,7 @@ import { Task, RecurrencePattern } from '../models/Task';
 import { format } from 'date-fns';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useTheme } from '../contexts/ThemeContext';
+import { getTagColor, getSelectedTagColor } from '../utils/taskUtils';
 
 interface TaskListProps {
   tasks: Task[];
@@ -125,6 +126,12 @@ export default function TaskList({
     today.setHours(0, 0, 0, 0);
     const daysLeft = Math.ceil((dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
     
+    // 根据任务背景色确定文本颜色
+    const backgroundColor = item.backgroundColor || colors.card;
+    const textColor = getContrastColor(backgroundColor);
+    // 次要文本颜色（描述、信息等）
+    const subTextColor = adjustColorBrightness(textColor, textColor === '#ffffff' ? -40 : 40);
+    
     return (
       <View style={styles.itemContainer}>
         <TouchableOpacity
@@ -137,7 +144,12 @@ export default function TaskList({
         <TouchableOpacity 
           style={[
             styles.itemContent, 
-            { backgroundColor: item.backgroundColor || colors.card }
+            { 
+              backgroundColor: backgroundColor,
+              borderColor: isDarkMode ? 'rgba(255,255,255,0.1)' : 'transparent',
+              borderWidth: isDarkMode ? 1 : 0,
+              shadowOpacity: isDarkMode ? 0.4 : 0.1,
+            }
           ]} 
           onPress={() => {
             console.log('点击任务，任务ID:', item.id);
@@ -152,8 +164,7 @@ export default function TaskList({
           <View style={styles.titleRow}>
             <Text style={[
               styles.itemTitle, 
-              { color: colors.text },
-              isOverdue ? styles.overdueBadge : {}
+              { color: textColor }
             ]}>
               {item.title}
             </Text>
@@ -178,7 +189,7 @@ export default function TaskList({
             <Text 
               style={[
                 styles.itemDescription,
-                { color: colors.subText }
+                { color: subTextColor }
               ]}
               numberOfLines={2}
             >
@@ -189,11 +200,23 @@ export default function TaskList({
           {/* 任务标签 */}
           {item.tags && item.tags.length > 0 && (
             <View style={styles.tagsContainer}>
-              {item.tags.map((tag, index) => (
-                <View key={index} style={[styles.tagBadge, {backgroundColor: '#2196F3'}]}>
-                  <Text style={styles.tagText}>{tag}</Text>
-                </View>
-              ))}
+              {item.tags.map((tag, index) => {
+                // 根据标签名称获取颜色
+                const tagColor = getSelectedTagColor(tag);
+                // 在深色模式下调暗颜色
+                const darkModeColor = isDarkMode ? 
+                  adjustColorBrightness(tagColor, -30) : 
+                  tagColor;
+                
+                return (
+                  <View key={index} style={[
+                    styles.tagBadge, 
+                    { backgroundColor: isDarkMode ? darkModeColor : tagColor }
+                  ]}>
+                    <Text style={styles.tagText}>{tag}</Text>
+                  </View>
+                );
+              })}
             </View>
           )}
           
@@ -209,7 +232,9 @@ export default function TaskList({
               <Text 
                 style={[
                   styles.infoText, 
-                  { color: isOverdue ? colors.error : colors.subText }
+                  { 
+                    color: isOverdue ? colors.error : subTextColor
+                  }
                 ]}
               >
                 {format(dueDate, 'yyyy-MM-dd')}
@@ -227,7 +252,7 @@ export default function TaskList({
                 <Text 
                   style={[
                     styles.infoText,
-                    { color: colors.subText }
+                    { color: subTextColor }
                   ]}
                 >
                   {item.recurrencePattern.type === 'custom' 
@@ -248,7 +273,7 @@ export default function TaskList({
                 <Text 
                   style={[
                     styles.infoText,
-                    { color: colors.subText }
+                    { color: subTextColor }
                   ]}
                 >
                   提前{item.reminderOffset}{item.reminderUnit === 'minutes' ? '分钟' : item.reminderUnit === 'hours' ? '小时' : '天'}
@@ -370,7 +395,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
     shadowRadius: 2,
-    elevation: 2,
+    elevation: 3,
   },
   titleRow: {
     flexDirection: 'row',
@@ -400,7 +425,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#F44336',
   },
   statusText: {
-    color: '#fff',
+    color: '#ffffff',
     fontSize: 12,
     fontWeight: 'bold',
   },
@@ -453,8 +478,49 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   tagText: {
-    color: '#fff',
+    color: '#ffffff',
     fontSize: 12,
     fontWeight: 'bold',
   },
-}); 
+});
+
+// 辅助函数：调整颜色亮度
+const adjustColorBrightness = (color: string, percent: number): string => {
+  // 移除颜色中的#前缀
+  const hex = color.replace('#', '');
+  
+  // 将十六进制转为RGB
+  let r = parseInt(hex.substring(0, 2), 16);
+  let g = parseInt(hex.substring(2, 4), 16);
+  let b = parseInt(hex.substring(4, 6), 16);
+  
+  // 调整亮度
+  r = Math.max(0, Math.min(255, r + percent));
+  g = Math.max(0, Math.min(255, g + percent));
+  b = Math.max(0, Math.min(255, b + percent));
+  
+  // 转回十六进制
+  return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+};
+
+// 根据背景颜色计算出对比度高的文本颜色
+const getContrastColor = (backgroundColor: string): string => {
+  // 如果背景颜色不是有效的十六进制颜色代码，返回黑色
+  if (!backgroundColor || !backgroundColor.startsWith('#')) {
+    return '#000000';
+  }
+
+  // 移除颜色中的#前缀
+  const hex = backgroundColor.replace('#', '');
+  
+  // 将十六进制转为RGB
+  let r = parseInt(hex.substring(0, 2), 16);
+  let g = parseInt(hex.substring(2, 4), 16);
+  let b = parseInt(hex.substring(4, 6), 16);
+  
+  // 计算亮度 (标准亮度计算公式)
+  const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+  
+  // 如果亮度高于125（中等亮度），使用黑色文本，否则使用白色文本
+  return brightness > 155 ? '#000000' : '#ffffff';
+}; 
