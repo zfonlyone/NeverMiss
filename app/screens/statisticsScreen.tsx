@@ -13,7 +13,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { getTasks } from '../services/storageService';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useTheme } from '../contexts/ThemeContext';
-import { getCompletedTasks, getOverdueTasks, getTaskCompletionStats, getCompletedTaskHistory } from '../services/taskService';
+import { 
+  getCompletedTasks, 
+  getOverdueTasks, 
+  getTaskCompletionStats, 
+  getCompletedTaskHistory 
+} from '../services/taskService';
 import { Task } from '../models/Task';
 import { format } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
@@ -108,50 +113,58 @@ export default function StatisticsScreen() {
     );
   };
 
-  const renderTaskItem = ({ item }: { item: Task }) => (
-    <View style={[
-      styles.taskItem,
-      { backgroundColor: colors.card }
-    ]}>
-      <View style={styles.taskHeader}>
-        <Text style={[
-          styles.taskTitle,
-          { color: colors.text }
-        ]}>{item.title}</Text>
-        <View style={[
-          styles.statusBadge,
-          { backgroundColor: '#4CAF50' }
-        ]}>
-          <Text style={styles.statusText}>
-            {t.task.statusCompleted}
-          </Text>
-        </View>
-      </View>
-      
-      {item.description ? (
-        <Text style={[
-          styles.taskDescription,
-          { color: colors.subText }
-        ]} numberOfLines={2}>
-          {item.description}
-        </Text>
-      ) : null}
-      
-      {item.currentCycle && (
-        <View style={styles.taskFooter}>
-          <View style={styles.taskDateContainer}>
-            <Ionicons name="calendar" size={14} color={colors.subText} />
-            <Text style={[
-              styles.taskDate,
-              { color: colors.subText }
-            ]}>
-              {t.statistics.completedDate}: {formatDate(item.currentCycle.completedDate || new Date().toISOString())}
+  const renderTaskItem = ({ item }: { item: Task | TaskCompleteHistory }) => {
+    // 确定实际的任务对象
+    const task = 'task' in item ? item.task : item;
+    
+    return (
+      <View style={[
+        styles.taskItem,
+        { 
+          backgroundColor: colors.card,
+          shadowOpacity: isDarkMode ? 0.3 : 0.1
+        }
+      ]}>
+        <View style={styles.taskHeader}>
+          <Text style={[
+            styles.taskTitle,
+            { color: colors.text }
+          ]}>{task.title}</Text>
+          <View style={[
+            styles.statusBadge,
+            { backgroundColor: '#4CAF50' }
+          ]}>
+            <Text style={styles.statusText}>
+              {t.task.statusCompleted}
             </Text>
           </View>
         </View>
-      )}
-    </View>
-  );
+        
+        {task.description ? (
+          <Text style={[
+            styles.taskDescription,
+            { color: colors.subText }
+          ]} numberOfLines={2}>
+            {task.description}
+          </Text>
+        ) : null}
+        
+        {task.currentCycle && (
+          <View style={styles.taskFooter}>
+            <View style={styles.taskDateContainer}>
+              <Ionicons name="calendar" size={14} color={colors.subText} />
+              <Text style={[
+                styles.taskDate,
+                { color: colors.subText }
+              ]}>
+                {t.statistics.completedDate}: {formatDate(task.currentCycle.completedAt || new Date().toISOString())}
+              </Text>
+            </View>
+          </View>
+        )}
+      </View>
+    );
+  };
 
   // 渲染统计卡片
   const renderStatCard = (title: string, value: number | string, icon: string, color: string) => (
@@ -163,12 +176,17 @@ export default function StatisticsScreen() {
   );
 
   // 计算完成率
-  const calculateCompletionRate = (): string => {
-    if (!stats) return '0%';
+  const calculateCompletionRate = (): number => {
+    if (!stats) return 0;
     const total = stats.onTimeCompletions + stats.overdueCompletions;
-    if (total === 0) return '0%';
+    if (total === 0) return 0;
     const rate = (stats.onTimeCompletions / total) * 100;
-    return `${Math.round(rate)}%`;
+    return Math.round(rate);
+  };
+
+  // 获取完成率显示文本
+  const getCompletionRateText = (): string => {
+    return `${calculateCompletionRate()}%`;
   };
 
   return (
@@ -278,18 +296,24 @@ export default function StatisticsScreen() {
               ]}>{t.statistics.completionRate}</Text>
               
               <View style={styles.completionRateContainer}>
-                <View style={styles.progressBarContainer}>
+                <View style={[
+                  styles.progressBarContainer,
+                  { backgroundColor: isDarkMode ? '#333333' : '#e0e0e0' }
+                ]}>
                   <View 
                     style={[
                       styles.progressBar,
-                      { width: `${calculateCompletionRate()}%`, backgroundColor: colors.primary }
+                      { 
+                        width: `${calculateCompletionRate()}%` as any, 
+                        backgroundColor: colors.primary 
+                      }
                     ]}
                   />
                 </View>
                 <Text style={[
                   styles.completionRateText,
                   { color: colors.text }
-                ]}>{calculateCompletionRate()}</Text>
+                ]}>{getCompletionRateText()}</Text>
               </View>
             </View>
             
@@ -316,9 +340,18 @@ export default function StatisticsScreen() {
             </View>
             
             {/* 时间范围选择器 */}
-            <View style={styles.timeRangeSelector}>
-              <Text style={styles.sectionTitle}>{t.statistics.completionHistory}</Text>
-              <View style={styles.timeRangeButtons}>
+            <View style={[
+              styles.timeRangeSelector,
+              { backgroundColor: colors.card }
+            ]}>
+              <Text style={[
+                styles.sectionTitle,
+                { color: colors.text }
+              ]}>{t.statistics.completionHistory}</Text>
+              <View style={[
+                styles.timeRangeButtons,
+                { backgroundColor: isDarkMode ? '#333333' : '#f5f5f5' }
+              ]}>
                 {[
                   { value: 'today', label: '今天' },
                   { value: 'week', label: '本周' },
@@ -336,6 +369,7 @@ export default function StatisticsScreen() {
                     <Text
                       style={[
                         styles.timeRangeButtonText,
+                        { color: isDarkMode ? '#aaaaaa' : '#666666' },
                         timeRange === item.value && styles.timeRangeButtonTextActive
                       ]}
                     >
@@ -347,32 +381,56 @@ export default function StatisticsScreen() {
             </View>
             
             {/* 任务完成历史记录 */}
-            <View style={styles.historyContainer}>
+            <View style={[
+              styles.historyContainer,
+              { backgroundColor: colors.card }
+            ]}>
               {completedTasks.length > 0 ? (
                 completedTasks.map((item, index) => (
                   <React.Fragment key={`${item.task.id}-${item.history.id}`}>
-                    {renderTaskItem({item: item.task})}
+                    {renderTaskItem({item})}
                   </React.Fragment>
                 ))
               ) : (
-                <View style={styles.emptyContainer}>
-                  <Ionicons name="document-text-outline" size={48} color="#cccccc" />
-                  <Text style={styles.emptyText}>{t.statistics.noCompletionHistory}</Text>
+                <View style={[
+                  styles.emptyContainer,
+                  { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)' }
+                ]}>
+                  <Ionicons name="document-text-outline" size={48} color={isDarkMode ? '#555555' : '#cccccc'} />
+                  <Text style={[
+                    styles.emptyText,
+                    { color: colors.text }
+                  ]}>{t.statistics.noCompletionHistory}</Text>
                 </View>
               )}
             </View>
             
             {/* 标签统计 */}
             {stats && Object.keys(stats.tagCompletions).length > 0 && (
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>{t.statistics.tagStatistics}</Text>
+              <View style={[
+                styles.section,
+                { backgroundColor: colors.card }
+              ]}>
+                <Text style={[
+                  styles.sectionTitle,
+                  { color: colors.text }
+                ]}>{t.statistics.tagStatistics}</Text>
                 <View style={styles.tagStatsContainer}>
                   {Object.entries(stats.tagCompletions).map(([tag, count]) => (
                     <View key={tag} style={styles.tagStatItem}>
-                      <View style={styles.tagStatBadge}>
-                        <Text style={styles.tagStatBadgeText}>{tag}</Text>
+                      <View style={[
+                        styles.tagStatBadge,
+                        { backgroundColor: isDarkMode ? '#1c313a' : '#e3f2fd' }
+                      ]}>
+                        <Text style={[
+                          styles.tagStatBadgeText,
+                          { color: isDarkMode ? '#64b5f6' : '#2196F3' }
+                        ]}>{tag}</Text>
                       </View>
-                      <Text style={styles.tagStatCount}>{count}次</Text>
+                      <Text style={[
+                        styles.tagStatCount,
+                        { color: colors.text }
+                      ]}>{count}次</Text>
                     </View>
                   ))}
                 </View>
@@ -448,7 +506,6 @@ const styles = StyleSheet.create({
   progressBarContainer: {
     width: '100%',
     height: 12,
-    backgroundColor: '#e0e0e0',
     borderRadius: 6,
     overflow: 'hidden',
     marginBottom: 8,
@@ -466,7 +523,6 @@ const styles = StyleSheet.create({
     lineHeight: 24,
   },
   timeRangeSelector: {
-    backgroundColor: '#ffffff',
     padding: 16,
     marginHorizontal: 12,
     marginBottom: 12,
@@ -484,7 +540,6 @@ const styles = StyleSheet.create({
   },
   timeRangeButtons: {
     flexDirection: 'row',
-    backgroundColor: '#f5f5f5',
     borderRadius: 8,
     overflow: 'hidden',
   },
@@ -498,14 +553,12 @@ const styles = StyleSheet.create({
   },
   timeRangeButtonText: {
     fontSize: 14,
-    color: '#666666',
   },
   timeRangeButtonTextActive: {
     color: '#ffffff',
     fontWeight: 'bold',
   },
   historyContainer: {
-    backgroundColor: '#ffffff',
     marginHorizontal: 12,
     marginBottom: 12,
     borderRadius: 8,
@@ -569,7 +622,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     padding: 32,
-    backgroundColor: 'rgba(0,0,0,0.03)',
     borderRadius: 8,
   },
   emptyText: {
@@ -605,20 +657,7 @@ const styles = StyleSheet.create({
     color: '#666666',
     marginTop: 4,
   },
-  completionRateContainer: {
-    alignItems: 'center',
-  },
-  completionRateText: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginTop: 8,
-  },
-  tipText: {
-    fontSize: 16,
-    lineHeight: 24,
-  },
   section: {
-    backgroundColor: '#ffffff',
     marginHorizontal: 12,
     marginBottom: 12,
     borderRadius: 8,
@@ -640,7 +679,6 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   tagStatBadge: {
-    backgroundColor: '#e3f2fd',
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 12,
@@ -648,7 +686,6 @@ const styles = StyleSheet.create({
   },
   tagStatBadgeText: {
     fontSize: 12,
-    color: '#2196F3',
   },
   tagStatCount: {
     fontSize: 14,

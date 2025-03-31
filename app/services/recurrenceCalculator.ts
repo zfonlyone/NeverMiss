@@ -497,3 +497,6 @@ export class RecurrenceCalculator {
 
 // 导出单例实例
 export const recurrenceCalculator = new RecurrenceCalculator(); 
+
+// 添加默认导出
+export default recurrenceCalculator; 

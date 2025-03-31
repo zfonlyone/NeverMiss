@@ -1,4 +1,30 @@
-// ... existing code ...
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import { Alert } from 'react-native';
+import * as taskService from '../services/taskService';
+import { Task } from '../models/Task';
+
+// 任务上下文类型
+interface TaskContextType {
+  tasks: Task[];
+  loading: boolean;
+  setTasks: (tasks: Task[]) => void;
+  completeTask: (taskId: number) => Promise<Task | null>;
+  handleTaskOverdue: (taskId: number, action: 'reset' | 'continue' | 'skip') => Promise<Task | null>;
+}
+
+// 创建上下文
+const TaskContext = createContext<TaskContextType>({
+  tasks: [],
+  loading: false,
+  setTasks: () => {},
+  completeTask: async () => null,
+  handleTaskOverdue: async () => null,
+});
+
+// 任务提供者组件
+export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [loading, setLoading] = useState(false);
 
   // 完成任务
   const completeTask = async (taskId: number) => {
@@ -84,4 +110,21 @@
     }
   };
 
-// ... existing code ... 
+  return (
+    <TaskContext.Provider value={{ 
+      tasks, 
+      loading, 
+      setTasks, 
+      completeTask, 
+      handleTaskOverdue 
+    }}>
+      {children}
+    </TaskContext.Provider>
+  );
+};
+
+// 使用任务的钩子
+export const useTask = () => useContext(TaskContext);
+
+// 默认导出上下文
+export default TaskContext; 

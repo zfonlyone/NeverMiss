@@ -153,11 +153,11 @@ export default function TaskFormScreen() {
         safeDueDate.setDate(safeDueDate.getDate() + 1);
         setDueDate(safeDueDate);
         return;
-      }
-      
-      setDueDate(newDueDate);
-    } catch (error) {
-      console.error('计算截止日期错误:', error);
+        }
+        
+        setDueDate(newDueDate);
+      } catch (error) {
+        console.error('计算截止日期错误:', error);
       // 使用安全的默认值
       const safeDueDate = new Date(startDate);
       safeDueDate.setDate(safeDueDate.getDate() + 1);
@@ -186,11 +186,11 @@ export default function TaskFormScreen() {
         safeStartDate.setDate(safeStartDate.getDate() - 1);
         setStartDate(safeStartDate);
         return;
-      }
-      
-      setStartDate(newStartDate);
-    } catch (error) {
-      console.error('计算开始日期错误:', error);
+        }
+        
+        setStartDate(newStartDate);
+      } catch (error) {
+        console.error('计算开始日期错误:', error);
       // 使用安全的默认值
       const safeStartDate = new Date(dueDate);
       safeStartDate.setDate(safeStartDate.getDate() - 1);
@@ -408,7 +408,7 @@ export default function TaskFormScreen() {
           // 一次性更新两个状态
           setStartDate(newStartDate);
           setDueDate(newDueDate);
-        } else {
+    } else {
           // 非重复任务不应该到这里，但仍处理
           const newDueDate = new Date(newStartDate);
           newDueDate.setDate(newStartDate.getDate() + 1);
@@ -416,7 +416,7 @@ export default function TaskFormScreen() {
           setDueDate(newDueDate);
         }
       }
-    } catch (error) {
+      } catch (error) {
       console.error('重置任务周期错误:', error);
       Alert.alert('提示', '重置周期失败');
       
