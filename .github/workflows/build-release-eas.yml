@@ -110,7 +110,7 @@ jobs:
 
   create-release:
     name: Create Expo Cloud Release
-    needs: [build-android, build-ios]
+    needs: [build-android, build-ios, check-branch]
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository

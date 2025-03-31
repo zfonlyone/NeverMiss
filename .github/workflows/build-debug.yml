@@ -65,17 +65,6 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v2
 
-      - name: Configure Kotlin version
-        run: |
-          echo "kotlin.version=1.7.20" >> android/gradle.properties
-          echo "suppressKotlinVersionCompatibilityCheck=true" >> android/gradle.properties
-          echo "android.useAndroidX=true" >> android/gradle.properties
-          echo "android.enableJetifier=true" >> android/gradle.properties
-          echo "org.gradle.jvmargs=-Xmx2048m -XX:+HeapDumpOnOutOfMemoryError -Dfile.encoding=UTF-8" >> android/gradle.properties
-          echo "org.gradle.parallel=true" >> android/gradle.properties
-          echo "org.gradle.configureondemand=true" >> android/gradle.properties
-          echo "org.gradle.daemon=false" >> android/gradle.properties
-
       # 添加Gradle缓存
       - name: Cache Gradle packages
         uses: actions/cache@v3
@@ -90,27 +79,13 @@ jobs:
       - name: Build Debug APK
         run: |
           cd android
-          # 构建新架构版本（使用 JavaScriptCore）
-          ./gradlew assembleDebug \
-            -PreactNativeDevSupport=true \
-            -PreactNativeJsEngine=jsc \
-            -PnewArchEnabled=true \
-            -Pkotlin.version=1.7.20 \
-            -Pcompose.compiler.version=1.3.2 \
-            --no-daemon \
-            --max-workers=2 \
-            --build-cache \
-            --parallel \
-            --stacktrace \
-            --info
+          ./gradlew assembleDebug -PreactNativeDevSupport=false -PreactNativeJsEngine=hermes --no-daemon --max-workers=2
 
       - name: Create build directory
         run: mkdir -p ./build
 
       - name: Copy APK to build directory
-        run: |
-          # 复制新架构版本APK
-          cp android/app/build/outputs/apk/debug/app-debug-newarch.apk ./build/NeverMiss-Android-debug.apk
+        run: cp android/app/build/outputs/apk/debug/app-debug.apk ./build/NeverMiss-Android-debug.apk
 
       - name: Upload Debug APK artifact
         uses: actions/upload-artifact@v4
@@ -163,49 +138,21 @@ jobs:
       - name: Build iOS App for Simulator
         run: |
           cd ios
-          # 构建 iPhone 14
           xcodebuild -workspace NeverMiss.xcworkspace -scheme NeverMiss -configuration Debug -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone 14' CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" CODE_SIGN_ENTITLEMENTS="" RCT_NO_LAUNCH_PACKAGER=1 NO_FLIPPER=1 COMPILER_INDEX_STORE_ENABLE=NO -quiet build
-          # 构建 iPhone 15 Pro
-          xcodebuild -workspace NeverMiss.xcworkspace -scheme NeverMiss -configuration Debug -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone 15 Pro' CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" CODE_SIGN_ENTITLEMENTS="" RCT_NO_LAUNCH_PACKAGER=1 NO_FLIPPER=1 COMPILER_INDEX_STORE_ENABLE=NO -quiet build
-          # 构建 iPhone SE (3rd generation)
-          xcodebuild -workspace NeverMiss.xcworkspace -scheme NeverMiss -configuration Debug -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone SE (3rd generation)' CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" CODE_SIGN_ENTITLEMENTS="" RCT_NO_LAUNCH_PACKAGER=1 NO_FLIPPER=1 COMPILER_INDEX_STORE_ENABLE=NO -quiet build
-          # 构建 iPhone 15 Pro Max
-          xcodebuild -workspace NeverMiss.xcworkspace -scheme NeverMiss -configuration Debug -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone 15 Pro Max' CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" CODE_SIGN_ENTITLEMENTS="" RCT_NO_LAUNCH_PACKAGER=1 NO_FLIPPER=1 COMPILER_INDEX_STORE_ENABLE=NO -quiet build
 
-      - name: Find and prepare iOS apps
+      - name: Find and prepare iOS app
         run: |
-          mkdir -p ./build/ios-simulator
-          
-          # 查找并复制 iPhone 14 版本
-          IPHONE14_APP_PATH=$(find ~/Library/Developer/Xcode/DerivedData -name "NeverMiss.app" -type d | grep -v "SourcePackages" | head -n 1)
-          if [ ! -z "$IPHONE14_APP_PATH" ]; then
-            mkdir -p ./build/ios-simulator/iphone14
-            cp -r "$IPHONE14_APP_PATH" ./build/ios-simulator/iphone14/
+          DERIVED_APP_PATH=$(find ~/Library/Developer/Xcode/DerivedData -name "NeverMiss.app" -type d | grep -v "SourcePackages" | head -n 1)
+          if [ ! -z "$DERIVED_APP_PATH" ]; then
+            mkdir -p ./build/ios-simulator
+            cp -r "$DERIVED_APP_PATH" ./build/ios-simulator/
+            cd build
+            zip -r -y NeverMiss-iOS-Simulator-debug.zip ios-simulator
+          else
+            echo "警告: 找不到iOS构建产物"
+            mkdir -p ./build
+            echo "Placeholder" > ./build/NeverMiss-iOS-Simulator-debug.zip
           fi
-          
-          # 查找并复制 iPhone 15 Pro 版本
-          IPHONE15PRO_APP_PATH=$(find ~/Library/Developer/Xcode/DerivedData -name "NeverMiss.app" -type d | grep -v "SourcePackages" | tail -n 3 | head -n 1)
-          if [ ! -z "$IPHONE15PRO_APP_PATH" ]; then
-            mkdir -p ./build/ios-simulator/iphone15pro
-            cp -r "$IPHONE15PRO_APP_PATH" ./build/ios-simulator/iphone15pro/
-          fi
-          
-          # 查找并复制 iPhone SE 版本
-          IPHONESE_APP_PATH=$(find ~/Library/Developer/Xcode/DerivedData -name "NeverMiss.app" -type d | grep -v "SourcePackages" | tail -n 2 | head -n 1)
-          if [ ! -z "$IPHONESE_APP_PATH" ]; then
-            mkdir -p ./build/ios-simulator/iphonese
-            cp -r "$IPHONESE_APP_PATH" ./build/ios-simulator/iphonese/
-          fi
-          
-          # 查找并复制 iPhone 15 Pro Max 版本
-          IPHONE15PROMAX_APP_PATH=$(find ~/Library/Developer/Xcode/DerivedData -name "NeverMiss.app" -type d | grep -v "SourcePackages" | tail -n 1)
-          if [ ! -z "$IPHONE15PROMAX_APP_PATH" ]; then
-            mkdir -p ./build/ios-simulator/iphone15promax
-            cp -r "$IPHONE15PROMAX_APP_PATH" ./build/ios-simulator/iphone15promax/
-          fi
-          
-          cd build
-          zip -r -y NeverMiss-iOS-Simulator-debug.zip ios-simulator
 
       - name: Upload iOS simulator app artifact
         uses: actions/upload-artifact@v4
@@ -266,52 +213,60 @@ jobs:
             echo "ios_file_exists=false" >> $GITHUB_OUTPUT
           fi
 
-      - name: Generate version number
-        id: version
+      - name: Set release tag name
+        id: set_tag
         run: |
-          VERSION="v${{ steps.package_version.outputs.version }}"
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          if [[ ${{ github.ref }} == refs/tags/v* ]]; then
+            TAG="${{ github.ref_name }}"
+          else
+            TAG="v${{ steps.package_version.outputs.version }}-debug-${{ github.sha }}"
+          fi
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
 
       - name: Generate release notes
         run: |
+          TITLE="NeverMiss 开发调试版本 v${{ steps.package_version.outputs.version }}"
+          DESC="此版本为开发调试版本，基于 package.json 中的版本号 v${{ steps.package_version.outputs.version }}，需要PC开发环境支持运行。"
+          
           # 获取当前日期
           BUILD_DATE=$(date +'%Y-%m-%d')
           
           cat > ./build/RELEASE_NOTES.md << EOF
-          ## NeverMiss 开发调试版本 ${{ steps.version.outputs.version }}
+          ## ${TITLE}
           
-          ### 发布说明
+          ### 版本说明
           
-          这是 NeverMiss 应用的开发调试版本，用于测试和开发目的。
+          ${DESC}
           
           ### 下载说明
           
-          - **Android APK版本**: NeverMiss-Android-debug.apk
-            - 开发调试版本
+          - **Android 调试版本**: NeverMiss-Android-debug.apk
             - 适用于Android 7.0及以上设备
-            - 包含调试信息和开发工具
+            - 需连接开发环境运行
+            - 开发调试版本，需要PC运行相关服务使用
           
-          - **iOS模拟器版本**: NeverMiss-iOS-Simulator-debug.zip
-            - 包含多个iOS模拟器版本
-            - 支持iPhone 14、iPhone 15 Pro、iPhone SE和iPhone 15 Pro Max
-            - 仅用于iOS模拟器测试
+          - **iOS模拟器调试版本**: NeverMiss-iOS-Simulator-debug.zip
+            - 仅适用于macOS上的iOS模拟器
+            - 需要Xcode和iOS模拟器环境
+            - 需要PC运行相关服务使用
+            - 解压后，拖拽.app文件到模拟器中安装
           
           ### 构建信息
           
-          - 版本号: ${{ steps.package_version.outputs.version }}
+          - 分支: ${{ github.ref_name }}
           - 提交: ${{ github.sha }}
           - 构建时间: $(date +'%Y-%m-%d %H:%M:%S')
+          - 版本: v${{ steps.package_version.outputs.version }}
           - 构建日期: ${BUILD_DATE}
-          - 分支: ${{ github.ref_name }}
+          - 环境要求: 需要PC运行开发服务器
           EOF
 
-      - name: Create Release
-        id: create_release
+      - name: Create Debug Release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: debug-${{ steps.version.outputs.version }}
-          name: NeverMiss 开发调试版本 ${{ steps.version.outputs.version }}
-          draft: true
+          name: NeverMiss v${{ steps.package_version.outputs.version }} 开发调试版 [${{ github.ref_name }}]
+          tag_name: ${{ steps.set_tag.outputs.tag }}
+          draft: false
           prerelease: true
           body_path: ./build/RELEASE_NOTES.md
           files: |
