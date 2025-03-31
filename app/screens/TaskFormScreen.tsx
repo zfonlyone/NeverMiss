@@ -8,10 +8,9 @@ import {
   ScrollView,
   Alert,
   ActivityIndicator,
-  Switch,
   Platform
 } from 'react-native';
-import { useRouter, Stack, useLocalSearchParams } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { StatusBar } from 'expo-status-bar';
@@ -19,9 +18,7 @@ import {
   Task,
   CreateTaskInput,
   DateType,
-  RecurrenceType,
   RecurrencePattern,
-  WeekDay,
   AdvancedRecurrencePattern,
   UpdateTaskInput
 } from '../models/Task';
@@ -33,9 +30,8 @@ import {
 } from '../services/taskService';
 import RecurrencePatternSelector from '../components/RecurrencePatternSelector';
 import { recurrenceCalculator } from '../services/recurrenceCalculator';
-import { getTagColor, getSelectedTagColor, TAG_PRESETS, TAG_COLORS } from '../utils/taskUtils';
+import { TAG_PRESETS, TAG_COLORS } from '../utils/taskUtils';
 import { useTheme } from '../contexts/ThemeContext';
-import TagColorSelector from '../components/TagColorSelector';
 
 // 简化版任务表单
 export default function TaskFormScreen() {
@@ -265,83 +261,73 @@ export default function TaskFormScreen() {
     
     try {
       setIsLoading(true);
-      // 将taskId转换为数字类型
       const numericTaskId = typeof taskId === 'string' ? parseInt(taskId, 10) : Number(taskId);
-      
       const task = await getTask(numericTaskId);
       
       if (task) {
+        // 设置基本信息
         setTitle(task.title);
         setDescription(task.description || '');
         
-        // 确保日期有效
-        const taskStartDate = new Date(task.startDate);
-        const taskDueDate = new Date(task.dueDate);
-        
-        if (!isNaN(taskStartDate.getTime())) {
-          setStartDate(taskStartDate);
-        } else {
-          console.warn('任务开始日期无效，使用当前日期');
-          setStartDate(new Date());
+        // 设置日期
+        if (task.startDate) {
+          setStartDate(new Date(task.startDate));
+        }
+        if (task.dueDate) {
+          setDueDate(new Date(task.dueDate));
         }
         
-        if (!isNaN(taskDueDate.getTime())) {
-          setDueDate(taskDueDate);
-        } else {
-          console.warn('任务截止日期无效，使用明天');
-          const tomorrow = new Date();
-          tomorrow.setDate(tomorrow.getDate() + 1);
-          setDueDate(tomorrow);
-        }
-        
-        setIsRecurring(task.isRecurring);
-        setRecurrencePattern(task.recurrencePattern);
-        
-        // 处理高级循环模式
-        if (task.recurrencePattern.advancedPattern) {
-          setUseAdvancedRecurrence(true);
-          setAdvancedRecurrencePattern(task.recurrencePattern.advancedPattern);
-        } else {
-          setUseAdvancedRecurrence(false);
-        }
-        
-        // 处理计算方向
-        if (task.useDueDateToCalculate) {
-          setUseDueDateToCalculate(task.useDueDateToCalculate);
-        }
-        
-        // 日期类型
+        // 设置日期类型
         if (task.dateType) {
           setDateType(task.dateType);
         }
         
-        // 提醒设置
-        if (task.reminderOffset !== undefined) {
-          setReminderOffset(task.reminderOffset);
-          setEnableReminder(true);
-        } else {
-          setEnableReminder(false);
+        // 设置重复设置
+        setIsRecurring(task.isRecurring || false);
+        if (task.recurrencePattern) {
+          setRecurrencePattern(task.recurrencePattern);
         }
         
+        // 设置计算方向
+        if (task.useDueDateToCalculate !== undefined) {
+          setUseDueDateToCalculate(task.useDueDateToCalculate);
+        }
+        
+        // 设置高级循环模式
+        if (task.recurrencePattern?.advancedPattern) {
+          setUseAdvancedRecurrence(true);
+          setAdvancedRecurrencePattern(task.recurrencePattern.advancedPattern);
+        }
+        
+        // 设置提醒设置
+        if (task.reminderOffset !== undefined) {
+          setReminderOffset(task.reminderOffset);
+        }
         if (task.reminderUnit) {
           setReminderUnit(task.reminderUnit);
         }
         
-        // 卡片背景颜色
+        // 设置卡片背景颜色
         if (task.backgroundColor) {
           setCardBackgroundColor(task.backgroundColor);
         }
-
+        
         // 加载标签和标签颜色
         const taskTags = task.tags || [];
         if (taskTags.length > 0) {
-          setTaskLabel(taskTags[0]);
-          // 如果是预设标签，使用预设颜色；否则使用保存的自定义颜色
-          const preset = TAG_PRESETS.find(tag => tag.value === taskTags[0]);
+          const tag = taskTags[0];
+          setTaskLabel(tag);
+          
+          // 如果是预设标签，使用预设颜色
+          const preset = TAG_PRESETS.find(t => t.value === tag);
           if (preset) {
             setCustomTagColor(preset.color);
-          } else if (task.tagColors && task.tagColors[taskTags[0]]) {
-            setCustomTagColor(task.tagColors[taskTags[0]]);
+          } else if (task.tagColors && task.tagColors[tag]) {
+            // 如果是自定义标签，使用保存的自定义颜色
+            setCustomTagColor(task.tagColors[tag]);
+          } else {
+            // 如果没有保存的颜色，使用默认颜色
+            setCustomTagColor(TAG_COLORS[0]);
           }
         }
       } else {
@@ -512,30 +498,40 @@ export default function TaskFormScreen() {
 
   // 保存任务
   const handleSave = async () => {
-      if (!title.trim()) {
-        Alert.alert('提示', '请输入任务标题');
-        return;
-      }
-      
-      // 验证日期有效性
-      if (isNaN(startDate.getTime()) || isNaN(dueDate.getTime())) {
-        Alert.alert('提示', '日期设置无效，请重新设置日期');
-        return;
-      }
-      
-      // 确保截止日期不早于开始日期
-      if (dueDate < startDate) {
-        Alert.alert('提示', '截止日期不能早于开始日期');
-        return;
-      }
-      
-      // 检查任务是否过期，如果过期则提示用户
-      if (checkIfTaskExpired()) {
-        return;
-      }
-      
+    if (!title.trim()) {
+      Alert.alert('提示', '请输入任务标题');
+      return;
+    }
+    
+    // 验证日期有效性
+    if (isNaN(startDate.getTime()) || isNaN(dueDate.getTime())) {
+      Alert.alert('提示', '日期设置无效，请重新设置日期');
+      return;
+    }
+    
+    // 确保截止日期不早于开始日期
+    if (dueDate < startDate) {
+      Alert.alert('提示', '截止日期不能早于开始日期');
+      return;
+    }
+    
+    // 检查任务是否过期，如果过期则提示用户
+    if (checkIfTaskExpired()) {
+      return;
+    }
+    
     try {
       setIsLoading(true);
+      
+      // 如果是编辑模式，获取当前任务信息
+      let existingTagColors: Record<string, string> = {};
+      if (isEditMode && taskId) {
+        const numericTaskId = typeof taskId === 'string' ? parseInt(taskId, 10) : Number(taskId);
+        const currentTask = await getTask(numericTaskId);
+        if (currentTask?.tagColors) {
+          existingTagColors = currentTask.tagColors;
+        }
+      }
       
       // 准备任务数据
       const taskData = {
@@ -562,9 +558,11 @@ export default function TaskFormScreen() {
         reminderHours: 0,
         reminderMinutes: reminderOffset,
         tags: taskLabel ? [taskLabel] : [],
+        // 修改标签颜色保存逻辑
         tagColors: taskLabel ? {
-          [taskLabel]: TAG_PRESETS.find(tag => tag.value === taskLabel)?.color || customTagColor
-        } : {},
+          ...existingTagColors, // 保留原有的标签颜色
+          [taskLabel]: TAG_PRESETS.find(t => t.value === taskLabel)?.color || customTagColor // 使用预设颜色或自定义颜色
+        } : existingTagColors,
         backgroundColor: cardBackgroundColor
       };
       
@@ -802,106 +800,107 @@ export default function TaskFormScreen() {
           
           {/* 自定义标签颜色选择器 */}
           {taskLabel && !TAG_PRESETS.find(tag => tag.value === taskLabel) && (
-            <TagColorSelector
-              selectedColor={customTagColor}
-              onColorChange={setCustomTagColor}
-            />
+            <>
+              <Text style={[styles.label, { color: colors.text, marginTop: 12 }]}>选择标签颜色</Text>
+              <View style={{
+                flexDirection: 'row',
+                flexWrap: 'wrap',
+                justifyContent: 'space-between',
+                paddingHorizontal: 8,
+                marginBottom: 16
+              }}>
+                {TAG_COLORS.map((color) => (
+                  <TouchableOpacity
+                    key={color}
+                    style={{
+                      width: 36,
+                      height: 36,
+                      borderRadius: 18,
+                      backgroundColor: color,
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                      borderWidth: 2,
+                      borderColor: customTagColor === color ? colors.primary : colors.border,
+                      marginBottom: 8,
+                      shadowColor: '#000',
+                      shadowOffset: { width: 0, height: 1 },
+                      shadowOpacity: 0.1,
+                      shadowRadius: 1,
+                      elevation: 1
+                    }}
+                    onPress={() => setCustomTagColor(color)}
+                  >
+                    {customTagColor === color && (
+                      <Ionicons 
+                        name="checkmark" 
+                        size={18} 
+                        color={getContrastColor(color)} 
+                      />
+                    )}
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </>
           )}
           
-          {/* 背景颜色选择 - 改为圆形预览 */}
+          {/* 卡片背景颜色选择 */}
           <Text style={[styles.label, { color: colors.text }]}>卡片背景颜色</Text>
-          
-          <View style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            marginBottom: 16,
-            paddingHorizontal: 8
-          }}>
-            {[
-              { color: '#ffffff', name: '白色' },
-              { color: '#f5f5f5', name: '浅灰' },
-              { color: '#e3f2fd', name: '浅蓝' },
-              { color: '#e8f5e9', name: '浅绿' },
-              { color: '#fff3e0', name: '橙色' },
-              { color: '#ffebee', name: '浅红' },
-              { color: '#f3e5f5', name: '浅紫' },
-              { color: '#fffde7', name: '浅黄' },
-              { color: '#333333', name: '深灰' },
-              { color: '#263238', name: '深蓝' },
-            ].map((item) => (
-              <TouchableOpacity
-                key={item.color}
-                style={{
-                  width: 36,
-                  height: 36,
-                  borderRadius: 18,
-                  backgroundColor: item.color,
-                  justifyContent: 'center',
-                  alignItems: 'center',
-                  borderWidth: 2,
-                  borderColor: cardBackgroundColor === item.color ? colors.primary : colors.border,
-                  shadowColor: '#000',
-                  shadowOffset: { width: 0, height: 1 },
-                  shadowOpacity: 0.1,
-                  shadowRadius: 1,
-                  elevation: 1
-                }}
-                onPress={() => setCardBackgroundColor(item.color)}
-              >
-                {cardBackgroundColor === item.color && (
-                  <Ionicons 
-                    name="checkmark" 
-                    size={18} 
-                    color={getContrastColor(item.color)} 
-                  />
-                )}
-              </TouchableOpacity>
-            ))}
-          </View>
-          
-          {/* 预览效果 */}
-          <View style={{
-            backgroundColor: cardBackgroundColor,
-            padding: 12,
-            borderRadius: 8,
-            borderWidth: 1,
-            borderColor: isDarkMode ? 'rgba(255,255,255,0.1)' : colors.border,
-            alignItems: 'center',
-            marginBottom: 8
-          }}>
-            <Text style={{
-              color: getContrastColor(cardBackgroundColor),
-              fontWeight: '500',
-              fontSize: 16,
-              marginBottom: 6
+          <ScrollView 
+            horizontal={true} 
+            showsHorizontalScrollIndicator={false}
+            style={{
+              marginBottom: 16,
+              paddingHorizontal: 8
+            }}
+          >
+            <View style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              paddingVertical: 8
             }}>
-              任务标题预览
-            </Text>
-            <Text style={{
-              color: adjustColorBrightness(getContrastColor(cardBackgroundColor), getContrastColor(cardBackgroundColor) === '#ffffff' ? -40 : 40),
-              fontSize: 14,
-              marginBottom: 8
-            }}>
-              这是任务描述文本预览效果
-            </Text>
-            {taskLabel && (
-              <View style={{
-                backgroundColor: TAG_PRESETS.find(tag => tag.value === taskLabel)?.color || customTagColor,
-                paddingHorizontal: 8,
-                paddingVertical: 4,
-                borderRadius: 16,
-                marginTop: 8
-              }}>
-                <Text style={{ 
-                  color: getContrastColor(TAG_PRESETS.find(tag => tag.value === taskLabel)?.color || customTagColor), 
-                  fontSize: 12 
-                }}>
-                  {taskLabel}
-                </Text>
-              </View>
-            )}
-          </View>
+              {[
+                { color: '#ffffff', name: '白色' },
+                { color: '#f5f5f5', name: '浅灰' },
+                { color: '#e3f2fd', name: '浅蓝' },
+                { color: '#e8f5e9', name: '浅绿' },
+                { color: '#fff3e0', name: '橙色' },
+                { color: '#ffebee', name: '浅红' },
+                { color: '#f3e5f5', name: '浅紫' },
+                { color: '#fffde7', name: '浅黄' },
+                { color: '#333333', name: '深灰' },
+                { color: '#263238', name: '深蓝' },
+              ].map((item) => (
+                <TouchableOpacity
+                  key={item.color}
+                  style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: 18,
+                    backgroundColor: item.color,
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    borderWidth: 2,
+                    borderColor: cardBackgroundColor === item.color ? colors.primary : colors.border,
+                    marginRight: 12,
+                    shadowColor: '#000',
+                    shadowOffset: { width: 0, height: 1 },
+                    shadowOpacity: 0.1,
+                    shadowRadius: 1,
+                    elevation: 1
+                  }}
+                  onPress={() => setCardBackgroundColor(item.color)}
+                >
+                  {cardBackgroundColor === item.color && (
+                    <Ionicons 
+                      name="checkmark" 
+                      size={18} 
+                      color={getContrastColor(item.color)} 
+                    />
+                  )}
+                </TouchableOpacity>
+              ))}
+            </View>
+          </ScrollView>
         </View>
         
         {/* 日期类型 */}
