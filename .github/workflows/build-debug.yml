@@ -95,10 +95,14 @@ jobs:
             -PreactNativeDevSupport=true \
             -PreactNativeJsEngine=jsc \
             -PnewArchEnabled=true \
+            -Pkotlin.version=1.7.20 \
+            -Pcompose.compiler.version=1.3.2 \
             --no-daemon \
             --max-workers=2 \
             --build-cache \
-            --parallel
+            --parallel \
+            --stacktrace \
+            --info
 
       - name: Create build directory
         run: mkdir -p ./build
@@ -262,97 +266,52 @@ jobs:
             echo "ios_file_exists=false" >> $GITHUB_OUTPUT
           fi
 
-      - name: Set release tag name
-        id: set_tag
+      - name: Generate version number
+        id: version
         run: |
-          if [[ ${{ github.ref }} == refs/tags/v* ]]; then
-            TAG="${{ github.ref_name }}"
-          else
-            TAG="v${{ steps.package_version.outputs.version }}-debug-${{ github.sha }}"
-          fi
-          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          VERSION="v${{ steps.package_version.outputs.version }}"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
 
       - name: Generate release notes
         run: |
-          TITLE="NeverMiss 开发调试版本 v${{ steps.package_version.outputs.version }}"
-          DESC="此版本为开发调试版本，基于 package.json 中的版本号 v${{ steps.package_version.outputs.version }}，需要PC开发环境支持运行。"
-          
           # 获取当前日期
           BUILD_DATE=$(date +'%Y-%m-%d')
           
           cat > ./build/RELEASE_NOTES.md << EOF
-          ## ${TITLE}
+          ## NeverMiss 开发调试版本 ${{ steps.version.outputs.version }}
           
-          ### 版本说明
+          ### 发布说明
           
-          ${DESC}
+          这是 NeverMiss 应用的开发调试版本，用于测试和开发目的。
           
           ### 下载说明
           
-          - **Android 标准调试版本**: NeverMiss-Android-debug.apk
+          - **Android APK版本**: NeverMiss-Android-debug.apk
+            - 开发调试版本
             - 适用于Android 7.0及以上设备
-            - 需连接开发环境运行
-            - 开发调试版本，需要PC运行相关服务使用
-            - 使用 JavaScriptCore 引擎
-            - 使用旧架构（Old Architecture）
-            - 支持热重载和调试功能
-            - 包含开发服务器支持
-            - 适合日常开发调试使用
-            - 兼容性最好，第三方库支持最完善
+            - 包含调试信息和开发工具
           
-          - **Android 新架构调试版本**: NeverMiss-Android-debug-newarch.apk
-            - 使用新架构（New Architecture）
-            - 使用 JavaScriptCore 引擎
-            - 相比旧架构的优势：
-              - 性能更好
-              - 内存管理更优
-              - 启动速度更快
-            - 需要注意：
-              - 部分第三方库可能不兼容
-              - 需要原生模块适配
-              - 调试工具支持有限
-            - 适合测试新架构性能
-          
-          - **Android Hermes调试版本**: NeverMiss-Android-debug-hermes.apk
-            - 使用 Hermes JavaScript 引擎
-            - 使用旧架构（Old Architecture）
-            - 相比标准版本的优势：
-              - 内存占用更少（约减少 30-50%）
-              - 启动速度更快
-              - 应用性能更好
-              - 更适合低端设备
-            - 同样需要开发服务器支持
-            - 适合性能测试和低端设备测试
-            - 第三方库兼容性好
-          
-          - **iOS模拟器调试版本**: NeverMiss-iOS-Simulator-debug.zip
-            - 包含以下设备版本：
-              - iPhone 14
-              - iPhone 15 Pro
-              - iPhone SE (3rd generation)
-              - iPhone 15 Pro Max
-            - 仅适用于macOS上的iOS模拟器
-            - 需要Xcode和iOS模拟器环境
-            - 需要PC运行开发服务器
-            - 解压后，将对应设备版本的.app文件拖拽到相应的模拟器中即可安装
-            - 用于开发调试和功能测试
+          - **iOS模拟器版本**: NeverMiss-iOS-Simulator-debug.zip
+            - 包含多个iOS模拟器版本
+            - 支持iPhone 14、iPhone 15 Pro、iPhone SE和iPhone 15 Pro Max
+            - 仅用于iOS模拟器测试
           
           ### 构建信息
           
-          - 分支: ${{ github.ref_name }}
+          - 版本号: ${{ steps.package_version.outputs.version }}
           - 提交: ${{ github.sha }}
           - 构建时间: $(date +'%Y-%m-%d %H:%M:%S')
-          - 版本: v${{ steps.package_version.outputs.version }}
           - 构建日期: ${BUILD_DATE}
-          - 环境要求: 需要PC运行开发服务器
+          - 分支: ${{ github.ref_name }}
           EOF
 
-      - name: Create Debug Release
+      - name: Create Release
+        id: create_release
         uses: softprops/action-gh-release@v1
         with:
-          name: NeverMiss v${{ steps.package_version.outputs.version }} 开发调试版 [${{ github.ref_name }}]
-          tag_name: ${{ steps.set_tag.outputs.tag }}
-          draft: false
+          tag_name: debug-${{ steps.version.outputs.version }}
+          name: NeverMiss 开发调试版本 ${{ steps.version.outputs.version }}
+          draft: true
           prerelease: true
           body_path: ./build/RELEASE_NOTES.md
           files: |
