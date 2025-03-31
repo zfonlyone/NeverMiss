@@ -65,6 +65,11 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v2
 
+      - name: Configure Kotlin version
+        run: |
+          echo "kotlin.version=1.7.20" >> android/gradle.properties
+          echo "suppressKotlinVersionCompatibilityCheck=true" >> android/gradle.properties
+
       # 添加Gradle缓存
       - name: Cache Gradle packages
         uses: actions/cache@v3
