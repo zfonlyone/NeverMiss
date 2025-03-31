@@ -33,8 +33,9 @@ import {
 } from '../services/taskService';
 import RecurrencePatternSelector from '../components/RecurrencePatternSelector';
 import { recurrenceCalculator } from '../services/recurrenceCalculator';
-import { getTagColor, getSelectedTagColor, TAG_PRESETS } from '../utils/taskUtils';
+import { getTagColor, getSelectedTagColor, TAG_PRESETS, TAG_COLORS } from '../utils/taskUtils';
 import { useTheme } from '../contexts/ThemeContext';
+import TagColorSelector from '../components/TagColorSelector';
 
 // 简化版任务表单
 export default function TaskFormScreen() {
@@ -60,6 +61,8 @@ export default function TaskFormScreen() {
   
   // 任务标签
   const [taskLabel, setTaskLabel] = useState('');
+  // 自定义标签颜色
+  const [customTagColor, setCustomTagColor] = useState(TAG_COLORS[0]);
   
   // 卡片背景颜色
   const [cardBackgroundColor, setCardBackgroundColor] = useState('#ffffff');
@@ -328,6 +331,19 @@ export default function TaskFormScreen() {
         if (task.backgroundColor) {
           setCardBackgroundColor(task.backgroundColor);
         }
+
+        // 加载标签和标签颜色
+        const taskTags = task.tags || [];
+        if (taskTags.length > 0) {
+          setTaskLabel(taskTags[0]);
+          // 如果是预设标签，使用预设颜色；否则使用保存的自定义颜色
+          const preset = TAG_PRESETS.find(tag => tag.value === taskTags[0]);
+          if (preset) {
+            setCustomTagColor(preset.color);
+          } else if (task.tagColors && task.tagColors[taskTags[0]]) {
+            setCustomTagColor(task.tagColors[taskTags[0]]);
+          }
+        }
       } else {
         Alert.alert('提示', '找不到指定的任务');
       }
@@ -546,6 +562,9 @@ export default function TaskFormScreen() {
         reminderHours: 0,
         reminderMinutes: reminderOffset,
         tags: taskLabel ? [taskLabel] : [],
+        tagColors: taskLabel ? {
+          [taskLabel]: TAG_PRESETS.find(tag => tag.value === taskLabel)?.color || customTagColor
+        } : {},
         backgroundColor: cardBackgroundColor
       };
       
@@ -732,7 +751,7 @@ export default function TaskFormScreen() {
           <View style={{
             flexDirection: 'row',
             alignItems: 'center',
-            marginBottom: 16
+            marginBottom: 8
           }}>
             <TextInput
               style={{
@@ -746,7 +765,15 @@ export default function TaskFormScreen() {
                 color: colors.text
               }}
               value={taskLabel}
-              onChangeText={setTaskLabel}
+              onChangeText={(text) => {
+                setTaskLabel(text);
+                // 如果是预设标签，不使用自定义颜色
+                const preset = TAG_PRESETS.find(tag => tag.value === text);
+                if (!preset) {
+                  // 如果不是预设标签，使用当前选择的自定义颜色
+                  setCustomTagColor(customTagColor);
+                }
+              }}
               placeholder="自定义标签"
               placeholderTextColor={colors.subText}
             />
@@ -763,12 +790,23 @@ export default function TaskFormScreen() {
                   borderWidth: 1,
                   borderColor: colors.border
                 }}
-                onPress={() => setTaskLabel('')}
+                onPress={() => {
+                  setTaskLabel('');
+                  setCustomTagColor(TAG_COLORS[0]);
+                }}
               >
                 <Ionicons name="close" size={20} color={colors.subText} />
               </TouchableOpacity>
             )}
           </View>
+          
+          {/* 自定义标签颜色选择器 */}
+          {taskLabel && !TAG_PRESETS.find(tag => tag.value === taskLabel) && (
+            <TagColorSelector
+              selectedColor={customTagColor}
+              onColorChange={setCustomTagColor}
+            />
+          )}
           
           {/* 背景颜色选择 - 改为圆形预览 */}
           <Text style={[styles.label, { color: colors.text }]}>卡片背景颜色</Text>
@@ -849,13 +887,16 @@ export default function TaskFormScreen() {
             </Text>
             {taskLabel && (
               <View style={{
-                backgroundColor: getSelectedTagColor(taskLabel),
+                backgroundColor: TAG_PRESETS.find(tag => tag.value === taskLabel)?.color || customTagColor,
                 paddingHorizontal: 8,
                 paddingVertical: 4,
                 borderRadius: 16,
                 marginTop: 8
               }}>
-                <Text style={{ color: getContrastColor(getSelectedTagColor(taskLabel)), fontSize: 12 }}>
+                <Text style={{ 
+                  color: getContrastColor(TAG_PRESETS.find(tag => tag.value === taskLabel)?.color || customTagColor), 
+                  fontSize: 12 
+                }}>
                   {taskLabel}
                 </Text>
               </View>

@@ -93,6 +93,7 @@ export interface TaskCycle {
   startDate: string;
   dueDate: string;
   isCompleted: boolean;
+  isOverdue: boolean;
   completedAt?: string;
 }
 
@@ -117,12 +118,17 @@ export interface Task {
   status?: 'pending' | 'active' | 'overdue' | 'completed';
   // 提醒设置
   reminderOffset?: number;
-  reminderUnit?: 'minutes' | 'hours' | 'days';
+  reminderUnit?: ReminderUnit;
+  reminderTime?: ReminderTime;
+  reminderDays?: number;
+  reminderHours?: number;
+  reminderMinutes?: number;
   autoRestart: boolean;
   syncToCalendar: boolean;
   createdAt?: string;
   updatedAt?: string;
   tags?: string[];
+  tagColors?: { [key: string]: string }; // 标签颜色映射
   backgroundColor?: string;
   specialDate?: SpecialDate; // 特殊日期
 }
@@ -199,6 +205,8 @@ export function createTask(
   return {
     title,
     description: '',
+    startDate: now,
+    dueDate: now,
     recurrencePattern: {
       type: recurrenceType,
       value: recurrenceValue,

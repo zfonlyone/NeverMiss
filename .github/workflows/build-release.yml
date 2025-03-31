@@ -112,12 +112,17 @@ jobs:
       - name: Build Release APK and AAB
         run: |
           cd android
-          ./gradlew bundleRelease assembleRelease -PreactNativeDevSupport=false -PreactNativeJsEngine=hermes --no-daemon --max-workers=2
+          ./gradlew bundleRelease assembleRelease \
+            -PreactNativeDevSupport=false \
+            -PreactNativeJsEngine=jsc \
+            -PnewArchEnabled=true \
+            --no-daemon \
+            --max-workers=2
           
       - name: Copy APK and AAB to build directory
         run: |
           mkdir -p ./build
-          cp android/app/build/outputs/apk/release/app-release.apk ./build/NeverMiss-Android-Store.apk
+          cp android/app/build/outputs/apk/release/app-release-newarch.apk ./build/NeverMiss-Android-Store.apk
           cp android/app/build/outputs/bundle/release/app-release.aab ./build/NeverMiss-Android-Store.aab
 
       - name: Upload APK and AAB artifacts

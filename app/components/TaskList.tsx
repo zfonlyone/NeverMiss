@@ -201,8 +201,8 @@ export default function TaskList({
           {item.tags && item.tags.length > 0 && (
             <View style={styles.tagsContainer}>
               {item.tags.map((tag, index) => {
-                // 根据标签名称获取颜色
-                const tagColor = getSelectedTagColor(tag);
+                // 根据标签名称获取颜色，优先使用任务中保存的颜色
+                const tagColor = getSelectedTagColor(tag, item);
                 // 在深色模式下调暗颜色
                 const darkModeColor = isDarkMode ? 
                   adjustColorBrightness(tagColor, -30) : 

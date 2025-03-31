@@ -1,16 +1,6 @@
 import { Task } from '../models/Task';
 import { FilterOptions, SortOption, SortDirection, TaskStatusFilter } from '../components/TaskListFilter';
 
-// 预设标签和颜色
-export const TAG_PRESETS = [
-  { value: '工作', color: '#2196F3' },
-  { value: '学习', color: '#4CAF50' },
-  { value: '生活', color: '#FF9800' },
-  { value: '重要', color: '#F44336' },
-  { value: '紧急', color: '#E91E63' },
-  { value: '会议', color: '#9C27B0' }
-];
-
 // 预定义的标签颜色（用于非预设标签）
 export const TAG_COLORS = [
   '#FF9500', // 橙色
@@ -21,6 +11,16 @@ export const TAG_COLORS = [
   '#FFCC00', // 黄色
   '#8E8E93', // 灰色
   '#FF3B30', // 红色
+];
+
+// 预设标签和颜色
+export const TAG_PRESETS = [
+  { value: '工作', color: '#2196F3' },
+  { value: '学习', color: '#4CAF50' },
+  { value: '生活', color: '#FF9800' },
+  { value: '重要', color: '#F44336' },
+  { value: '紧急', color: '#E91E63' },
+  { value: '会议', color: '#9C27B0' }
 ];
 
 /**
@@ -42,17 +42,24 @@ export function getTagColor(tag: string): string {
 
 /**
  * 获取标签对应的颜色
- * 优先检查预设标签，如果不是预设标签则使用动态生成的颜色
+ * 优先使用任务中保存的颜色，其次是预设标签颜色，最后是动态生成的颜色
  * @param tagName 标签名称
+ * @param task 任务对象（可选）
  * @returns 标签颜色
  */
-export function getSelectedTagColor(tagName: string): string {
-  // 先检查是否是预设标签
+export function getSelectedTagColor(tagName: string, task?: Task): string {
+  // 如果提供了任务对象，优先使用任务中保存的颜色
+  if (task?.tagColors && task.tagColors[tagName]) {
+    return task.tagColors[tagName];
+  }
+  
+  // 其次检查是否是预设标签
   const preset = TAG_PRESETS.find(tag => tag.value === tagName);
   if (preset) {
     return preset.color;
   }
-  // 如果不是预设标签，使用动态生成的颜色
+  
+  // 最后使用动态生成的颜色
   return getTagColor(tagName);
 }
 
@@ -150,10 +157,16 @@ export function sortTasks(
         comparison = aDate.localeCompare(bDate);
         break;
       case 'createdAt':
-        comparison = a.createdAt.localeCompare(b.createdAt);
+        // 添加空值检查
+        const aCreatedAt = a.createdAt || '';
+        const bCreatedAt = b.createdAt || '';
+        comparison = aCreatedAt.localeCompare(bCreatedAt);
         break;
       case 'lastUpdated':
-        comparison = a.updatedAt.localeCompare(b.updatedAt);
+        // 添加空值检查
+        const aUpdatedAt = a.updatedAt || '';
+        const bUpdatedAt = b.updatedAt || '';
+        comparison = aUpdatedAt.localeCompare(bUpdatedAt);
         break;
       default:
         comparison = 0;

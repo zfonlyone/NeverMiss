@@ -81,31 +81,11 @@ jobs:
       - name: Build Release APK (unsigned)
         run: |
           cd android
-          # 构建标准旧架构版本（使用 JavaScriptCore）
-          ./gradlew assembleRelease \
-            -PreactNativeDevSupport=false \
-            -PreactNativeJsEngine=jsc \
-            -PnewArchEnabled=false \
-            --no-daemon \
-            --max-workers=2 \
-            --build-cache \
-            --parallel
-
-          # 构建标准新架构版本（使用 JavaScriptCore）
+          # 构建新架构版本（使用 JavaScriptCore）
           ./gradlew assembleRelease \
             -PreactNativeDevSupport=false \
             -PreactNativeJsEngine=jsc \
             -PnewArchEnabled=true \
-            --no-daemon \
-            --max-workers=2 \
-            --build-cache \
-            --parallel
-
-          # 构建 Hermes 版本
-          ./gradlew assembleRelease \
-            -PreactNativeDevSupport=false \
-            -PreactNativeJsEngine=hermes \
-            -PnewArchEnabled=false \
             --no-daemon \
             --max-workers=2 \
             --build-cache \
@@ -116,21 +96,14 @@ jobs:
 
       - name: Copy APK to build directory
         run: |
-          # 复制标准旧架构版本APK
-          cp android/app/build/outputs/apk/release/app-release.apk ./build/NeverMiss-Android-ReleaseTest.apk
-          # 复制标准新架构版本APK
-          cp android/app/build/outputs/apk/release/app-release-newarch.apk ./build/NeverMiss-Android-ReleaseTest-newarch.apk
-          # 复制Hermes版本APK
-          cp android/app/build/outputs/apk/release/app-release-hermes.apk ./build/NeverMiss-Android-ReleaseTest-hermes.apk
+          # 复制新架构版本APK
+          cp android/app/build/outputs/apk/release/app-release-newarch.apk ./build/NeverMiss-Android-ReleaseTest.apk
 
       - name: Upload Test APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: android-release-test-app
-          path: |
-            ./build/NeverMiss-Android-ReleaseTest.apk
-            ./build/NeverMiss-Android-ReleaseTest-newarch.apk
-            ./build/NeverMiss-Android-ReleaseTest-hermes.apk
+          path: ./build/NeverMiss-Android-ReleaseTest.apk
           retention-days: 7
 
   build-ios-test:
