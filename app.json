@@ -35,21 +35,8 @@
       "favicon": "./assets/images/icon.png"
     },
     "plugins": [
-      "expo-router",
-      "expo-font",
-      [
-        "expo-build-properties",
-        {
-          "android": {
-            "newArchEnabled": false,
-            "kotlinVersion": "1.7.20",
-            "suppressKotlinVersionCompatibilityCheck": true
-          },
-          "ios": {
-            "newArchEnabled": true
-          }
-        }
+      "expo-router"
       ]
-    ]
+    
   }
 } 
