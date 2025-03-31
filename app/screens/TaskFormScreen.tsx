@@ -279,13 +279,13 @@ export default function TaskFormScreen() {
         
         // 设置日期类型
         if (task.dateType) {
-          setDateType(task.dateType);
+        setDateType(task.dateType);
         }
         
         // 设置重复设置
         setIsRecurring(task.isRecurring || false);
         if (task.recurrencePattern) {
-          setRecurrencePattern(task.recurrencePattern);
+        setRecurrencePattern(task.recurrencePattern);
         }
         
         // 设置计算方向
@@ -325,7 +325,7 @@ export default function TaskFormScreen() {
           } else if (task.tagColors && task.tagColors[tag]) {
             // 如果是自定义标签，使用保存的自定义颜色
             setCustomTagColor(task.tagColors[tag]);
-          } else {
+      } else {
             // 如果没有保存的颜色，使用默认颜色
             setCustomTagColor(TAG_COLORS[0]);
           }
@@ -498,11 +498,11 @@ export default function TaskFormScreen() {
 
   // 保存任务
   const handleSave = async () => {
-    if (!title.trim()) {
-      Alert.alert('提示', '请输入任务标题');
-      return;
-    }
-    
+      if (!title.trim()) {
+        Alert.alert('提示', '请输入任务标题');
+        return;
+      }
+      
     // 验证日期有效性
     if (isNaN(startDate.getTime()) || isNaN(dueDate.getTime())) {
       Alert.alert('提示', '日期设置无效，请重新设置日期');
@@ -586,8 +586,8 @@ export default function TaskFormScreen() {
           { 
             text: '确定', 
             onPress: () => router.push({
-              pathname: '/screens/TaskListScreen',
-              params: { refresh: 'true' }
+        pathname: '/screens/TaskListScreen',
+        params: { refresh: 'true' }
             }) 
           }
         ]);
@@ -802,10 +802,10 @@ export default function TaskFormScreen() {
           {taskLabel && !TAG_PRESETS.find(tag => tag.value === taskLabel) && (
             <>
               <Text style={[styles.label, { color: colors.text, marginTop: 12 }]}>选择标签颜色</Text>
-              <View style={{
-                flexDirection: 'row',
+          <View style={{
+            flexDirection: 'row',
                 flexWrap: 'wrap',
-                justifyContent: 'space-between',
+            justifyContent: 'space-between',
                 paddingHorizontal: 8,
                 marginBottom: 16
               }}>
@@ -849,57 +849,57 @@ export default function TaskFormScreen() {
             horizontal={true} 
             showsHorizontalScrollIndicator={false}
             style={{
-              marginBottom: 16,
-              paddingHorizontal: 8
+            marginBottom: 16,
+            paddingHorizontal: 8
             }}
           >
             <View style={{
               flexDirection: 'row',
               alignItems: 'center',
               paddingVertical: 8
-            }}>
-              {[
-                { color: '#ffffff', name: '白色' },
-                { color: '#f5f5f5', name: '浅灰' },
-                { color: '#e3f2fd', name: '浅蓝' },
-                { color: '#e8f5e9', name: '浅绿' },
-                { color: '#fff3e0', name: '橙色' },
-                { color: '#ffebee', name: '浅红' },
-                { color: '#f3e5f5', name: '浅紫' },
+          }}>
+            {[
+              { color: '#ffffff', name: '白色' },
+              { color: '#f5f5f5', name: '浅灰' },
+              { color: '#e3f2fd', name: '浅蓝' },
+              { color: '#e8f5e9', name: '浅绿' },
+              { color: '#fff3e0', name: '橙色' },
+              { color: '#ffebee', name: '浅红' },
+              { color: '#f3e5f5', name: '浅紫' },
                 { color: '#fffde7', name: '浅黄' },
                 { color: '#333333', name: '深灰' },
                 { color: '#263238', name: '深蓝' },
-              ].map((item) => (
-                <TouchableOpacity
-                  key={item.color}
-                  style={{
-                    width: 36,
-                    height: 36,
-                    borderRadius: 18,
-                    backgroundColor: item.color,
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                    borderWidth: 2,
+            ].map((item) => (
+              <TouchableOpacity
+                key={item.color}
+                style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: 18,
+                  backgroundColor: item.color,
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  borderWidth: 2,
                     borderColor: cardBackgroundColor === item.color ? colors.primary : colors.border,
                     marginRight: 12,
-                    shadowColor: '#000',
-                    shadowOffset: { width: 0, height: 1 },
-                    shadowOpacity: 0.1,
-                    shadowRadius: 1,
-                    elevation: 1
-                  }}
-                  onPress={() => setCardBackgroundColor(item.color)}
-                >
-                  {cardBackgroundColor === item.color && (
-                    <Ionicons 
-                      name="checkmark" 
-                      size={18} 
+                  shadowColor: '#000',
+                  shadowOffset: { width: 0, height: 1 },
+                  shadowOpacity: 0.1,
+                  shadowRadius: 1,
+                  elevation: 1
+                }}
+                onPress={() => setCardBackgroundColor(item.color)}
+              >
+                {cardBackgroundColor === item.color && (
+                  <Ionicons 
+                    name="checkmark" 
+                    size={18} 
                       color={getContrastColor(item.color)} 
-                    />
-                  )}
-                </TouchableOpacity>
-              ))}
-            </View>
+                  />
+                )}
+              </TouchableOpacity>
+            ))}
+          </View>
           </ScrollView>
         </View>
         
