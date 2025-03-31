@@ -96,7 +96,23 @@ npx eas build --platform ios --profile preview --local
 
 ## 📂 项目结构
 
+NeverMiss项目采用模块化的文件组织结构，遵循最佳实践确保代码可维护性和可扩展性。
 
+```
+NeverMiss/
+├── app/                      # 应用程序主要代码
+│   ├── components/           # 可复用的UI组件
+│   ├── contexts/             # 应用程序上下文管理
+│   ├── models/               # 数据模型定义
+│   ├── screens/              # 应用程序屏幕/页面
+│   ├── services/             # 服务层实现
+│   └── utils/                # 工具函数和辅助方法
+└── assets/                   # 静态资源文件
+```
+
+详细的项目结构和文件组织规范请参考：
+- [项目结构文档](docs/PROJECT_STRUCTURE.md)
+- [代码开发规范](docs/CODE_STANDARDS.md)
 
 ## 🏗️ 项目架构
 
@@ -110,7 +126,20 @@ NeverMiss采用修改版的MVC架构，结合了React Native的组件化特性�
 详细的架构说明请参考：
 - [应用架构说明](docs/ARCHITECTURE.md)
 
+## 🤝 如何贡献
 
+欢迎对NeverMiss项目做出贡献！无论是功能改进、错误修复还是文档更新，您的帮助都将使应用变得更好。
+
+贡献步骤：
+1. Fork此仓库
+2. 创建您的功能分支 (`git checkout -b feature/AmazingFeature`)
+3. 提交您的更改 (`git commit -m 'feat: 添加一些很棒的功能'`)
+4. 推送到分支 (`git push origin feature/AmazingFeature`)
+5. 创建Pull Request
+
+在开发前，请确保阅读以下文档：
+- [代码开发规范](docs/CODE_STANDARDS.md)
+- [贡献指南](docs/CONTRIBUTING.md)
 
 ## 📄 许可证
 
